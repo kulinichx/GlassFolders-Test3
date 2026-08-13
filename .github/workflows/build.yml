@@ -1,4 +1,4 @@
-name: Build RootHide Test3.1
+name: Build RootHide Test4
 
 on:
   workflow_dispatch:
@@ -51,36 +51,68 @@ jobs:
           echo "deb=$DEB" >> "$GITHUB_OUTPUT"
           ls -lh "$DEB"
 
-      - name: Inspect package and verify arm64e
+      - name: Extract and verify both Mach-O binaries are arm64e
         shell: bash
         run: |
           set -euo pipefail
+
           DEB="${{ steps.package.outputs.deb }}"
           DEB_ABS="$GITHUB_WORKSPACE/$DEB"
 
-          rm -rf /tmp/gf-test3
-          mkdir -p /tmp/gf-test3
-          cd /tmp/gf-test3
+          rm -rf /tmp/gf-test4
+          mkdir -p /tmp/gf-test4
+          cd /tmp/gf-test4
 
-          # A .deb is an ar archive containing control/data tarballs.
-          # macOS provides ar/bsdtar; xz is installed above.
           ar -x "$DEB_ABS"
-
           DATA_TAR="$(find . -maxdepth 1 -type f -name 'data.tar.*' | head -n 1)"
           test -n "$DATA_TAR"
           tar -xf "$DATA_TAR"
 
-          DYLIB="$(find . -type f -name 'GlassFoldersTest3.dylib' | head -n 1)"
-          test -n "$DYLIB"
+          TWEAK="$(find . -type f -name 'GlassFolders.dylib' | head -n 1)"
+          PREFS="$(find . -type f -path '*GlassFoldersPrefs.bundle/GlassFoldersPrefs' | head -n 1)"
 
-          echo "Dylib: $DYLIB"
-          FILE_INFO="$(file "$DYLIB")"
-          echo "$FILE_INFO"
+          test -n "$TWEAK"
+          test -n "$PREFS"
 
-          if ! grep -qi "arm64e" <<<"$FILE_INFO"; then
-            echo "ERROR: dylib is not arm64e"
+          echo "Tweak binary:"
+          file "$TWEAK"
+
+          echo "Preferences binary:"
+          file "$PREFS"
+
+          if ! file "$TWEAK" | grep -qi "arm64e"; then
+            echo "ERROR: GlassFolders.dylib is not arm64e"
             exit 1
           fi
+
+          if ! file "$PREFS" | grep -qi "arm64e"; then
+            echo "ERROR: GlassFoldersPrefs is not arm64e"
+            exit 1
+          fi
+
+          echo "Both arm64e checks passed."
+
+      - name: Verify injection filter
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DEB="${{ steps.package.outputs.deb }}"
+          DEB_ABS="$GITHUB_WORKSPACE/$DEB"
+
+          rm -rf /tmp/gf-test4-filter
+          mkdir -p /tmp/gf-test4-filter
+          cd /tmp/gf-test4-filter
+
+          ar -x "$DEB_ABS"
+          DATA_TAR="$(find . -maxdepth 1 -type f -name 'data.tar.*' | head -n 1)"
+          tar -xf "$DATA_TAR"
+
+          FILTER="$(find . -type f -path '*MobileSubstrate/DynamicLibraries/GlassFolders.plist' | head -n 1)"
+          test -n "$FILTER"
+
+          cat "$FILTER"
+          grep -q "com.apple.springboard" "$FILTER"
 
       - name: SHA256
         run: |
@@ -89,7 +121,7 @@ jobs:
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-Test3.1-DEB
+          name: GlassFolders-Test4-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
