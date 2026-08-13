@@ -1,0 +1,95 @@
+name: Build RootHide Test3
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    name: Build arm64e RootHide deb
+    runs-on: macos-latest
+
+    env:
+      THEOS: ${{ github.workspace }}/theos
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          brew update
+          brew install ldid xz
+
+      - name: Install RootHide Theos
+        run: |
+          git clone --recursive https://github.com/roothide/theos.git "$THEOS"
+          echo "THEOS=$THEOS" >> "$GITHUB_ENV"
+
+      - name: Show toolchain information
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          clang --version
+          git -C "$THEOS" rev-parse HEAD
+
+      - name: Build RootHide package
+        run: |
+          make clean
+          make package FINALPACKAGE=1
+
+      - name: Locate generated deb
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEB="$(find packages -maxdepth 1 -type f -name '*.deb' | head -n 1)"
+          test -n "$DEB"
+          echo "deb=$DEB" >> "$GITHUB_OUTPUT"
+          ls -lh "$DEB"
+
+      - name: Inspect package and verify arm64e
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEB="${{ steps.package.outputs.deb }}"
+          DEB_ABS="$GITHUB_WORKSPACE/$DEB"
+
+          rm -rf /tmp/gf-test3
+          mkdir -p /tmp/gf-test3
+          cd /tmp/gf-test3
+
+          # A .deb is an ar archive containing control/data tarballs.
+          # macOS provides ar/bsdtar; xz is installed above.
+          ar -x "$DEB_ABS"
+
+          DATA_TAR="$(find . -maxdepth 1 -type f -name 'data.tar.*' | head -n 1)"
+          test -n "$DATA_TAR"
+          tar -xf "$DATA_TAR"
+
+          DYLIB="$(find . -type f -name 'GlassFoldersTest3.dylib' | head -n 1)"
+          test -n "$DYLIB"
+
+          echo "Dylib: $DYLIB"
+          FILE_INFO="$(file "$DYLIB")"
+          echo "$FILE_INFO"
+
+          if ! grep -qi "arm64e" <<<"$FILE_INFO"; then
+            echo "ERROR: dylib is not arm64e"
+            exit 1
+          fi
+
+      - name: SHA256
+        run: |
+          shasum -a 256 "${{ steps.package.outputs.deb }}"
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GlassFolders-Test3-DEB
+          path: ${{ steps.package.outputs.deb }}
+          if-no-files-found: error
+          retention-days: 14
