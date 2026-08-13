@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.4.0~test4
+Version: 0.5.0~test5
 Architecture: iphoneos-arm64e
-Description: Minimal RootHide folder-glass tweak. Adds a master switch and Home Screen glass strength while preserving the stable Test3.1 replacement-view approach.
+Description: Lightweight RootHide folder styling with Clear and Liquid Glass modes. Reuses Apple's opened-folder material and avoids continuous custom rendering.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks

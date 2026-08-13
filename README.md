@@ -1,73 +1,70 @@
-# GlassFolders 0.4 / Test4 — RootHide
+# GlassFolders 0.5 / Test5 — RootHide
 
-Target validation environment:
+Target test environment:
 
-- iPhone 14 Pro (iPhone15,2 / A16)
+- iPhone 14 Pro / iPhone15,2 / A16
 - iOS 16.6
 - Dopamine 3.x RootHide-style environment
 
-## What changed from stable Test3.1
+## Goal
 
-Test3.1 proved that replacing `SBFolderIconImageView`'s assigned background view
-is stable across repeated Home Screen page reuse.
+Add a usable Liquid Glass mode without turning GlassFolders into a large
+SpringBoard customization suite.
 
-Test4 keeps that exact architectural idea and adds only:
-
-- master enable switch
-- Home Screen glass strength slider (0–100)
-
-No opened-folder hooks are included yet.
+The design intentionally favors low memory/GPU overhead over maximum visual
+complexity.
 
 ## Modes
 
-### Enabled + Glass Strength 0%
+### Clear
 
-Equivalent visual goal to Test3.1:
-fully transparent folder icon plate.
+Home Screen folder plate only.
 
-### Enabled + Glass Strength 1–100%
+- Strength 0%: equivalent to the stable Test3.1 clear plate.
+- Strength >0: uses one ultra-thin material view per visible folder icon.
+- No opened-folder hooks are visually applied in Clear mode.
 
-Uses a tweak-owned `UIVisualEffectView` with
-`UIBlurEffectStyleSystemUltraThinMaterial` plus a very light white tint.
+### Liquid Glass
 
-The important part is that the Apple-provided original material background is
-still replaced, so the page-reuse bug from Test3 should not return.
+Home Screen:
+- ultra-thin material
+- very light white tint
+- one static subtle border
+- no shadow
+- no animated gradient
 
-### Disabled
+Opened folder:
+- reuses Apple's existing `SBFloatyFolderView` material
+- only scales the system background alpha
+- preserves Apple's own open/close animation
+- creates no extra full-screen blur view
 
-Passes SpringBoard's original background view untouched.
+The surrounding wallpaper blur/dim remains entirely controlled by stock iOS.
 
-## Apply settings
+## Performance decisions
 
-For Test4, change settings and then Respring once.
+There is deliberately:
 
-This is deliberate. Real-time preference updates will only be added after the
-basic preference bundle and custom glass view are verified stable on-device.
-
-## What Test4 intentionally does NOT do
-
-- no opened-folder panel changes
-- no wallpaper backdrop changes
-- no Liquid Glass edge highlight yet
-- no folder layout/title changes
-- no gestures
-- no Dock hooks
-- no launchd hooks
 - no daemon
-- no jailbreak filesystem access
+- no DisplayLink
+- no timer
+- no live preference observer
+- no custom animation loop
+- no full-screen custom blur
+- no shadow rendering
+- no continuous gradient animation
 
-## Suggested test sequence
+Preferences are loaded once when SpringBoard launches. A Respring is required
+after changing settings.
 
-1. Install over Test3.1.
-2. Open Settings → GlassFolders.
-3. Keep Enabled ON and Glass Strength at 0%.
-4. Respring.
-5. Swipe between Home Screen pages 20–30 times.
-6. If stable, test 10%, then 20%, then 30%.
-7. Disable the tweak, Respring, and verify the stock folder plate returns.
+At Clear 0%, GlassFolders does not allocate a `UIVisualEffectView` for the
+folder icon plate.
 
-Only after all of the above is stable should we add opened-folder visuals.
+## Settings UI
 
-## Upgrade note
+The old inline slider numeric display is disabled because iOS 16's
+PreferenceLoader was clipping the right-side decimal value on-device.
 
-The Debian package ID intentionally remains `com.local.glassfolderstest3`, so Test4 is treated as an upgrade from Test3.1 and dpkg can remove the obsolete Test3.1 dylib/plist cleanly.
+The stored range is still 0–100.
+
+Suggested starting point for Liquid Glass: 35–55%.

@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.4</string>
+			<string>GlassFolders 0.5</string>
 			<key>footerText</key>
-			<string>本版只控制桌面关闭状态的文件夹底板。设置修改后请 Respring 一次生效。</string>
+			<string>轻量优先：不运行后台进程、不持续刷新、不额外模糊整个桌面。设置修改后 Respring 一次生效。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -30,9 +30,39 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>桌面文件夹</string>
+			<string>风格</string>
 			<key>footerText</key>
-			<string>0% = Test3.1 的完全透明；数值越高，玻璃模糊与极淡白色染色越明显。建议先试 0–25%。</string>
+			<string>Clear 只处理桌面文件夹；Liquid Glass 同时让打开后的文件夹使用更通透的系统原生玻璃材质。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSegmentCell</string>
+			<key>label</key>
+			<string></string>
+			<key>key</key>
+			<string>Style</string>
+			<key>default</key>
+			<integer>0</integer>
+			<key>defaults</key>
+			<string>com.local.glassfolders</string>
+			<key>validTitles</key>
+			<array>
+				<string>Clear</string>
+				<string>Liquid Glass</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<integer>0</integer>
+				<integer>1</integer>
+			</array>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>玻璃强度</string>
+			<key>footerText</key>
+			<string>0% 最轻；数值越高玻璃更明显。为避免 iOS 16 PreferenceLoader 的右侧数值裁切，本版不在滑块右侧显示小数值。建议 Liquid Glass 从 35–55% 开始。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -50,13 +80,13 @@
 			<key>max</key>
 			<integer>100</integer>
 			<key>showValue</key>
-			<true/>
+			<false/>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>稳定测试建议：先用 0%，左右滑动桌面 20–30 次；确认稳定后再尝试 10%、20%、30%。暂时不要把这一版当作最终 Liquid Glass 效果。</string>
+			<string>性能设计：Clear=0% 时不会创建模糊视图；Liquid Glass 打开文件夹时只调整系统已有背景材质的透明度，不创建额外全屏 blur，也没有持续动画线程。</string>
 		</dict>
 	</array>
 </dict>
