@@ -1,70 +1,60 @@
-# GlassFolders 0.5 / Test5 — RootHide
+# GlassFolders 0.5.2 / Test5.2 — Edge Glass
 
-Target test environment:
+## Why this version
 
-- iPhone 14 Pro / iPhone15,2 / A16
-- iOS 16.6
-- Dopamine 3.x RootHide-style environment
+Test5 was too visually flat compared with the supplied iOS 27 reference.
+Test5.1 increased the glass strength but used a full-area diagonal highlight.
 
-## Goal
+Test5.2 changes the highlight model:
 
-Add a usable Liquid Glass mode without turning GlassFolders into a large
-SpringBoard customization suite.
+- very weak full border
+- stronger top/upper-left catch-light
+- no full-area diagonal highlight
+- no animated lighting
+- no gyroscope response
 
-The design intentionally favors low memory/GPU overhead over maximum visual
-complexity.
+The design follows the principle that the material should remain translucent
+and let the wallpaper color pass through while using subtle edge light to make
+the glass boundary readable.
 
-## Modes
+## Liquid Glass
 
-### Clear
-
-Home Screen folder plate only.
-
-- Strength 0%: equivalent to the stable Test3.1 clear plate.
-- Strength >0: uses one ultra-thin material view per visible folder icon.
-- No opened-folder hooks are visually applied in Clear mode.
-
-### Liquid Glass
-
-Home Screen:
-- ultra-thin material
+Closed folder:
+- `UIBlurEffectStyleSystemUltraThinMaterialLight`
 - very light white tint
-- one static subtle border
-- no shadow
-- no animated gradient
+- 1 physical-pixel weak border
+- one tiny static gradient located only on the top edge
+- top-left is brightest, fades toward the right
 
 Opened folder:
+- no new blur view
 - reuses Apple's existing `SBFloatyFolderView` material
-- only scales the system background alpha
-- preserves Apple's own open/close animation
-- creates no extra full-screen blur view
+- larger surface is slightly "thicker" than the small closed-folder plate
+- Apple's own open/close animation remains intact
 
-The surrounding wallpaper blur/dim remains entirely controlled by stock iOS.
+## Performance
 
-## Performance decisions
+No:
+- daemon
+- timer
+- DisplayLink
+- motion sensor
+- continuously animated gradient
+- custom full-screen blur
+- shadow rendering loop
 
-There is deliberately:
+At Clear 0%, no `UIVisualEffectView` is created for a closed folder.
 
-- no daemon
-- no DisplayLink
-- no timer
-- no live preference observer
-- no custom animation loop
-- no full-screen custom blur
-- no shadow rendering
-- no continuous gradient animation
+## Suggested test
 
-Preferences are loaded once when SpringBoard launches. A Respring is required
-after changing settings.
+Liquid Glass:
+- 40%
+- 45%
+- 50%
+- 55%
 
-At Clear 0%, GlassFolders does not allocate a `UIVisualEffectView` for the
-folder icon plate.
+Compare 45–50% against the iOS 27 reference.
 
-## Settings UI
-
-The old inline slider numeric display is disabled because iOS 16's
-PreferenceLoader was clipping the right-side decimal value on-device.
-
-The stored range is still 0–100.
-
-Suggested starting point for Liquid Glass: 35–55%.
+If Edge Glass still looks too flat, the next A/B experiment should replace only
+the tiny top-edge highlight with a static diagonal specular band. Do not expose
+both as permanent user-facing options unless testing proves both are useful.

@@ -1,22 +1,26 @@
 #import <UIKit/UIKit.h>
 #import <CoreFoundation/CoreFoundation.h>
+#import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
+#import <math.h>
 
 /*
- * GlassFolders 0.5 / Test5
+ * GlassFolders 0.5.2 / Test5.2 — Edge Glass
  *
- * Lightweight-first design:
+ * Design goal:
+ * - Clear stays extremely light.
+ * - Liquid Glass uses Apple's existing material ideas:
+ *   background color passes through, subtle depth, stronger top/upper-left
+ *   catch-light, very weak remaining edge.
+ *
+ * Performance goal:
  * - no daemon
- * - no display link
+ * - no DisplayLink
+ * - no timer
  * - no continuous custom animation
- * - no live preference observer
  * - no full-screen custom blur
- *
- * Preferences are loaded once when SpringBoard starts.
- * Changes intentionally require one Respring.
- *
- * Style 0: Clear
- * Style 1: Liquid Glass
+ * - no shadow rendering
+ * - preferences loaded once per SpringBoard launch
  */
 
 static CFStringRef const GFPreferencesDomain = CFSTR("com.local.glassfolders");
@@ -30,6 +34,7 @@ static BOOL GFReadBool(CFStringRef key, BOOL fallback) {
     if (!value) return fallback;
 
     BOOL result = fallback;
+
     if (CFGetTypeID(value) == CFBooleanGetTypeID()) {
         result = CFBooleanGetValue((CFBooleanRef)value);
     } else if (CFGetTypeID(value) == CFNumberGetTypeID()) {
@@ -47,6 +52,7 @@ static NSInteger GFReadInteger(CFStringRef key, NSInteger fallback) {
     if (!value) return fallback;
 
     long long n = fallback;
+
     if (CFGetTypeID(value) == CFNumberGetTypeID()) {
         CFNumberGetValue((CFNumberRef)value, kCFNumberLongLongType, &n);
     }
@@ -57,11 +63,13 @@ static NSInteger GFReadInteger(CFStringRef key, NSInteger fallback) {
 
 static CGFloat GFReadPercent(CFStringRef key, CGFloat fallbackPercent) {
     CFPropertyListRef value = CFPreferencesCopyAppValue(key, GFPreferencesDomain);
+
     if (!value) {
         return MIN(1.0, MAX(0.0, fallbackPercent / 100.0));
     }
 
     double n = fallbackPercent;
+
     if (CFGetTypeID(value) == CFNumberGetTypeID()) {
         CFNumberGetValue((CFNumberRef)value, kCFNumberDoubleType, &n);
     }
@@ -83,32 +91,29 @@ static void GFLoadPreferences(void) {
 }
 
 
-/*
- * Home Screen folder plate owned entirely by the tweak.
- *
- * This keeps the stable Test3.1 architecture: Apple's original material
- * background is not retained. Therefore SpringBoard page reuse cannot restore
- * Apple's folder blur behind our back.
- *
- * Memory/GPU optimization:
- * at strength ~0 we do not create a UIVisualEffectView at all.
- */
 @interface GFGlassFolderPlateView : UIView
 @property (nonatomic, strong) UIVisualEffectView *gfBlurView;
 @property (nonatomic, strong) UIView *gfTintView;
+@property (nonatomic, strong) CAGradientLayer *gfTopCatchLight;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) NSInteger gfStyle;
-- (instancetype)initWithStyle:(NSInteger)style strength:(CGFloat)strength;
+@property (nonatomic, assign) CGFloat gfPreferredRadius;
+- (instancetype)initWithStyle:(NSInteger)style
+                     strength:(CGFloat)strength
+               preferredRadius:(CGFloat)radius;
 @end
 
 @implementation GFGlassFolderPlateView
 
-- (instancetype)initWithStyle:(NSInteger)style strength:(CGFloat)strength {
+- (instancetype)initWithStyle:(NSInteger)style
+                     strength:(CGFloat)strength
+               preferredRadius:(CGFloat)radius {
     self = [super initWithFrame:CGRectZero];
 
     if (self) {
         _gfStyle = style;
         _gfStrength = MIN(1.0, MAX(0.0, strength));
+        _gfPreferredRadius = MAX(0.0, radius);
 
         self.backgroundColor = UIColor.clearColor;
         self.userInteractionEnabled = NO;
@@ -116,26 +121,39 @@ static void GFLoadPreferences(void) {
 
         CGFloat blurAlpha = 0.0;
         CGFloat tintAlpha = 0.0;
-        CGFloat borderAlpha = 0.0;
+        CGFloat edgeAlpha = 0.0;
+        CGFloat topCatchAlpha = 0.0;
+        UIBlurEffectStyle blurStyle = UIBlurEffectStyleSystemUltraThinMaterial;
 
-        if (_gfStyle == 1) {
-            // Liquid Glass: still deliberately subtle.
-            blurAlpha = 0.85 * _gfStrength;
-            tintAlpha = 0.065 * _gfStrength;
-            borderAlpha = 0.32 * _gfStrength;
-        } else {
-            // Clear: same visual family as 0.4, no decorative edge.
+        if (_gfStyle == 1 && _gfStrength > 0.001) {
+            /*
+             * Medium values become visibly useful sooner without needing
+             * 80-100%. This keeps 40-55% in the main "Liquid Glass" zone.
+             */
+            CGFloat e = sqrt(_gfStrength);
+
+            blurStyle = UIBlurEffectStyleSystemUltraThinMaterialLight;
+
+            blurAlpha = MIN(0.93, 0.52 + (0.55 * e));
+            tintAlpha = 0.022 + (0.090 * e);
+
+            /*
+             * The full border is deliberately weak.
+             * The visible "glass catch" comes from the upper edge instead.
+             */
+            edgeAlpha = 0.08 + (0.19 * e);
+            topCatchAlpha = 0.20 + (0.34 * e);
+        } else if (_gfStyle == 0) {
+            /*
+             * Clear mode remains close to the stable Test4 behavior.
+             * At 0%, no blur view is allocated.
+             */
             blurAlpha = 0.70 * _gfStrength;
             tintAlpha = 0.035 * _gfStrength;
         }
 
-        /*
-         * Avoid allocating a blur view for fully transparent folders.
-         * This is the common Clear=0% case and is as light as Test3.1.
-         */
         if (blurAlpha > 0.005) {
-            UIBlurEffect *effect =
-                [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterial];
+            UIBlurEffect *effect = [UIBlurEffect effectWithStyle:blurStyle];
 
             _gfBlurView = [[UIVisualEffectView alloc] initWithEffect:effect];
             _gfBlurView.alpha = blurAlpha;
@@ -151,10 +169,33 @@ static void GFLoadPreferences(void) {
             [self addSubview:_gfTintView];
         }
 
-        if (borderAlpha > 0.001) {
-            self.layer.borderWidth = 0.75 / UIScreen.mainScreen.scale;
+        if (_gfStyle == 1 && edgeAlpha > 0.001) {
+            CGFloat scale = UIScreen.mainScreen.scale;
+
+            self.layer.borderWidth = 1.0 / scale;
             self.layer.borderColor =
-                [UIColor colorWithWhite:1.0 alpha:borderAlpha].CGColor;
+                [UIColor colorWithWhite:1.0 alpha:edgeAlpha].CGColor;
+
+            /*
+             * One tiny static gradient only along the top edge.
+             * It is NOT a diagonal full-surface highlight.
+             *
+             * Left/top is strongest, fading toward the right.
+             * No animation, no redraw loop, no motion sensor.
+             */
+            _gfTopCatchLight = [CAGradientLayer layer];
+            _gfTopCatchLight.startPoint = CGPointMake(0.0, 0.5);
+            _gfTopCatchLight.endPoint = CGPointMake(1.0, 0.5);
+            _gfTopCatchLight.colors = @[
+                (id)[UIColor colorWithWhite:1.0 alpha:0.95].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.52].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.12].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor
+            ];
+            _gfTopCatchLight.locations = @[@0.00, @0.24, @0.66, @1.00];
+            _gfTopCatchLight.opacity = topCatchAlpha;
+
+            [self.layer addSublayer:_gfTopCatchLight];
         }
     }
 
@@ -164,21 +205,38 @@ static void GFLoadPreferences(void) {
 - (void)layoutSubviews {
     [super layoutSubviews];
 
-    if (self.gfBlurView) {
-        self.gfBlurView.frame = self.bounds;
+    self.gfBlurView.frame = self.bounds;
+    self.gfTintView.frame = self.bounds;
+
+    CGFloat radius = self.gfPreferredRadius;
+
+    if (radius <= 0.0 && self.superview) {
+        radius = self.superview.layer.cornerRadius;
     }
 
-    if (self.gfTintView) {
-        self.gfTintView.frame = self.bounds;
-    }
-
-    /*
-     * Inherit SpringBoard's own folder geometry where available.
-     * We do not invent a new folder size or shape.
-     */
-    CGFloat radius = self.superview.layer.cornerRadius;
     if (radius > 0.0) {
         self.layer.cornerRadius = radius;
+        self.layer.cornerCurve = kCACornerCurveContinuous;
+    }
+
+    if (self.gfTopCatchLight) {
+        CGFloat scale = UIScreen.mainScreen.scale;
+        CGFloat lineHeight = MAX(1.0 / scale, 0.45);
+
+        /*
+         * Keep the catch-light just inside the rounded top edge.
+         * Insets prevent it from looking like a hard rectangular rule.
+         */
+        CGFloat horizontalInset = MAX(4.0, radius * 0.20);
+
+        self.gfTopCatchLight.frame = CGRectMake(
+            horizontalInset,
+            0.55 / scale,
+            MAX(0.0, CGRectGetWidth(self.bounds) - (horizontalInset * 2.0)),
+            lineHeight
+        );
+
+        self.gfTopCatchLight.cornerRadius = lineHeight * 0.5;
     }
 }
 
@@ -204,9 +262,12 @@ static void GFLoadPreferences(void) {
         return;
     }
 
+    CGFloat originalRadius = backgroundView ? backgroundView.layer.cornerRadius : 0.0;
+
     GFGlassFolderPlateView *plate =
         [[GFGlassFolderPlateView alloc] initWithStyle:GFStyle
-                                             strength:GFGlassStrength];
+                                             strength:GFGlassStrength
+                                       preferredRadius:originalRadius];
 
     %orig(plate);
 }
@@ -226,22 +287,22 @@ static void GFLoadPreferences(void) {
         return;
     }
 
-    /*
-     * Lightweight Liquid Glass opened-folder look:
-     * reuse Apple's existing folder material and only scale its alpha.
-     *
-     * No additional blur view is created here.
-     * No display link / continuous renderer is used.
-     *
-     * 0% strength -> airy ~18% panel
-     * 100% strength -> stronger ~58% panel
-     */
-    double panelFactor = 0.18 + (0.40 * GFGlassStrength);
+    if (GFGlassStrength <= 0.001) {
+        %orig(0.0);
+        return;
+    }
 
     /*
-     * Multiplication preserves Apple's own open/close animation curve.
+     * Larger surface = slightly "thicker" material.
+     * Still reuses Apple's own opened-folder material.
+     *
+     * No additional full-screen blur is created.
+     * Multiplication preserves Apple's transition curve.
      */
-    %orig(alpha * panelFactor);
+    double e = sqrt(GFGlassStrength);
+    double panelFactor = 0.26 + (0.53 * e);
+
+    %orig(alpha * MIN(0.80, panelFactor));
 }
 
 %end
