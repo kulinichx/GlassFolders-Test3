@@ -1,106 +1,129 @@
 #import "GFRootListController.h"
 #import <UIKit/UIKit.h>
 #import <Preferences/PSSpecifier.h>
+#import <Preferences/PSSliderTableCell.h>
 #import <spawn.h>
 #import <roothide.h>
+#import <math.h>
+
+extern char **environ;
+
 
 /*
- * Minimal declaration is intentional. The real class comes from
- * Preferences.framework at runtime.
+ * Lightweight percent slider.
+ *
+ * IMPORTANT:
+ * PSSliderTableCell is imported from Theos' Preferences headers.
+ * Do NOT redeclare it locally — its real superclass is PSControlTableCell.
  */
-@interface PSSliderTableCell : UITableViewCell
-- (instancetype)initWithStyle:(UITableViewCellStyle)style
-              reuseIdentifier:(NSString *)identifier
-                    specifier:(PSSpecifier *)specifier;
-- (UIControl *)control;
-@end
-
-
 @interface GFPercentSliderCell : PSSliderTableCell
 @property (nonatomic, strong) UILabel *gfPercentLabel;
-@property (nonatomic, weak) UISlider *gfSlider;
+@property (nonatomic, weak) UISlider *gfBoundSlider;
 @end
 
 @implementation GFPercentSliderCell
 
-- (instancetype)initWithStyle:(UITableViewCellStyle)style
-              reuseIdentifier:(NSString *)identifier
-                    specifier:(PSSpecifier *)specifier {
-    self = [super initWithStyle:style reuseIdentifier:identifier specifier:specifier];
-
-    if (self) {
-        _gfPercentLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-        _gfPercentLabel.textAlignment = NSTextAlignmentRight;
-        _gfPercentLabel.textColor = UIColor.secondaryLabelColor;
-        _gfPercentLabel.font =
-            [UIFont monospacedDigitSystemFontOfSize:15.0 weight:UIFontWeightRegular];
-
-        [self.contentView addSubview:_gfPercentLabel];
-    }
-
-    return self;
-}
-
-- (void)gfBindSliderIfNeeded {
-    UIControl *control = [self control];
-
-    if (![control isKindOfClass:[UISlider class]]) {
+- (void)gfEnsurePercentLabel {
+    if (self.gfPercentLabel) {
         return;
     }
 
-    UISlider *slider = (UISlider *)control;
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
+    label.textAlignment = NSTextAlignmentRight;
+    label.textColor = UIColor.secondaryLabelColor;
+    label.font = [UIFont monospacedDigitSystemFontOfSize:15.0
+                                                  weight:UIFontWeightRegular];
+    label.userInteractionEnabled = NO;
 
-    if (self.gfSlider != slider) {
-        if (self.gfSlider) {
-            [self.gfSlider removeTarget:self
-                                  action:@selector(gfSliderChanged:)
-                        forControlEvents:UIControlEventValueChanged];
+    [self.contentView addSubview:label];
+    self.gfPercentLabel = label;
+}
+
+- (UISlider *)gfSlider {
+    /*
+     * PSControlTableCell exposes -control.
+     * We still verify the runtime class before treating it as UISlider.
+     */
+    UIControl *control = [self control];
+
+    if ([control isKindOfClass:[UISlider class]]) {
+        return (UISlider *)control;
+    }
+
+    return nil;
+}
+
+- (void)gfBindSliderIfNeeded {
+    UISlider *slider = [self gfSlider];
+
+    if (!slider) {
+        return;
+    }
+
+    if (self.gfBoundSlider != slider) {
+        if (self.gfBoundSlider) {
+            [self.gfBoundSlider removeTarget:self
+                                       action:@selector(gfSliderChanged:)
+                             forControlEvents:UIControlEventValueChanged];
         }
 
-        self.gfSlider = slider;
+        self.gfBoundSlider = slider;
 
         [slider addTarget:self
                    action:@selector(gfSliderChanged:)
          forControlEvents:UIControlEventValueChanged];
     }
-
-    [self gfUpdatePercentLabel];
-}
-
-- (void)gfSliderChanged:(UISlider *)slider {
-    [self gfUpdatePercentLabel];
 }
 
 - (void)gfUpdatePercentLabel {
-    if (!self.gfSlider) {
+    UISlider *slider = [self gfSlider];
+
+    if (!slider) {
         self.gfPercentLabel.text = @"";
         return;
     }
 
-    NSInteger percent = (NSInteger)lroundf(self.gfSlider.value);
-    self.gfPercentLabel.text = [NSString stringWithFormat:@"%ld%%", (long)percent];
+    NSInteger percent = (NSInteger)lroundf(slider.value);
+    self.gfPercentLabel.text =
+        [NSString stringWithFormat:@"%ld%%", (long)percent];
+}
+
+- (void)gfSliderChanged:(UISlider *)sender {
+    [self gfUpdatePercentLabel];
 }
 
 - (void)layoutSubviews {
     [super layoutSubviews];
 
+    [self gfEnsurePercentLabel];
     [self gfBindSliderIfNeeded];
 
-    UISlider *slider = self.gfSlider;
-    if (!slider) return;
+    UISlider *slider = [self gfSlider];
 
-    CGRect contentBounds = self.contentView.bounds;
+    if (!slider) {
+        self.gfPercentLabel.hidden = YES;
+        return;
+    }
 
-    CGFloat valueWidth = 54.0;
-    CGFloat gap = 10.0;
-    CGFloat rightInset = 16.0;
+    self.gfPercentLabel.hidden = NO;
+
+    CGRect bounds = self.contentView.bounds;
+
+    /*
+     * Give the percentage a fixed, generous area so "100%" never clips.
+     * Shrink only the slider — don't let the number overlap the cell edge.
+     */
+    const CGFloat rightInset = 16.0;
+    const CGFloat valueWidth = 58.0;
+    const CGFloat gap = 10.0;
 
     CGRect sliderFrame = slider.frame;
-    CGFloat maxRight =
-        CGRectGetWidth(contentBounds) - rightInset - valueWidth - gap;
+    CGFloat maximumSliderRight =
+        CGRectGetWidth(bounds) - rightInset - valueWidth - gap;
 
-    if (CGRectGetMaxX(sliderFrame) > maxRight) {
-        sliderFrame.size.width = MAX(80.0, maxRight - sliderFrame.origin.x);
+    if (CGRectGetMaxX(sliderFrame) > maximumSliderRight) {
+        sliderFrame.size.width =
+            MAX(90.0, maximumSliderRight - sliderFrame.origin.x);
         slider.frame = sliderFrame;
     }
 
@@ -108,7 +131,7 @@
         CGRectGetMaxX(slider.frame) + gap,
         0.0,
         valueWidth,
-        CGRectGetHeight(contentBounds)
+        CGRectGetHeight(bounds)
     );
 
     [self gfUpdatePercentLabel];
@@ -129,41 +152,44 @@
 
 - (void)respring {
     /*
-     * RootHide randomizes jbroot. Never hard-code /var/jb or a .jbroot-* path.
+     * Resolve the randomized RootHide jbroot instead of hard-coding it.
      */
-    NSString *toolPath = jbroot(@"/usr/bin/sbreload");
+    NSString *sbreloadPath = jbroot(@"/usr/bin/sbreload");
 
-    if (toolPath.length == 0) {
-        return;
+    if (sbreloadPath.length > 0) {
+        const char *path = sbreloadPath.fileSystemRepresentation;
+
+        char *const argv[] = {
+            (char *)path,
+            NULL
+        };
+
+        pid_t pid = 0;
+        int result =
+            posix_spawn(&pid, path, NULL, NULL, argv, environ);
+
+        if (result == 0) {
+            return;
+        }
     }
 
-    const char *path = toolPath.fileSystemRepresentation;
-    char *const argv[] = {
-        (char *)path,
-        NULL
-    };
+    /*
+     * Fallback only if sbreload could not be spawned.
+     */
+    NSString *killallPath = jbroot(@"/usr/bin/killall");
 
-    pid_t pid = 0;
-    int status = posix_spawn(&pid, path, NULL, NULL, argv, NULL);
+    if (killallPath.length > 0) {
+        const char *path = killallPath.fileSystemRepresentation;
 
-    if (status != 0) {
-        /*
-         * Lightweight fallback. killall is also resolved through jbroot.
-         * This branch runs only if sbreload failed to spawn.
-         */
-        NSString *killallPath = jbroot(@"/usr/bin/killall");
-        const char *killPath = killallPath.fileSystemRepresentation;
+        char *const argv[] = {
+            (char *)path,
+            (char *)"-9",
+            (char *)"SpringBoard",
+            NULL
+        };
 
-        if (killPath) {
-            char *const fallbackArgv[] = {
-                (char *)killPath,
-                (char *)"-9",
-                (char *)"SpringBoard",
-                NULL
-            };
-
-            posix_spawn(&pid, killPath, NULL, NULL, fallbackArgv, NULL);
-        }
+        pid_t pid = 0;
+        posix_spawn(&pid, path, NULL, NULL, argv, environ);
     }
 }
 
