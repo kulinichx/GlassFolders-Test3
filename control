@@ -1,0 +1,9 @@
+Package: com.local.glassfolderstest3
+Name: GlassFolders Test3
+Version: 0.3.0~test3
+Architecture: iphoneos-arm64e
+Description: Minimal RootHide validation tweak. Hides only the Home Screen folder icon plate using one Logos hook.
+Maintainer: Local Test Build
+Author: Local Test Build
+Section: Tweaks
+Depends: mobilesubstrate, firmware (>= 16.0)
