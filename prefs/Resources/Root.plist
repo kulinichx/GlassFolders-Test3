@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>GlassFolders</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>GlassFolders 0.4</string>
+			<key>footerText</key>
+			<string>本版只控制桌面关闭状态的文件夹底板。设置修改后请 Respring 一次生效。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>启用</string>
+			<key>key</key>
+			<string>Enabled</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.local.glassfolders</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>桌面文件夹</string>
+			<key>footerText</key>
+			<string>0% = Test3.1 的完全透明；数值越高，玻璃模糊与极淡白色染色越明显。建议先试 0–25%。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSliderCell</string>
+			<key>label</key>
+			<string>玻璃强度</string>
+			<key>key</key>
+			<string>GlassStrength</string>
+			<key>default</key>
+			<integer>0</integer>
+			<key>defaults</key>
+			<string>com.local.glassfolders</string>
+			<key>min</key>
+			<integer>0</integer>
+			<key>max</key>
+			<integer>100</integer>
+			<key>showValue</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>稳定测试建议：先用 0%，左右滑动桌面 20–30 次；确认稳定后再尝试 10%、20%、30%。暂时不要把这一版当作最终 Liquid Glass 效果。</string>
+		</dict>
+	</array>
+</dict>
+</plist>

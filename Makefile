@@ -5,13 +5,16 @@ THEOS_PACKAGE_SCHEME = roothide
 FINALPACKAGE = 1
 DEBUG = 0
 
-INSTALL_TARGET_PROCESSES = SpringBoard
+INSTALL_TARGET_PROCESSES = SpringBoard Preferences
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = GlassFoldersTest3
-GlassFoldersTest3_FILES = Tweak.xm
-GlassFoldersTest3_CFLAGS = -fobjc-arc
-GlassFoldersTest3_FRAMEWORKS = UIKit
+TWEAK_NAME = GlassFolders
+GlassFolders_FILES = Tweak.xm
+GlassFolders_CFLAGS = -fobjc-arc
+GlassFolders_FRAMEWORKS = UIKit CoreFoundation
 
 include $(THEOS_MAKE_PATH)/tweak.mk
+
+SUBPROJECTS += prefs
+include $(THEOS_MAKE_PATH)/aggregate.mk

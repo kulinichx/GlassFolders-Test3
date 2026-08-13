@@ -1,9 +1,9 @@
 Package: com.local.glassfolderstest3
-Name: GlassFolders Test3
-Version: 0.3.1~test3.1
+Name: GlassFolders
+Version: 0.4.0~test4
 Architecture: iphoneos-arm64e
-Description: Minimal RootHide validation tweak. Stable folder icon transparency across Home Screen page reuse.
+Description: Minimal RootHide folder-glass tweak. Adds a master switch and Home Screen glass strength while preserving the stable Test3.1 replacement-view approach.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks
-Depends: mobilesubstrate, firmware (>= 16.0)
+Depends: mobilesubstrate, preferenceloader, firmware (>= 16.0)

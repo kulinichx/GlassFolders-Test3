@@ -1,50 +1,73 @@
-# GlassFolders Test3.1 — RootHide
+# GlassFolders 0.4 / Test4 — RootHide
 
-Minimal validation build for:
-- iPhone 14 Pro / A16 / iPhone15,2
+Target validation environment:
+
+- iPhone 14 Pro (iPhone15,2 / A16)
 - iOS 16.6
 - Dopamine 3.x RootHide-style environment
 
-## Purpose
+## What changed from stable Test3.1
 
-Test3 deliberately does only one thing:
-hide the translucent plate behind the miniature app previews of a closed Home Screen folder icon.
+Test3.1 proved that replacing `SBFolderIconImageView`'s assigned background view
+is stable across repeated Home Screen page reuse.
 
-It uses:
-- RootHide Theos
-- Logos
-- substrate-compatible injection
-- arm64e
-- SpringBoard-only filter
+Test4 keeps that exact architectural idea and adds only:
 
-Hooked selector:
-`SBFolderIconImageView -setBackgroundView:`
+- master enable switch
+- Home Screen glass strength slider (0–100)
 
-It does NOT modify opened-folder visuals, wallpaper blur, layout, titles, gestures, Dock, launchd, or jailbreak filesystem paths.
+No opened-folder hooks are included yet.
 
-There is no Settings bundle in Test3.
+## Modes
 
-## Build on GitHub
+### Enabled + Glass Strength 0%
 
-1. Create a new GitHub repository.
-2. Upload every file/folder from this project to the repository root.
-3. Open Actions → Build RootHide Test3.
-4. Click Run workflow.
-5. Download the `GlassFolders-Test3-DEB` artifact.
+Equivalent visual goal to Test3.1:
+fully transparent folder icon plate.
 
-The workflow fails automatically if the built dylib is not reported as arm64e.
+### Enabled + Glass Strength 1–100%
 
+Uses a tweak-owned `UIVisualEffectView` with
+`UIBlurEffectStyleSystemUltraThinMaterial` plus a very light white tint.
 
-## Test3.1 change
+The important part is that the Apple-provided original material background is
+still replaced, so the page-reuse bug from Test3 should not return.
 
-Test3 initially kept Apple's folder background view and changed its alpha to zero.
-On iOS 16.6, Home Screen page scrolling can reuse/reconfigure `SBFolderIconImageView`,
-which allows the original material background to become visible again.
+### Disabled
 
-Test3.1 keeps the same single `setBackgroundView:` hook but substitutes a fresh,
-empty `UIView` instead. This mirrors the strategy used by Atria for its
-"Hide folder icon blur" option and avoids relying on the system material view's
-alpha remaining unchanged during reuse.
+Passes SpringBoard's original background view untouched.
 
-Expected result: folder icon plates stay transparent after repeatedly swiping
-between Home Screen pages.
+## Apply settings
+
+For Test4, change settings and then Respring once.
+
+This is deliberate. Real-time preference updates will only be added after the
+basic preference bundle and custom glass view are verified stable on-device.
+
+## What Test4 intentionally does NOT do
+
+- no opened-folder panel changes
+- no wallpaper backdrop changes
+- no Liquid Glass edge highlight yet
+- no folder layout/title changes
+- no gestures
+- no Dock hooks
+- no launchd hooks
+- no daemon
+- no jailbreak filesystem access
+
+## Suggested test sequence
+
+1. Install over Test3.1.
+2. Open Settings → GlassFolders.
+3. Keep Enabled ON and Glass Strength at 0%.
+4. Respring.
+5. Swipe between Home Screen pages 20–30 times.
+6. If stable, test 10%, then 20%, then 30%.
+7. Disable the tweak, Respring, and verify the stock folder plate returns.
+
+Only after all of the above is stable should we add opened-folder visuals.
+
+## Upgrade note
+
+The Debian package ID intentionally remains `com.local.glassfolderstest3`, so Test4 is treated as an upgrade from Test3.1 and dpkg can remove the obsolete Test3.1 dylib/plist cleanly.
