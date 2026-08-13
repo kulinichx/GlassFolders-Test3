@@ -14,7 +14,6 @@ jobs:
 
     env:
       THEOS: ${{ github.workspace }}/theos
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout project
@@ -29,9 +28,23 @@ jobs:
           git clone --recursive https://github.com/roothide/theos.git "$THEOS"
           echo "THEOS=$THEOS" >> "$GITHUB_ENV"
 
-      - name: Install patched iOS 16.5 SDK
+      - name: Install official Theos patched iOS 16.5 SDK
+        shell: bash
         run: |
-          "$THEOS/bin/install-sdk" 16.5
+          set -euo pipefail
+
+          mkdir -p "$THEOS/sdks"
+
+          SDK_URL="https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS16.5.sdk.tar.xz"
+          SDK_ARCHIVE="/tmp/iPhoneOS16.5.sdk.tar.xz"
+
+          echo "Downloading official Theos patched SDK..."
+          curl -L --fail --retry 3 --retry-delay 2 \
+            "$SDK_URL" \
+            -o "$SDK_ARCHIVE"
+
+          echo "Extracting SDK..."
+          tar -xJf "$SDK_ARCHIVE" -C "$THEOS/sdks"
 
           echo "Installed SDKs:"
           ls -la "$THEOS/sdks"
@@ -39,17 +52,28 @@ jobs:
           SDK="$THEOS/sdks/iPhoneOS16.5.sdk"
           test -d "$SDK"
 
-          echo "Checking private Preferences framework:"
-          find "$SDK/System/Library/PrivateFrameworks/Preferences.framework" -maxdepth 2 -type f -print
-          test -d "$SDK/System/Library/PrivateFrameworks/Preferences.framework"
+          echo "Checking Preferences private framework..."
+          PREF_FRAMEWORK="$SDK/System/Library/PrivateFrameworks/Preferences.framework"
+          test -d "$PREF_FRAMEWORK"
+
+          find "$PREF_FRAMEWORK" -maxdepth 2 -type f -print
+
+          if ! find "$PREF_FRAMEWORK" -type f \( -name '*.tbd' -o -name 'Preferences' \) | grep -q .; then
+            echo "ERROR: Preferences framework link stub was not found."
+            exit 1
+          fi
+
+          echo "Patched iOS 16.5 SDK verification passed."
 
       - name: Show toolchain information
         run: |
           xcodebuild -version
           clang --version
           git -C "$THEOS" rev-parse HEAD
-          echo "Project target:"
+
+          echo "Main target:"
           grep '^TARGET' Makefile
+
           echo "Prefs target:"
           grep '^TARGET' prefs/Makefile
 
@@ -63,10 +87,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           DEB="$(find packages -maxdepth 1 -type f -name '*.deb' | head -n 1)"
-          test -n "$DEB"
+          if [[ -z "$DEB" ]]; then
+            echo "ERROR: No deb produced."
+            exit 1
+          fi
+
           echo "deb=$DEB" >> "$GITHUB_OUTPUT"
-          echo "Generated: $DEB"
+          echo "Generated package:"
           ls -lh "$DEB"
 
       - name: Extract package
@@ -85,10 +114,11 @@ jobs:
 
           DATA_TAR="$(find . -maxdepth 1 -type f -name 'data.tar.*' | head -n 1)"
           test -n "$DATA_TAR"
+
           tar -xf "$DATA_TAR"
 
           echo "Package contents:"
-          find . -type f -maxdepth 10 -print
+          find . -maxdepth 10 -type f -print
 
       - name: Verify tweak and preferences are real arm64e
         shell: bash
@@ -102,10 +132,10 @@ jobs:
           test -n "$TWEAK"
           test -n "$PREFS"
 
-          echo "Tweak:"
+          echo "Tweak binary:"
           file "$TWEAK"
 
-          echo "Preferences bundle:"
+          echo "Preferences binary:"
           file "$PREFS"
 
           file "$TWEAK" | grep -qi "arm64e"
@@ -122,8 +152,17 @@ jobs:
           FILTER="$(find . -type f -path '*MobileSubstrate/DynamicLibraries/GlassFolders.plist' | head -n 1)"
           test -n "$FILTER"
 
+          echo "Injection filter:"
           cat "$FILTER"
+
           grep -q "com.apple.springboard" "$FILTER"
+
+          if grep -qi "launchd" "$FILTER"; then
+            echo "ERROR: unexpected launchd injection."
+            exit 1
+          fi
+
+          echo "SpringBoard-only filter verified."
 
       - name: SHA256
         run: |
