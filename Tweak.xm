@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 1.2 — Forced Theos SDK
+ * GlassFolders 0.7.4 Beta 1.3 — Dedup + Rounded Icon
  *
  * Scope:
  * - stable closed SpringBoard folder icon path

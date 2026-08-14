@@ -1,51 +1,43 @@
-# GlassFolders 0.7.4 Beta 1.2 — Forced Theos SDK
+# GlassFolders 0.7.4 Beta 1.3 — Dedup + Rounded Icon
 
-Folder-only safety branch. No App Library code.
+This build fixes the two Settings issues observed on-device.
 
-## Why this workflow exists
+## Duplicate row
 
-A GitHub log showed Theos building from `/Users/runner/theos`, even though the
-previous clean workflow installed Theos under the repository workspace. That
-proves an older `build.yml` was still being executed.
+Inspection of the actual Beta 1.2 deb showed both:
 
-This clean repository intentionally uses the historical workflow filename:
+- `Library/PreferenceLoader/Preferences/GlassFolders.plist`
+- `Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist`
 
-`.github/workflows/build.yml`
+The top-level plist was an old repository leftover and produced the second,
+iconless GlassFolders row.
 
-so replacing that file overwrites the old workflow.
+Beta 1.3 deletes that old file before every build and the final-deb verifier
+hard-fails unless exactly one `GlassFolders.plist` exists.
 
-## SDK handling
+Old `GlassFoldersIcon*.png` files are also deleted and rejected.
 
-The workflow downloads the official Theos patched
-`iPhoneOS16.5.sdk.tar.xz`, extracts it, searches for the actual extracted
-`iPhoneOS16.5.sdk`, and normalizes it to the exact path:
+## Rounded Settings icon
 
-`$THEOS/sdks/iPhoneOS16.5.sdk`
+Inspection of the actual Beta 1.2 PNG showed alpha=255 at all four external
+corners. PreferenceLoader displayed the image as a square.
 
-Before compilation it verifies the exact directory again.
+Beta 1.3 writes a real anti-aliased alpha mask into the PNG itself. The corner
+radius is approximately 22% of icon width, matching the visual proportion of
+standard iOS Settings list icons.
 
-Both make commands explicitly receive:
+The final-deb verifier checks that the four external corner alpha values are
+transparent for all three icon scales:
 
-`THEOS="$THEOS"`
-
-so a stale runner environment cannot redirect Make to `/Users/runner/theos`.
+- 29x29
+- 58x58
+- 87x87
 
 ## Runtime
 
-Only:
+Unchanged folder-only safety branch:
 
 - `SBFolderIconImageView`
 - `SBFolderBackgroundView`
 
-No App Library code or runtime loader exists.
-
-## Settings icon
-
-PreferenceLoader entry:
-
-`icon = GlassFolders.png`
-
-with matching 1x/2x/3x resources both next to the entry plist and inside
-`GlassFoldersPrefs.bundle`.
-
-The final deb verifier checks the actual packaged files.
+No App Library code.
