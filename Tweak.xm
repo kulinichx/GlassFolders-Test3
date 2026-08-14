@@ -113,7 +113,6 @@ static id GFCreateCAFilter(NSString *type) {
 @interface GFBackdropGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
-@property (nonatomic, strong) CAShapeLayer *gfBaseOutline;
 @property (nonatomic, strong) CAGradientLayer *gfWhiteRimGlow;
 @property (nonatomic, strong) CAShapeLayer *gfWhiteRimMask;
 @property (nonatomic, assign) CGFloat gfStrength;
@@ -288,27 +287,19 @@ static id GFCreateCAFilter(NSString *type) {
              * The highlight itself is neutral white. Wallpaper color only
              * comes from the backdrop material underneath it.
              */
-            _gfBaseOutline = [CAShapeLayer layer];
-            _gfBaseOutline.fillColor = UIColor.clearColor.CGColor;
-            _gfBaseOutline.strokeColor =
-                [UIColor colorWithWhite:1.0
-                                  alpha:(0.038 + 0.026 * e)].CGColor;
-            _gfBaseOutline.lineCap = kCALineCapRound;
-            _gfBaseOutline.lineJoin = kCALineJoinRound;
-
             _gfWhiteRimGlow = [CAGradientLayer layer];
             _gfWhiteRimGlow.startPoint = CGPointMake(0.00, 0.00);
             _gfWhiteRimGlow.endPoint = CGPointMake(1.00, 1.00);
             _gfWhiteRimGlow.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.58].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.38].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.18].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.065].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.018].CGColor
+                (id)[UIColor colorWithWhite:1.0 alpha:0.34].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.20].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.085].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.028].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.006].CGColor
             ];
             _gfWhiteRimGlow.locations =
                 @[@0.00, @0.18, @0.44, @0.72, @1.00];
-            _gfWhiteRimGlow.opacity = 0.14 + (0.18 * e);
+            _gfWhiteRimGlow.opacity = 0.08 + (0.11 * e);
 
             _gfWhiteRimMask = [CAShapeLayer layer];
             _gfWhiteRimMask.fillColor = UIColor.clearColor.CGColor;
@@ -318,7 +309,6 @@ static id GFCreateCAFilter(NSString *type) {
 
             _gfWhiteRimGlow.mask = _gfWhiteRimMask;
 
-            [self.layer addSublayer:_gfBaseOutline];
             [self.layer addSublayer:_gfWhiteRimGlow];
         }
     }
@@ -345,7 +335,7 @@ static id GFCreateCAFilter(NSString *type) {
         self.layer.cornerRadius = radius;
         self.layer.cornerCurve = kCACornerCurveContinuous;
     }
-    if (self.gfBaseOutline && self.gfWhiteRimGlow && self.gfWhiteRimMask) {
+    if (self.gfWhiteRimGlow && self.gfWhiteRimMask) {
         /*
          * Both layers use the SAME continuous rounded-rectangle geometry.
          * Nothing ends abruptly at 30% / 50%, so there is no artificial seam.
@@ -354,9 +344,13 @@ static id GFCreateCAFilter(NSString *type) {
          * The brighter rim is ~1.6pt but remains soft because its actual
          * brightness comes from a low-opacity white gradient.
          */
-        CGFloat baseWidth = 0.60;
-        CGFloat rimWidth = 1.60;
-        CGFloat inset = MAX(baseWidth, rimWidth) * 0.5 + 0.28;
+        /*
+         * Softer optical edge:
+         * wider than a hairline, but much lower opacity.
+         * The goal is a transition region, not a visible outline.
+         */
+        CGFloat rimWidth = 2.35;
+        CGFloat inset = rimWidth * 0.5 + 0.30;
 
         CGRect pathRect = CGRectInset(self.bounds, inset, inset);
         CGFloat pathRadius = MAX(0.0, radius - inset);
@@ -364,10 +358,6 @@ static id GFCreateCAFilter(NSString *type) {
         UIBezierPath *edgePath =
             [UIBezierPath bezierPathWithRoundedRect:pathRect
                                        cornerRadius:pathRadius];
-
-        self.gfBaseOutline.frame = self.bounds;
-        self.gfBaseOutline.path = edgePath.CGPath;
-        self.gfBaseOutline.lineWidth = baseWidth;
 
         self.gfWhiteRimGlow.frame = self.bounds;
         self.gfWhiteRimMask.frame = self.bounds;
@@ -397,7 +387,6 @@ static id GFCreateCAFilter(NSString *type) {
 @interface GFOpenedFolderGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
-@property (nonatomic, strong) CAShapeLayer *gfBaseOutline;
 @property (nonatomic, strong) CAGradientLayer *gfWhiteRimGlow;
 @property (nonatomic, strong) CAShapeLayer *gfWhiteRimMask;
 @property (nonatomic, assign) CGFloat gfStrength;
@@ -436,9 +425,13 @@ static id GFCreateCAFilter(NSString *type) {
              * - still restrained saturation
              * - almost no brightness lift
              */
-            CGFloat blurRadius = 4.8 + (10.8 * e);
-            CGFloat saturation = 1.06 + (0.30 * e);
-            CGFloat brightness = 0.002 + (0.008 * e);
+            /*
+             * Opened "frosted transparent" calibration:
+             * visibly softer than the closed icon, but still transparent.
+             */
+            CGFloat blurRadius = 7.0 + (14.0 * e);
+            CGFloat saturation = 1.02 + (0.18 * e);
+            CGFloat brightness = 0.001 + (0.006 * e);
 
             id saturate = GFCreateCAFilter(@"colorSaturate");
             id brighten = GFCreateCAFilter(@"colorBrightness");
@@ -484,7 +477,7 @@ static id GFCreateCAFilter(NSString *type) {
          * Keep the opened folder neutral.
          * Wallpaper remains the color source.
          */
-        CGFloat tintAlpha = 0.002 + (0.010 * e);
+        CGFloat tintAlpha = 0.010 + (0.024 * e);
 
         if (_gfStrength > 0.001 && tintAlpha > 0.001) {
             _gfTintView = [[UIView alloc] initWithFrame:CGRectZero];
@@ -499,27 +492,19 @@ static id GFCreateCAFilter(NSString *type) {
              * Same Apple-style white edge language as the closed folder,
              * slightly wider because this is a much larger surface.
              */
-            _gfBaseOutline = [CAShapeLayer layer];
-            _gfBaseOutline.fillColor = UIColor.clearColor.CGColor;
-            _gfBaseOutline.strokeColor =
-                [UIColor colorWithWhite:1.0
-                                  alpha:(0.030 + 0.022 * e)].CGColor;
-            _gfBaseOutline.lineCap = kCALineCapRound;
-            _gfBaseOutline.lineJoin = kCALineJoinRound;
-
             _gfWhiteRimGlow = [CAGradientLayer layer];
             _gfWhiteRimGlow.startPoint = CGPointMake(0.00, 0.00);
             _gfWhiteRimGlow.endPoint = CGPointMake(1.00, 1.00);
             _gfWhiteRimGlow.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.50].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.30].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.12].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.040].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.012].CGColor
+                (id)[UIColor colorWithWhite:1.0 alpha:0.28].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.16].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.065].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.020].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.004].CGColor
             ];
             _gfWhiteRimGlow.locations =
                 @[@0.00, @0.18, @0.44, @0.72, @1.00];
-            _gfWhiteRimGlow.opacity = 0.12 + (0.16 * e);
+            _gfWhiteRimGlow.opacity = 0.07 + (0.10 * e);
 
             _gfWhiteRimMask = [CAShapeLayer layer];
             _gfWhiteRimMask.fillColor = UIColor.clearColor.CGColor;
@@ -528,7 +513,6 @@ static id GFCreateCAFilter(NSString *type) {
             _gfWhiteRimMask.lineJoin = kCALineJoinRound;
             _gfWhiteRimGlow.mask = _gfWhiteRimMask;
 
-            [self.layer addSublayer:_gfBaseOutline];
             [self.layer addSublayer:_gfWhiteRimGlow];
         }
     }
@@ -567,10 +551,13 @@ static id GFCreateCAFilter(NSString *type) {
         self.layer.cornerCurve = kCACornerCurveContinuous;
     }
 
-    if (self.gfBaseOutline && self.gfWhiteRimGlow && self.gfWhiteRimMask) {
-        CGFloat baseWidth = 0.70;
-        CGFloat rimWidth = 1.90;
-        CGFloat inset = MAX(baseWidth, rimWidth) * 0.5 + 0.35;
+    if (self.gfWhiteRimGlow && self.gfWhiteRimMask) {
+        /*
+         * Large panel edge is even softer than the closed icon.
+         * Wide enough to suggest glass thickness, dim enough to avoid a frame.
+         */
+        CGFloat rimWidth = 2.70;
+        CGFloat inset = rimWidth * 0.5 + 0.38;
 
         CGRect pathRect = CGRectInset(self.bounds, inset, inset);
         CGFloat pathRadius = MAX(0.0, radius - inset);
@@ -578,10 +565,6 @@ static id GFCreateCAFilter(NSString *type) {
         UIBezierPath *edgePath =
             [UIBezierPath bezierPathWithRoundedRect:pathRect
                                        cornerRadius:pathRadius];
-
-        self.gfBaseOutline.frame = self.bounds;
-        self.gfBaseOutline.path = edgePath.CGPath;
-        self.gfBaseOutline.lineWidth = baseWidth;
 
         self.gfWhiteRimGlow.frame = self.bounds;
         self.gfWhiteRimMask.frame = self.bounds;

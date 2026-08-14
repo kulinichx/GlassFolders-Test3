@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.5.11-1~test5.11
+Version: 0.5.12~test5.12
 Architecture: iphoneos-arm64e
-Description: Lightweight RootHide Native Transparent Glass for closed and opened folders, with Apple-style neutral rim, 5 percent detents, crisp haptics, and built-in logout.
+Description: Lightweight RootHide Native Transparent Glass with soft closed edges and frosted-transparent opened folders, 5 percent detents, crisp haptics, and built-in logout.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks

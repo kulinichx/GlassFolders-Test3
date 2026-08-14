@@ -1,53 +1,43 @@
-# GlassFolders 0.5.11 — Opened Native Transparent Glass
+# GlassFolders 0.5.12 — Frosted Open Glass
 
-## Target
+Calibrated against the supplied Apple opened-folder reference.
 
-This version combines the closed-folder calibration with the supplied Apple
-opened-folder reference.
+## Closed folder
 
-Desired opened-folder look:
+The Backdrop Glass color remains unchanged.
 
-- one large translucent glass panel
-- wallpaper color clearly passes through
-- app icons remain crisp
-- rounded white rim is subtle and neutral
-- no diagonal white stripe
-- no white/gray frosted-card look
-- surrounding desktop blur/dim remains Apple's stock effect
+The hard outline has been removed:
+- no base white stroke
+- only one wider, much lower-opacity neutral-white rim
+- edge reads as a soft transition, not a frame
 
-## Implementation
+## Opened folder
 
-`SBFloatyFolderView` now receives one lightweight
-`GFOpenedFolderGlassView` behind its content.
+Target: "slightly frosted but still transparent".
 
-The custom opened glass uses:
+Compared with 0.5.11:
+- stronger blur
+- lower saturation boost
+- tiny additional neutral-white tint
+- no hard base outline
+- wider but much dimmer soft rim
 
-- `CABackdropLayer` when available
-- static saturation / brightness / Gaussian blur filters
-- nearly zero white tint
-- one faint complete white outline
-- one neutral-white gradient rim
+The wallpaper color is still visible through the large panel, but details are
+more softly diffused than in the closed folder.
 
-The large surface is intentionally a little "thicker" than the closed folder:
+## Mapping
 
-- slightly stronger blur
-- slightly lower saturation boost
-- still wallpaper-colored
+One user-facing strength slider still controls both states.
 
-## Animation
+Closed folder:
+- clearer/thinner material
 
-No open/close animation is rewritten.
+Opened folder:
+- automatically one material-weight step thicker
 
-The system continues calling `setBackgroundAlpha:`. GlassFolders maps that
-same alpha directly to the custom glass view, so the panel follows Apple's
-existing zoom/fade transition automatically.
+No separate "opened folder strength" setting is added.
 
-Apple's original folder panel material is set to zero opacity only in
-Liquid Glass mode.
-
-The surrounding wallpaper blur/dim is not replaced or duplicated.
-
-## Performance
+## Performance unchanged
 
 No:
 - daemon
@@ -58,27 +48,11 @@ No:
 - custom full-screen blur
 - custom transition animator
 
-At runtime the opened effect adds only one static backdrop view while a folder
-is open.
+The opened panel still follows SpringBoard's own background-alpha animation.
 
-## Existing UX retained
+## UX unchanged
 
 - 5% magnetic detents
 - crisp rigid haptic ticks
 - magnetic settle on release
 - 应用并注销
-
-
-## Fix1 build correction
-
-The initial 0.5.11 source stored the opened glass using a Logos-added property
-on `SBFloatyFolderView`. Clang rejected property access on the private class in
-this build environment.
-
-Fix1 uses Objective-C associated objects instead:
-
-- `objc_getAssociatedObject`
-- `objc_setAssociatedObject`
-- `OBJC_ASSOCIATION_RETAIN_NONATOMIC`
-
-No opened/closed glass visual parameters were changed.
