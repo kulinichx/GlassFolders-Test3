@@ -1,4 +1,4 @@
-name: Build RootHide 0.7.3 App Library Beta1.3.1 Gate Fix.3 Runtime Fix
+name: Build RootHide 0.7.3 App Library Beta1.4 Exact Hook.3 Runtime Fix
 
 on:
   workflow_dispatch:
@@ -86,7 +86,7 @@ jobs:
           require_text '#import <dlfcn.h>' Tweak.xm 'dlfcn import'
 
           echo "Rejecting dangerous controller/factory hooks..."
-          if grep -Eq -- 'SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView|SBHLibraryViewController|SBHLibraryPodFolderController|_SBHLibraryPodIconView|_SBHLibraryPodIconListView' Tweak.xm; then
+          if grep -Eq -- 'SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView|SBHLibraryViewController|SBHLibraryPodFolderController|SBHLibraryPodFolderView|_SBHLibraryPodIconView|_SBHLibraryPodIconListView|GFResolveAppLibraryBackgroundClass|GFInstallAppLibraryRuntimeHook' Tweak.xm; then
             echo "ERROR: forbidden folder/App-Library controller or icon-list path found."
             fail=1
           else
@@ -96,8 +96,10 @@ jobs:
           echo "Checking essential runtime entry points..."
           require_text 'SBFolderIconImageView' Tweak.xm 'closed-folder visual class'
           require_text 'SBFolderBackgroundView' Tweak.xm 'opened-folder visual class'
-          require_text 'GFResolveAppLibraryBackgroundClass' Tweak.xm 'App Library runtime resolver'
-          require_text 'GFInstallAppLibraryRuntimeHook' Tweak.xm 'App Library runtime installer'
+          require_text 'SBHLibraryCategoryPodBackgroundView' Tweak.xm 'App Library category background class'
+          require_text '%group GFAppLibraryHooks' Tweak.xm 'App Library Logos group'
+          require_text '%init(' Tweak.xm 'Logos initialization'
+          require_text 'SpringBoardHome.framework/SpringBoardHome' Tweak.xm 'SpringBoardHome explicit load'
           require_text 'AppLibraryPodsEnabled' Tweak.xm 'App Library preference key'
 
           if [ "$fail" -ne 0 ]; then
@@ -197,7 +199,7 @@ jobs:
           strings "$DYLIB" > "$STRINGS_FILE"
 
           echo "Reject dangerous private/controller paths:"
-          if grep -E 'SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView|SBHLibraryViewController|SBHLibraryPodFolderController|_SBHLibraryPodIconView|_SBHLibraryPodIconListView' "$STRINGS_FILE"; then
+          if grep -E 'SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView|SBHLibraryViewController|SBHLibraryPodFolderController|SBHLibraryPodFolderView|_SBHLibraryPodIconView|_SBHLibraryPodIconListView|GFResolveAppLibraryBackgroundClass|GFInstallAppLibraryRuntimeHook' "$STRINGS_FILE"; then
             echo "ERROR: dangerous folder/App-Library path leaked into build."
             exit 1
           fi
@@ -213,7 +215,7 @@ jobs:
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.3-Beta1.3.1-RuntimeAppLibrary-DEB
+          name: GlassFolders-0.7.3-Beta1.4-AppLibraryExact-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
