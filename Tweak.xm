@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 1.8 FIX4 — Apple Side-Tangent Continuity
+ * GlassFolders 0.7.4 Beta 1.8 FIX5 — Continuous Corner/Tangent Rails
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -1053,7 +1053,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
 
     NSString *cacheKey = [NSString stringWithFormat:
-        @"P-%@-%zux%zu-r%.2f-s%ld",
+        @"P5-%@-%zux%zu-r%.2f-s%ld",
         darkAppearance ? @"D" : @"L",
         pixelWidth,
         pixelHeight,
@@ -1373,45 +1373,63 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 secondaryEndpointGate;
 
             /*
-             * Geometric ownership fixes the visible seam at the two intended
-             * continuous joins.  A normal-based selector alone approaches zero
-             * at the side tangent of a rounded corner, which made the TL arc
-             * look detached from the top and the BR arc detached from bottom.
+             * FIX5 — one geometric rail across BOTH tangents.
              *
-             * Treat the complete top-left quarter arc as part of the primary
-             * rail and the complete bottom-right quarter arc as part of the
-             * secondary rail.  Then feather a short distance down/up the side
-             * so the energy leaves the corner continuously rather than ending
-             * on one pixel row.
+             * FIX4 solved the side tangent (TL -> left, BR -> right), but the
+             * horizontal tangent could still show a tiny break because the
+             * quarter-arc ownership ended on one pixel column while the top /
+             * bottom straight rail immediately fell back to a normal-derived
+             * mask.  At 1.5x that hand-off is visible as a hairline gap.
+             *
+             * The owned rail is now explicit geometry:
+             *
+             *   primary   = TL quarter arc + top straight + TL side tail
+             *   secondary = bottom straight + BR quarter arc + BR side tail
+             *
+             * The straight and curved pieces deliberately overlap by a small
+             * sub-point-safe amount at the tangent.  There is no alpha fade at
+             * an internal join; fading happens only at the true free endpoint
+             * (TR for primary, BL for secondary) and at the side tails.
              */
+            CGFloat tangentOverlap =
+                MAX(2.0 * renderScale,
+                    endpointRadius * 0.055);
+
             CGFloat topLeftArcOwnership =
-                (x <= endpointRadius &&
+                (x <= endpointRadius + tangentOverlap &&
                  y <= endpointRadius)
                     ? 1.0
                     : 0.0;
 
             CGFloat bottomRightArcOwnership =
-                (x >= width - endpointRadius &&
+                (x >= width - endpointRadius - tangentOverlap &&
                  y >= height - endpointRadius)
                     ? 1.0
                     : 0.0;
 
             /*
-             * FIX4 — Apple-like side-tangent hand-off.
-             *
-             * The reference material does not let the specular rail stop at
-             * the exact quarter-circle tangent.  The top-left reflection
-             * continues a short way down the left wall, and the lower-right
-             * reflection continues a short way up the right wall, with a very
-             * soft energy roll-off.
-             *
-             * Keep this purely geometric: no extra tint, no extra blur pass,
-             * and no higher-resolution lighting map.  This preserves FIX2's
-             * SpringBoard cost/stability while fixing the visible side kink.
-             *
-             * About half a corner radius matches the visual hand-off on the
-             * large system folder panel.  The 10 pt floor keeps smaller radii
-             * from collapsing into a one/two-pixel fade.
+             * Position-owned horizontal rails remove the last normal-field
+             * ambiguity at the arc/straight tangent.  The surrounding SDF
+             * band still controls actual edge thickness, so these masks do
+             * not paint the panel interior.
+             */
+            CGFloat topStraightOwnership =
+                (y <= endpointRadius &&
+                 x >= endpointRadius - tangentOverlap &&
+                 x <= width - endpointRadius)
+                    ? 1.0
+                    : 0.0;
+
+            CGFloat bottomStraightOwnership =
+                (y >= height - endpointRadius &&
+                 x >= endpointRadius &&
+                 x <= width - endpointRadius + tangentOverlap)
+                    ? 1.0
+                    : 0.0;
+
+            /*
+             * Preserve FIX4's already-good side hand-off: about half a radius
+             * with a C2-continuous smootherstep roll-off.
              */
             CGFloat sideTailLength =
                 MAX(10.0 * renderScale,
@@ -1429,12 +1447,6 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                     MAX(1.0, sideTailLength)
                 );
 
-            /*
-             * Quintic smootherstep (C2-continuous) rather than cubic
-             * smoothstep.  Both slope and curvature arrive/leave gently, so
-             * there is no perceptual elbow at either the arc tangent or the
-             * quiet side-middle transition.
-             */
             CGFloat tlT = topLeftTailProgress;
             CGFloat brT = bottomRightTailProgress;
 
@@ -1460,26 +1472,30 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                       (1.0 - bottomRightTailSmooth)
                     : 0.0;
 
+            CGFloat primaryOwnedGeometry =
+                MAX(
+                    MAX(topLeftArcOwnership,
+                        topStraightOwnership),
+                    topLeftSideTail
+                );
+
+            CGFloat secondaryOwnedGeometry =
+                MAX(
+                    MAX(bottomRightArcOwnership,
+                        bottomStraightOwnership),
+                    bottomRightSideTail
+                );
+
             primaryRailMask =
                 GFClamp01(
-                    MAX(
-                        primaryRailMask,
-                        MAX(
-                            topLeftArcOwnership,
-                            topLeftSideTail
-                        )
-                    )
+                    MAX(primaryRailMask,
+                        primaryOwnedGeometry)
                 );
 
             secondaryRailMask =
                 GFClamp01(
-                    MAX(
-                        secondaryRailMask,
-                        MAX(
-                            bottomRightArcOwnership,
-                            bottomRightSideTail
-                        )
-                    )
+                    MAX(secondaryRailMask,
+                        secondaryOwnedGeometry)
                 );
 
             CGFloat coveredByRails =
@@ -1544,11 +1560,14 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              * the TL arc and top segment visually equal instead of making the
              * 45-degree corner peak brighter.
              */
-            CGFloat primaryDirectionalMicro =
-                0.96 + 0.04 * pow(facing, 1.15);
-
-            CGFloat secondaryDirectionalMicro =
-                0.96 + 0.04 * pow(opposite, 1.15);
+            /*
+             * The opened panel rail is intentionally energy-flat through an
+             * internal tangent.  Direction still shapes the non-owned corner
+             * transitions, but it must not create a 1-4% dip exactly where a
+             * curved rail becomes a straight one.
+             */
+            CGFloat primaryDirectionalMicro = 1.0;
+            CGFloat secondaryDirectionalMicro = 1.0;
 
             CGFloat white =
                 filament * perimeterFloor +
