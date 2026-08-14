@@ -7,7 +7,7 @@
 #import <dlfcn.h>
 
 /*
- * GlassFolders 0.7.3 Beta 1.4.1 — Logos Init Fix
+ * GlassFolders 0.7.3 Beta 2 — Pod Container Glass
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -1762,69 +1762,274 @@ static void GFUpdateOpenedFolderBackground(
 
 
 
-#pragma mark - App Library category pod glass
+
+#pragma mark - App Library Pod container glass
 
 /*
- * App Library safety boundary
+ * App Library hierarchy used here:
  *
- * The category card has a dedicated visual background view class. We attach
- * only to that background surface. No App Library controller, category-folder
- * controller, icon-list view, or icon view is hooked.
+ * SBHLibraryPodFolderView
+ *   -> category pod contents / icons
+ *   -> SBHLibraryCategoryPodBackgroundView (stock dark card background)
  *
- * This matters because the new option should be visual-only and should not
- * participate in App Library navigation, selection, layout, or folder opening.
+ * The pod view is the geometry/lifecycle container.  The category-background
+ * view is used only as the exact card frame/radius reference.
+ *
+ * We do NOT replace the pod, controller, icon list, icon views, labels, touch
+ * handling, or expansion logic.
  */
-static void GFUpdateAppLibraryCategoryBackground(
+static char kGFAppLibraryPodGlassKey;
+static char kGFAppLibraryPodBackgroundKey;
+
+
+static GFPanelGlassView *GFAppLibraryGlassForPod(
+    UIView *podView
+) {
+    return (GFPanelGlassView *)
+        objc_getAssociatedObject(
+            podView,
+            &kGFAppLibraryPodGlassKey
+        );
+}
+
+
+static void GFSetAppLibraryGlassForPod(
+    UIView *podView,
+    GFPanelGlassView *glass
+) {
+    objc_setAssociatedObject(
+        podView,
+        &kGFAppLibraryPodGlassKey,
+        glass,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+}
+
+
+static UIView *GFStoredAppLibraryBackgroundForPod(
+    UIView *podView
+) {
+    return (UIView *)
+        objc_getAssociatedObject(
+            podView,
+            &kGFAppLibraryPodBackgroundKey
+        );
+}
+
+
+static void GFSetStoredAppLibraryBackgroundForPod(
+    UIView *podView,
     UIView *backgroundView
 ) {
-    if (!backgroundView) {
+    objc_setAssociatedObject(
+        podView,
+        &kGFAppLibraryPodBackgroundKey,
+        backgroundView,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+}
+
+
+static UIView *GFFindLibraryCategoryBackgroundRecursive(
+    UIView *root,
+    Class backgroundClass
+) {
+    if (!root ||
+        !backgroundClass) {
+        return nil;
+    }
+
+    for (UIView *subview
+         in root.subviews) {
+
+        if ([subview isKindOfClass:backgroundClass]) {
+            return subview;
+        }
+
+        UIView *nested =
+            GFFindLibraryCategoryBackgroundRecursive(
+                subview,
+                backgroundClass
+            );
+
+        if (nested) {
+            return nested;
+        }
+    }
+
+    return nil;
+}
+
+
+static UIView *GFResolveLibraryCategoryBackground(
+    UIView *podView
+) {
+    if (!podView) {
+        return nil;
+    }
+
+    UIView *stored =
+        GFStoredAppLibraryBackgroundForPod(
+            podView
+        );
+
+    if (stored &&
+        [stored isDescendantOfView:podView]) {
+        return stored;
+    }
+
+    /*
+     * Restore a stale reused background before forgetting it.
+     */
+    if (stored) {
+        GFSetStockPanelSubviewSuppressed(
+            stored,
+            NO
+        );
+    }
+
+    Class backgroundClass =
+        NSClassFromString(
+            @"SBHLibraryCategoryPodBackgroundView"
+        );
+
+    UIView *resolved =
+        GFFindLibraryCategoryBackgroundRecursive(
+            podView,
+            backgroundClass
+        );
+
+    GFSetStoredAppLibraryBackgroundForPod(
+        podView,
+        resolved
+    );
+
+    return resolved;
+}
+
+
+static UIView *GFNearestLibraryPodAncestor(
+    UIView *view
+) {
+    if (!view) {
+        return nil;
+    }
+
+    Class podClass =
+        NSClassFromString(
+            @"SBHLibraryPodFolderView"
+        );
+
+    UIView *current =
+        view.superview;
+
+    while (current) {
+        if (podClass &&
+            [current isKindOfClass:podClass]) {
+            return current;
+        }
+
+        current =
+            current.superview;
+    }
+
+    return nil;
+}
+
+
+static void GFRestoreAppLibraryPod(
+    UIView *podView
+) {
+    if (!podView) {
         return;
     }
 
     GFPanelGlassView *glass =
-        GFPanelGlassForBackground(
-            backgroundView
+        GFAppLibraryGlassForPod(
+            podView
         );
 
+    if (glass) {
+        [glass removeFromSuperview];
+
+        GFSetAppLibraryGlassForPod(
+            podView,
+            nil
+        );
+    }
+
+    UIView *backgroundView =
+        GFStoredAppLibraryBackgroundForPod(
+            podView
+        );
+
+    if (backgroundView) {
+        GFSetStockPanelSubviewSuppressed(
+            backgroundView,
+            NO
+        );
+
+        GFSetStoredAppLibraryBackgroundForPod(
+            podView,
+            nil
+        );
+    }
+}
+
+
+static void GFUpdateAppLibraryPod(
+    UIView *podView
+) {
+    if (!podView) {
+        return;
+    }
+
     if (!GFShouldUseAppLibraryPods()) {
-        if (glass) {
-            [glass removeFromSuperview];
-
-            GFSetPanelGlassForBackground(
-                backgroundView,
-                nil
-            );
-        }
-
-        for (UIView *subview
-             in backgroundView.subviews) {
-
-            GFSetStockPanelSubviewSuppressed(
-                subview,
-                NO
-            );
-        }
+        GFRestoreAppLibraryPod(
+            podView
+        );
 
         return;
     }
 
+    UIView *backgroundView =
+        GFResolveLibraryCategoryBackground(
+            podView
+        );
+
     /*
-     * Preserve the system background hierarchy and lifecycle; suppress only
-     * its visual children while the custom glass is active.
+     * Do not guess the card geometry if the exact background descendant has
+     * not appeared yet. UIKit will call layout again after it is attached.
      */
-    backgroundView.backgroundColor =
-        UIColor.clearColor;
-
-    for (UIView *subview
-         in backgroundView.subviews) {
-
-        if (subview != glass) {
-            GFSetStockPanelSubviewSuppressed(
-                subview,
-                YES
-            );
-        }
+    if (!backgroundView) {
+        return;
     }
+
+    CGRect cardFrame =
+        [backgroundView
+            convertRect:backgroundView.bounds
+                 toView:podView];
+
+    if (CGRectIsEmpty(cardFrame) ||
+        CGRectGetWidth(cardFrame) < 40.0 ||
+        CGRectGetHeight(cardFrame) < 40.0) {
+        return;
+    }
+
+    /*
+     * This is the key change from Beta1.x:
+     * hide the WHOLE stock category-background view, not just its child
+     * material views. The previous builds could leave a dark host layer alive.
+     */
+    GFSetStockPanelSubviewSuppressed(
+        backgroundView,
+        YES
+    );
+
+    GFPanelGlassView *glass =
+        GFAppLibraryGlassForPod(
+            podView
+        );
 
     if (!glass) {
         glass =
@@ -1832,133 +2037,68 @@ static void GFUpdateAppLibraryCategoryBackground(
                 initWithStrength:
                     GFGlassStrength];
 
-        GFSetPanelGlassForBackground(
-            backgroundView,
+        /*
+         * Associate before insertion so any synchronous UIView callbacks can
+         * identify our child without recursively creating another one.
+         */
+        GFSetAppLibraryGlassForPod(
+            podView,
             glass
         );
 
-        [backgroundView
-            addSubview:glass];
-    } else if (glass.superview != backgroundView) {
+        /*
+         * PodFolderView owns icons/content above this layer. Index 0 keeps the
+         * custom material underneath all system content.
+         */
+        [podView
+            insertSubview:glass
+                  atIndex:0];
+    } else if (glass.superview != podView) {
         [glass removeFromSuperview];
 
-        [backgroundView
-            addSubview:glass];
+        [podView
+            insertSubview:glass
+                  atIndex:0];
     }
 
     glass.frame =
-        backgroundView.bounds;
+        cardFrame;
 
     glass.autoresizingMask =
-        UIViewAutoresizingFlexibleWidth |
-        UIViewAutoresizingFlexibleHeight;
+        UIViewAutoresizingNone;
 
-    /*
-     * Prefer Apple's actual category-card radius. If it has not propagated to
-     * the host layer yet, derive a conservative continuous radius from size.
-     */
     CGFloat radius =
         backgroundView.layer.cornerRadius;
 
     if (radius <= 0.0) {
         CGFloat shortSide =
             MIN(
-                CGRectGetWidth(backgroundView.bounds),
-                CGRectGetHeight(backgroundView.bounds)
+                CGRectGetWidth(cardFrame),
+                CGRectGetHeight(cardFrame)
             );
 
+        /*
+         * Only a radius fallback; frame still comes from the exact system
+         * background view.
+         */
         radius =
             MIN(
-                34.0,
-                MAX(20.0, shortSide * 0.14)
+                30.0,
+                MAX(
+                    18.0,
+                    shortSide * 0.16
+                )
             );
     }
 
     [glass
         setPreferredRadius:
             radius];
-
-    [backgroundView
-        bringSubviewToFront:glass];
 }
 
 
-@interface SBFolderBackgroundView : UIView
+@interface SBHLibraryPodFolderView : UIView
 @end
-
-
-%group GFOpenedPanelHooks
-
-%hook SBFolderBackgroundView
-
-- (void)didAddSubview:(UIView *)subview {
-    %orig(subview);
-
-    if (GFShouldUseOpenedPanel() &&
-        ![subview isKindOfClass:
-            [GFPanelGlassView class]]) {
-
-        /*
-         * Synchronous suppression means newly-created stock material cannot
-         * become the first rendered dark frame.
-         */
-        GFSetStockPanelSubviewSuppressed(
-            subview,
-            YES
-        );
-    }
-}
-
-- (void)didMoveToWindow {
-    %orig;
-
-    /*
-     * This is after SpringBoard constructed the background object and its
-     * material children, but before normal on-screen compositing.
-     * We do not insert our view during the private object's initializer.
-     */
-    GFUpdateOpenedFolderBackground(self);
-}
-
-- (void)layoutSubviews {
-    %orig;
-
-    GFUpdateOpenedFolderBackground(self);
-}
-
-- (void)setBackgroundColor:(UIColor *)color {
-    if (GFShouldUseOpenedPanel()) {
-        %orig(UIColor.clearColor);
-    } else {
-        %orig(color);
-    }
-}
-
-- (void)traitCollectionDidChange:
-    (UITraitCollection *)previousTraitCollection {
-
-    %orig(previousTraitCollection);
-
-    GFPanelGlassView *glass =
-        GFPanelGlassForBackground(self);
-
-    if (glass) {
-        [glass gfRefreshMaterial];
-    }
-
-    GFUpdateOpenedFolderBackground(self);
-}
-
-%end
-
-%end
-
-
-
-
-
-
-#pragma mark - App Library category-card background
 
 @interface SBHLibraryCategoryPodBackgroundView : UIView
 - (void)_updateVisualStyle;
@@ -1967,33 +2107,12 @@ static void GFUpdateAppLibraryCategoryBackground(
 
 %group GFAppLibraryHooks
 
-%hook SBHLibraryCategoryPodBackgroundView
-
-- (void)_updateVisualStyle {
-    if (GFShouldUseAppLibraryPods()) {
-        /*
-         * This method is the category-background style writer.
-         * While custom glass is enabled, do not let it repaint the stock
-         * opaque/material background over our glass.
-         */
-        GFUpdateAppLibraryCategoryBackground(
-            self
-        );
-
-        return;
-    }
-
-    %orig;
-
-    GFUpdateAppLibraryCategoryBackground(
-        self
-    );
-}
+%hook SBHLibraryPodFolderView
 
 - (void)didMoveToWindow {
     %orig;
 
-    GFUpdateAppLibraryCategoryBackground(
+    GFUpdateAppLibraryPod(
         self
     );
 }
@@ -2001,17 +2120,27 @@ static void GFUpdateAppLibraryCategoryBackground(
 - (void)layoutSubviews {
     %orig;
 
-    GFUpdateAppLibraryCategoryBackground(
+    GFUpdateAppLibraryPod(
         self
     );
 }
 
-- (void)setBackgroundColor:(UIColor *)color {
-    if (GFShouldUseAppLibraryPods()) {
-        %orig(UIColor.clearColor);
-    } else {
-        %orig(color);
+- (void)didAddSubview:(UIView *)subview {
+    %orig(subview);
+
+    if ([subview isKindOfClass:
+            [GFPanelGlassView class]]) {
+        return;
     }
+
+    /*
+     * The category background can be created lazily. A synchronous refresh
+     * here avoids waiting for a later page movement once the exact child
+     * enters the pod hierarchy.
+     */
+    GFUpdateAppLibraryPod(
+        self
+    );
 }
 
 - (void)traitCollectionDidChange:
@@ -2020,15 +2149,56 @@ static void GFUpdateAppLibraryCategoryBackground(
     %orig(previousTraitCollection);
 
     GFPanelGlassView *glass =
-        GFPanelGlassForBackground(self);
+        GFAppLibraryGlassForPod(
+            self
+        );
 
     if (glass) {
         [glass gfRefreshMaterial];
     }
 
-    GFUpdateAppLibraryCategoryBackground(
+    GFUpdateAppLibraryPod(
         self
     );
+}
+
+%end
+
+
+%hook SBHLibraryCategoryPodBackgroundView
+
+- (void)_updateVisualStyle {
+    /*
+     * Let Apple finish configuring its own hidden background object. We no
+     * longer cancel this method. The pod container owns our visible material.
+     */
+    %orig;
+
+    UIView *podView =
+        GFNearestLibraryPodAncestor(
+            self
+        );
+
+    if (podView) {
+        GFUpdateAppLibraryPod(
+            podView
+        );
+    }
+}
+
+- (void)didMoveToWindow {
+    %orig;
+
+    UIView *podView =
+        GFNearestLibraryPodAncestor(
+            self
+        );
+
+    if (podView) {
+        GFUpdateAppLibraryPod(
+            podView
+        );
+    }
 }
 
 %end
@@ -2096,26 +2266,19 @@ static void GFUpdateAppLibraryCategoryBackground(
         }
 
         /*
-         * Deterministic App Library setup.
+         * App Library Pod setup.
          *
-         * The previous builds checked/guessed the class too early. Explicitly
-         * load SpringBoardHome first, then initialize Logos against the exact
-         * category background class used by the App Library.
+         * AppLibraryController's public headers identify
+         * SBHLibraryPodFolderView as the App Library pod folder container.
+         * Load SpringBoardHome before the Logos group is initialized.
          */
         dlopen(
             "/System/Library/PrivateFrameworks/SpringBoardHome.framework/SpringBoardHome",
             RTLD_LAZY | RTLD_LOCAL
         );
 
-        /*
-         * Use standard Logos group initialization.
-         *
-         * SpringBoardHome has already been loaded above, so if the exact
-         * category-background class exists, Logos can resolve the class by
-         * its normal hook token. No class substitution is needed here.
-         */
         if (objc_getClass(
-                "SBHLibraryCategoryPodBackgroundView"
+                "SBHLibraryPodFolderView"
             )) {
             %init(GFAppLibraryHooks);
         }

@@ -10,7 +10,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.3 App Library Beta 1.4.1</string>
+			<string>GlassFolders 0.7.3 App Library Beta 2</string>
 			<key>footerText</key>
 			<string>桌面保持稳定光学玻璃；Liquid Glass 打开文件夹改为浅色、半透明、轻磨砂圆角面板，并自动适配系统深色/浅色模式。</string>
 		</dict>
@@ -62,7 +62,7 @@
 			<key>label</key>
 			<string>App 资源库</string>
 			<key>footerText</key>
-			<string>单独控制 App 资源库首页分类大文件夹。Beta 1.4 显式加载 SpringBoardHome 后精确 Hook 分类背景类，不再扫描或猜测资源库视图。</string>
+			<string>单独控制 App 资源库首页分类大文件夹。Beta 2 使用 SBHLibraryPodFolderView 作为分类卡片容器，只隐藏它内部真实的系统分类背景，并在同一几何位置插入玻璃；图标、标题和交互保持系统原生。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

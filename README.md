@@ -1,40 +1,77 @@
-# GlassFolders 0.7.3 Beta 1.4.1 — Logos Init Fix
+# GlassFolders 0.7.3 Beta 2 — App Library Pod Container
 
-This is a build-only correction over Beta 1.4.
+This build replaces the unsuccessful App Library Beta1.x approach.
 
-## What failed
+## What the on-device result proved
 
-Beta 1.4 declared the App Library hook group correctly, but initialized it with
-a dynamic class-substitution form.
+The nested small folder-like element in App Library already received
+GlassFolders through the normal `SBFolderIconImageView` path.
 
-The build environment rejected that form at Logos preprocessing time with:
+The large outer category cards did not.
 
-`%init for an undefined %group GFAppLibraryHooks`
+The AppLibraryController public headers identify:
 
-## Beta 1.4.1
+`SBHLibraryPodFolderView : SBFolderView`
 
-The runtime flow is now deliberately simple:
+as the App Library pod folder container.
 
-1. explicitly load SpringBoardHome;
-2. check for `SBHLibraryCategoryPodBackgroundView`;
-3. call `%init(GFAppLibraryHooks);`.
+Its tweak source separately uses
+`SBHLibraryCategoryPodBackgroundView -_updateVisualStyle`
+for the category background visual.
 
-No runtime class scanning, no MSHookMessageEx path, and no class-token
-substitution is used.
+## Beta 2 architecture
 
-## Settings icon
+For each `SBHLibraryPodFolderView`:
 
-The Beta 1.4 PreferenceLoader correction is retained: the `icon` key remains
-inside the `entry` dictionary and the 1x/2x/3x assets remain packaged.
+1. locate its exact `SBHLibraryCategoryPodBackgroundView` descendant;
+2. use that descendant only for system frame + corner radius;
+3. hide the whole stock background view;
+4. insert one `GFPanelGlassView` at index 0 of the pod container;
+5. keep icons, labels, touch handling, and folder expansion untouched.
 
-## Runtime scope
+The custom glass frame is converted from the real system background view into
+pod coordinates. If that exact background is not present yet, Beta 2 does
+nothing and waits for the next UIKit layout callback; it does not guess a card
+frame.
+
+The descendant is cached per pod, so the recursive search is not repeated after
+the background is resolved.
+
+## App Library hooks
+
+Only these visual classes are used:
+
+- `SBHLibraryPodFolderView`
+- `SBHLibraryCategoryPodBackgroundView`
+
+No App Library controller, pod folder controller, icon-list view, icon view,
+search controller, or navigation hook is added.
+
+## PreferenceLoader icon
+
+The Settings entry now follows the common PreferenceLoader structure:
+
+`/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist`
+
+with its icon next to it:
+
+`/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon.png`
+
+and the `entry.icon` value is the absolute path above.
+
+1x/2x/3x PNG variants are included.
+
+## Existing behavior
 
 Unchanged:
 
-- closed folder: `SBFolderIconImageView`;
-- opened folder: `SBFolderBackgroundView`;
-- App Library category card: `SBHLibraryCategoryPodBackgroundView`;
-- SpringBoard-only injection;
-- RootHide arm64e.
+- closed Home Screen folder optical glass;
+- opened folder `SBFolderBackgroundView` glass;
+- percentage-driven edge calibration;
+- dark/light adaptation;
+- independent App Library switch;
+- RootHide arm64e;
+- SpringBoard-only tweak injection.
 
-No daemon, timer, polling, DisplayLink, or continuous Metal rendering.
+No daemon, timer, polling loop, DisplayLink, gyroscope, or continuous Metal
+rendering.
