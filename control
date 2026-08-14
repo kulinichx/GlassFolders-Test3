@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.4~beta2.0
+Version: 0.7.4~beta2.1
 Architecture: iphoneos-arm64e
-Description: Beta 2.0 rebuilds opened-folder continuity around the host native continuous corner, moves Liquid Glass optical rails safely inside the clip, and makes Clear match the supplied Apple reference: no second local blur, wallpaper-owned chroma, neutral-white transmission, and dark/light adaptive highlights.
+Description: Beta 2.1 restores the lighter closed Liquid Glass appearance from the earlier reference by reducing only the native App Library pod material contribution, while preserving the existing opened Liquid Glass continuity, Clear reference behavior, and dark/light adaptation.
 Maintainer: kulinich
 Author: kulinich
 Section: Tweaks

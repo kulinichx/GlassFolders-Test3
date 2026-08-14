@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.4 Beta 2.0</string>
+			<string>GlassFolders 0.7.4 Beta 2.1</string>
 			<key>footerText</key>
-			<string>Beta 2.0：Clear 按参考图改为“透明透光片”：不再二次局部模糊，颜色完全来自壁纸/桌面，只加入中性白透光与柔和白色高光；Liquid Glass 保留更厚的 backdrop 玻璃。打开面板新增原生 continuous-corner 连续边缘底线，专门修复左上↔上/左、右下↔下/右的细小断点，并分别适配深色与浅色模式。</string>
+			<string>Beta 2.1：关闭状态 Liquid Glass 恢复到之前较浅的参考效果，只降低 SBHLibraryCategoryPodBackgroundView 的叠加参与度，不改变壁纸取色、白色高光、打开状态 Liquid Glass、Clear 参考效果或深浅模式适配。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -88,7 +88,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>关闭文件夹的 Liquid Glass 会创建独立的 SBHLibraryCategoryPodBackgroundView，并在进入层级后触发其 _updateVisualStyle；Beta 2.0 提高了该原生视觉层的参与度。真实 App 资源库本身不会被 hook 或修改。</string>
+			<string>关闭文件夹的 Liquid Glass 会创建独立的 SBHLibraryCategoryPodBackgroundView，并在进入层级后触发其 _updateVisualStyle；Beta 2.1 将该原生视觉层恢复为较浅的参与度，以匹配之前的关闭文件夹参考图。真实 App 资源库本身不会被 hook 或修改。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

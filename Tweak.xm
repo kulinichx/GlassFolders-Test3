@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 2.0 — Native-curve continuity + reference Clear
+ * GlassFolders 0.7.4 Beta 2.1 — Lighter closed Liquid Glass
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -761,12 +761,13 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
     CGFloat materialResponse = GFMaterialResponse(strength);
 
     /*
-     * Native category-pod visual contributes more of its
-     * own material. The earlier ~0.61 alpha at 55% was visibly weaker than
-     * the real App Library card. This changes only the native view's
-     * participation -- no chromatic overlay is introduced.
+     * Beta 2.1: restore the lighter closed-folder Liquid Glass appearance.
+     * The stronger native pod participation introduced later made the closed
+     * icon read visibly darker on-device.  This is the earlier, proven blend
+     * used by the lighter reference: no hue tint, just less native material
+     * stacked over the wallpaper backdrop.
      */
-    podView.alpha = MIN(0.90, 0.58 + 0.34 * materialResponse);
+    podView.alpha = MIN(0.78, 0.42 + 0.36 * materialResponse);
 
     return podView;
 }
@@ -1273,7 +1274,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 insideDepth / MAX(0.001, coreWidth);
 
             /*
-             * Beta 2.0: keep the directional optical filament slightly
+             * Beta 2.1: keep the directional optical filament slightly
              * INSIDE the host's native continuous-corner clip.  The host is
              * kCACornerCurveContinuous (a squircle-like curve), while this
              * lightweight CPU texture uses an analytic rounded-rect field.
@@ -1925,7 +1926,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
         if (self.gfStyle == 0) {
             /*
-             * Beta 2.0 Clear follows the supplied Apple reference: the open
+             * Beta 2.1 Clear follows the supplied Apple reference: the open
              * folder is a transparent luminous sheet over SpringBoard's
              * already-blurred open-folder presentation.  Do NOT blur that
              * presentation a second time; doing so is what produced the
@@ -2132,7 +2133,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     }
 
     /*
-     * Beta 2.0 continuity floor. CALayer draws this border with the SAME
+     * Beta 2.1 continuity floor. CALayer draws this border with the SAME
      * kCACornerCurveContinuous geometry that clips the panel, so it cannot
      * develop the tiny TL<->top or BR<->bottom tangent gap seen in the
      * hand-rasterized rail. It is intentionally faint; the directional
