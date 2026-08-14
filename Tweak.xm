@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.3 Beta 1 — App Library Pods
+ * GlassFolders 0.7.3 Beta 1.1 — App Library Fix
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -1554,10 +1554,16 @@ static inline BOOL GFShouldUseOpenedPanel(void) {
 
 
 static inline BOOL GFShouldUseAppLibraryPods(void) {
+    /*
+     * Independent App Library control:
+     * master enable + this switch are sufficient.
+     *
+     * It still reuses the current Glass Strength and adaptive material,
+     * but no longer silently depends on the desktop Style selector.
+     */
     return
         GFEnabled &&
-        GFAppLibraryPodsEnabled &&
-        GFStyle == 1;
+        GFAppLibraryPodsEnabled;
 }
 
 
@@ -1958,8 +1964,29 @@ static void GFUpdateAppLibraryCategoryBackground(
 %hook SBHLibraryCategoryPodBackgroundView
 
 - (void)_updateVisualStyle {
+    if (GFShouldUseAppLibraryPods()) {
+        /*
+         * Critical: do not call the stock visual-style writer while custom
+         * glass is active. Existing App Library tweaks use this method as the
+         * authoritative category-background styling point.
+         *
+         * Calling %orig first can configure an opaque/private material on the
+         * host layer itself, which cannot be neutralized by hiding UIView
+         * children afterwards.
+         */
+        GFUpdateAppLibraryCategoryBackground(
+            self
+        );
+
+        return;
+    }
+
     %orig;
 
+    /*
+     * If the option was disabled and SpringBoard refreshes visual style,
+     * remove our child and restore any stock subview visibility.
+     */
     GFUpdateAppLibraryCategoryBackground(
         self
     );
@@ -1971,6 +1998,15 @@ static void GFUpdateAppLibraryCategoryBackground(
     GFUpdateAppLibraryCategoryBackground(
         self
     );
+}
+
+
+- (void)setBackgroundColor:(UIColor *)color {
+    if (GFShouldUseAppLibraryPods()) {
+        %orig(UIColor.clearColor);
+    } else {
+        %orig(color);
+    }
 }
 
 - (void)layoutSubviews {

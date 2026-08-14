@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.3~beta1
+Version: 0.7.3~beta1.1
 Architecture: iphoneos-arm64e
-Description: Adds an independent App Library category-card Liquid Glass option using only SBHLibraryCategoryPodBackgroundView, while preserving the existing closed/open folder optical calibration.
+Description: Fixes App Library category-card glass by bypassing the stock _updateVisualStyle material while enabled and making the App Library switch independent of the desktop Style selector.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks
