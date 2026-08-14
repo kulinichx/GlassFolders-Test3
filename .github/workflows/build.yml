@@ -489,4 +489,4 @@ jobs:
           name: GlassFolders-0.7.4-Beta3.0-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 14
