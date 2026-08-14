@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 1.6.1 — Unused Variable Fix
+ * GlassFolders 0.7.4 Beta 1.7 — End-Gated Specular Rails
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -16,8 +16,9 @@
  * Optical model:
  * - CABackdropLayer for wallpaper color / blur / saturation
  * - cached rounded-rect SDF lighting
- * - one continuous equal-brightness top + upper-left specular rail
- * - one continuous equal-brightness bottom + lower-right specular rail
+ * - one continuous equal-brightness upper-left -> top specular rail
+ * - one continuous equal-brightness bottom -> lower-right specular rail
+ * - positional endpoint gates before upper-right / lower-left corners
  * - deliberately quiet straight left/right side middles
  * - subtle upper-right / lower-left transition structure
  *
@@ -420,7 +421,12 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                      *
                      * Same construction for bottom -> lower-right.
                      */
-                    CGFloat primaryRailMask =
+                    /*
+                     * Raw joined rails before endpoint ownership is applied.
+                     * The TL/top pair and bottom/BR pair still share exactly
+                     * one geometric mask and one luminance gain.
+                     */
+                    CGFloat primaryRailRaw =
                         GFClamp01(
                             MAX(
                                 pow(topFacing, 1.08),
@@ -428,7 +434,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                             )
                         );
 
-                    CGFloat secondaryRailMask =
+                    CGFloat secondaryRailRaw =
                         GFClamp01(
                             MAX(
                                 pow(bottomFacing, 1.08),
@@ -437,9 +443,85 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                         );
 
                     /*
-                     * Remove the rail-covered corner zones from the straight
-                     * vertical side mask. Only the middle walls retain this
-                     * tiny structural reflection.
+                     * Beta 1.7 endpoint ownership.
+                     *
+                     * Normal direction alone cannot distinguish "top straight"
+                     * from the upper-right radius: both still have -ny.
+                     * Use pixel position to detect entry into the opposite
+                     * corner radius, then smoothly attenuate only that end.
+                     *
+                     * Primary:
+                     *   TL corner + full top = 100%
+                     *   entering TR radius   = fade
+                     *   far TR end           = 12%
+                     *
+                     * Secondary:
+                     *   far BL end           = 12%
+                     *   leaving BL radius    = fade up
+                     *   full bottom + BR     = 100%
+                     */
+                    CGFloat endpointRadius =
+                        MAX(
+                            1.0,
+                            MIN(
+                                radius,
+                                0.5 * MIN(width, height)
+                            )
+                        );
+
+                    CGFloat rightArcProgress =
+                        GFClamp01(
+                            (
+                                x -
+                                (width - endpointRadius)
+                            ) /
+                            endpointRadius
+                        );
+
+                    CGFloat leftArcProgress =
+                        GFClamp01(
+                            (
+                                endpointRadius - x
+                            ) /
+                            endpointRadius
+                        );
+
+                    CGFloat rightArcSmooth =
+                        rightArcProgress *
+                        rightArcProgress *
+                        (
+                            3.0 -
+                            2.0 * rightArcProgress
+                        );
+
+                    CGFloat leftArcSmooth =
+                        leftArcProgress *
+                        leftArcProgress *
+                        (
+                            3.0 -
+                            2.0 * leftArcProgress
+                        );
+
+                    CGFloat primaryEndpointGate =
+                        1.0 -
+                        0.88 * rightArcSmooth;
+
+                    CGFloat secondaryEndpointGate =
+                        1.0 -
+                        0.88 * leftArcSmooth;
+
+                    CGFloat primaryRailMask =
+                        primaryRailRaw *
+                        primaryEndpointGate;
+
+                    CGFloat secondaryRailMask =
+                        secondaryRailRaw *
+                        secondaryEndpointGate;
+
+                    /*
+                     * Remove rail-owned regions from the straight vertical
+                     * side mask. The endpoint-faded TR/BL areas are permitted
+                     * to retain only a small structural side cue.
                      */
                     CGFloat coveredByRails =
                         MAX(
@@ -494,7 +576,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                      * shape coherent, without becoming a third/fourth hotspot.
                      */
                     CGFloat transitionCornerGain =
-                        0.0025 + 0.018 * edgeDrive;
+                        0.0015 + 0.010 * edgeDrive;
 
                     /*
                      * Keep directional physics only as a very small micro
@@ -553,9 +635,9 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                         exp(-(shadowOffset * shadowOffset * 1.20));
 
                     CGFloat darkStructureMask =
-                        0.72 * secondaryRailMask +
+                        0.78 * secondaryRailMask +
                         0.18 * sideMiddleMask +
-                        0.10 * (
+                        0.04 * (
                             topRightTransition +
                             bottomLeftTransition
                         );
@@ -1124,7 +1206,12 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             CGFloat bottomLeftTransition =
                 pow(bottomLeftCornerSelector, 0.90);
 
-            CGFloat primaryRailMask =
+            /*
+             * Raw joined rails. Endpoint ownership is applied using position
+             * because the normal alone cannot tell a straight horizontal edge
+             * from the opposite rounded corner.
+             */
+            CGFloat primaryRailRaw =
                 GFClamp01(
                     MAX(
                         pow(topFacing, 1.06),
@@ -1132,13 +1219,76 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                     )
                 );
 
-            CGFloat secondaryRailMask =
+            CGFloat secondaryRailRaw =
                 GFClamp01(
                     MAX(
                         pow(bottomFacing, 1.06),
                         bottomRightCornerBridge
                     )
                 );
+
+            CGFloat endpointRadius =
+                MAX(
+                    1.0,
+                    MIN(
+                        radius,
+                        0.5 * MIN(width, height)
+                    )
+                );
+
+            CGFloat rightArcProgress =
+                GFClamp01(
+                    (
+                        x -
+                        (width - endpointRadius)
+                    ) /
+                    endpointRadius
+                );
+
+            CGFloat leftArcProgress =
+                GFClamp01(
+                    (
+                        endpointRadius - x
+                    ) /
+                    endpointRadius
+                );
+
+            CGFloat rightArcSmooth =
+                rightArcProgress *
+                rightArcProgress *
+                (
+                    3.0 -
+                    2.0 * rightArcProgress
+                );
+
+            CGFloat leftArcSmooth =
+                leftArcProgress *
+                leftArcProgress *
+                (
+                    3.0 -
+                    2.0 * leftArcProgress
+                );
+
+            /*
+             * Keep 12% at the non-owned corner endpoint. This preserves the
+             * rounded silhouette without letting TR join the main top rail or
+             * BL join the main bottom rail.
+             */
+            CGFloat primaryEndpointGate =
+                1.0 -
+                0.88 * rightArcSmooth;
+
+            CGFloat secondaryEndpointGate =
+                1.0 -
+                0.88 * leftArcSmooth;
+
+            CGFloat primaryRailMask =
+                primaryRailRaw *
+                primaryEndpointGate;
+
+            CGFloat secondaryRailMask =
+                secondaryRailRaw *
+                secondaryEndpointGate;
 
             CGFloat coveredByRails =
                 MAX(
@@ -1194,8 +1344,8 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 : (0.0015 + 0.008 * edgeDrive);
 
             CGFloat transitionCornerGain = darkAppearance
-                ? (0.0045 + 0.022 * edgeDrive)
-                : (0.0035 + 0.016 * edgeDrive);
+                ? (0.0025 + 0.012 * edgeDrive)
+                : (0.0020 + 0.009 * edgeDrive);
 
             /*
              * Only a tiny directional micro-variation survives. This keeps
@@ -1253,9 +1403,9 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 MAX(0.001, darkShoulderWidth);
 
             CGFloat darkStructureMask =
-                0.72 * secondaryRailMask +
+                0.78 * secondaryRailMask +
                 0.18 * sideMiddleMask +
-                0.10 * (
+                0.04 * (
                     topRightTransition +
                     bottomLeftTransition
                 );

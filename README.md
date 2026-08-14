@@ -1,49 +1,82 @@
-# GlassFolders 0.7.4 Beta 1.6.1 — Unused Variable Fix
+# GlassFolders 0.7.4 Beta 1.7 — End-Gated Specular Rails
 
-This is a compile-only correction to Beta 1.6.
+This build fixes the endpoint-ownership problem visible on-device in Beta 1.6.1.
 
-## GitHub Actions failure
+## Observed problem
 
-Beta 1.6 replaced the previous independent edge/corner lighting model with the
-new shared continuous specular rails, but eight old local declarations were
-left behind.
+The shared rail masks correctly made:
 
-Because the project compiles with warnings promoted to errors, Clang stopped on
-`-Wunused-variable`.
+- upper-left + top equal-brightness;
+- bottom + lower-right equal-brightness.
 
-Removed declarations:
+However, the raw `topFacing` / `bottomFacing` normals also remain non-zero
+inside the opposite rounded corners.
 
-Closed optical map:
-- `horizontalEdge`
-- `highlightShoulderGain`
-- `highlightCoreGain`
-- `highlightFilamentGain`
+That caused:
 
-Opened optical map:
-- `horizontalEdge`
-- `shoulderGain`
-- `coreGain`
-- `filamentGain`
+- the top rail to continue visibly through the upper-right corner;
+- the bottom rail to continue visibly through the lower-left corner.
 
-## Optical behavior
+The result looked too close to four illuminated corners.
 
-The Beta 1.6 formulas are otherwise unchanged:
+## Beta 1.7 geometry
 
-- upper-left corner + top edge share `primaryRailMask`;
-- bottom edge + lower-right corner share `secondaryRailMask`;
-- both pieces inside each rail use the same luminance gains;
-- straight left/right side middles remain strongly suppressed;
-- opened and closed states use the same topology.
+Normal-based rail shape is now combined with positional endpoint gates.
 
-## Runtime / safety
+### Primary rail
+
+The primary rail still consists of:
+
+`upper-left corner -> full top edge`
+
+It stays at 100% through the upper-left corner and straight top.
+
+Only after entering the upper-right radius does `primaryEndpointGate`
+smoothly attenuate it, reaching 12% at the far end of that corner.
+
+### Secondary rail
+
+The secondary rail still consists of:
+
+`full bottom edge -> lower-right corner`
+
+The lower-left radius is attenuated in the mirror direction. The bottom
+straight and lower-right corner remain at 100%.
+
+### Why position is required
+
+A surface normal cannot distinguish a straight horizontal segment from the
+adjoining rounded radius because both can point upward/downward.
+
+The gate therefore uses the pixel's x position relative to the actual corner
+radius. No extra view/layer/runtime work is added.
+
+## Non-owned corners
+
+Upper-right and lower-left retain only subtle transition structure.
+
+Their explicit transition gain and dark-shoulder contribution were both reduced.
+
+## Closed / opened
+
+Both cached optical maps use the same endpoint topology.
+
+No hooks were added or changed.
+
+## Safety / performance
 
 Unchanged:
+
 - RootHide arm64e;
 - SpringBoard-only injection;
 - `SBFolderIconImageView`;
 - `SBFolderBackgroundView`;
 - no App Library code;
-- no daemon/timer/DisplayLink/gyro;
+- no daemon;
+- no timer;
+- no DisplayLink;
+- no gyro;
+- cached CPU-generated SDF optical maps;
 - rounded Settings icon;
 - duplicate PreferenceLoader cleanup;
 - `作者  kulinich`.
