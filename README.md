@@ -1,70 +1,71 @@
-# GlassFolders 0.6.0 RC1 — Material Reset
+# GlassFolders 0.6.0 RC3 — Open Panel Host Fix
 
-This release intentionally stops tuning "borders" and instead models the
-closed and opened folder as two material weights.
+## Root cause fixed
 
-## Material model
+Previous opened-folder builds placed the custom glass under
+`SBFloatyFolderView`.
 
-### Closed folder — clear-like
+On the tested iOS 16.6 SpringBoard build, that object behaves as a large
+container. When the old direct-child background lookup failed, the code used:
 
-Goal:
-- highly translucent
-- wallpaper remains visually dominant
-- low blur
-- modest saturation preservation
-- almost no white tint
-- no explicit edge stroke
-- no rim mask
-- no diagonal specular stripe
+`targetFrame = self.bounds`
 
-A broad radial white surface-light field near the upper-left provides a small
-sense of depth without drawing a visible edge.
+That made the custom backdrop effectively full-screen.
 
-### Opened folder — regular-like / light frost
+## RC3 host strategy
 
-Goal:
-- visibly more material weight than the small closed icon
-- moderate blur for the larger surface
+RC3 never uses the full `SBFloatyFolderView.bounds` as a fallback.
+
+It recursively searches the opened-folder hierarchy for the real panel host,
+scoring candidates by:
+
+- folder/background/clip/material/backdrop class-name signals
+- rounded-corner geometry
+- panel-like area relative to the root container
+- reasonable aspect ratio
+
+Strong candidates such as a floaty-folder background clip/background view are
+preferred.
+
+Once identified:
+
+- custom glass is inserted into that host
+- `glass.frame = host.bounds`
+- corner radius comes from that host
+- app icons/page controls remain outside/above the glass
+- surrounding wallpaper blur remains SpringBoard stock
+
+## Safe fallback
+
+If RC3 cannot identify the actual folder panel:
+
+- custom opened glass is removed
+- Apple's stock opened-folder background remains visible
+- no custom full-screen blur is created
+
+Wrong full-screen output is no longer an accepted fallback.
+
+## Visual model retained
+
+Closed:
+- clear-like backdrop
+- broad soft upper-left -> lower-right specular sheen
+- no hard border
+
+Opened:
+- rounded independent panel
+- lightly frosted transparent material
 - restrained saturation
-- small neutral-white tint
-- wallpaper color still passes through
-- no explicit border
+- tiny neutral tint
+- no diagonal white stripe
 
-The opened panel keeps using SpringBoard's own transition alpha and surrounding
-desktop blur/dim.
+## Performance / UX retained
 
-## Why no drawn rim
-
-The previous experimental releases treated the glass boundary as a rendered
-stroke. On-device this repeatedly produced one of three artifacts:
-
-- neon outline
-- hard plastic-card edge
-- disappearing/uneven highlight
-
-RC1 removes the whole class of artifacts by deleting line-based edge effects.
-
-## Performance
-
-No:
-- daemon
-- Timer
-- DisplayLink
-- gyroscope
-- animated highlight
-- Metal shader
-- custom full-screen blur
-- custom transition animator
-
-Static runtime cost:
-- one CABackdropLayer-based plate per visible closed folder
-- one broad static CAGradientLayer surface-light field
-- one opened backdrop panel while a folder is open
-
-## UX retained
-
-- Clear / Liquid Glass
-- one strength slider
-- 5% magnetic detents
-- rigid haptic tick across detents
+- no daemon
+- no Timer
+- no DisplayLink
+- no gyroscope
+- no custom transition animator
+- 5% detents
+- rigid haptic ticks
 - 应用并注销

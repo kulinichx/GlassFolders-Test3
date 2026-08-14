@@ -117,6 +117,7 @@ static id GFCreateCAFilter(NSString *type) {
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
 @property (nonatomic, strong) CAGradientLayer *gfSurfaceHighlight;
+@property (nonatomic, strong) CAGradientLayer *gfDiagonalSheen;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) NSInteger gfStyle;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
@@ -162,8 +163,8 @@ static id GFCreateCAFilter(NSString *type) {
             CGFloat brightness;
 
             if (_gfStyle == 1) {
-                blurRadius = 2.8 + (7.2 * e);
-                saturation = 1.04 + (0.22 * e);
+                blurRadius = 3.0 + (8.0 * e);
+                saturation = 1.06 + (0.28 * e);
                 brightness = 0.001 + (0.004 * e);
             } else {
                 blurRadius = 2.0 + (7.0 * e);
@@ -306,15 +307,53 @@ static id GFCreateCAFilter(NSString *type) {
             _gfSurfaceHighlight.startPoint = CGPointMake(0.08, 0.06);
             _gfSurfaceHighlight.endPoint = CGPointMake(0.78, 0.78);
             _gfSurfaceHighlight.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.095].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.038].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.010].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.120].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.050].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.012].CGColor,
                 (id)[UIColor colorWithWhite:1.0 alpha:0.000].CGColor
             ];
             _gfSurfaceHighlight.locations = @[@0.00, @0.36, @0.66, @1.00];
-            _gfSurfaceHighlight.opacity = 0.72 + (0.16 * e);
+            _gfSurfaceHighlight.opacity = 0.74 + (0.16 * e);
 
             [self.layer addSublayer:_gfSurfaceHighlight];
+
+            /*
+             * Broad diagonal specular sheen.
+             *
+             * IMPORTANT:
+             * The gradient axis runs upper-right -> lower-left so the visible
+             * iso-brightness band itself reads upper-left -> lower-right.
+             *
+             * The bright region is intentionally WIDE. There is no narrow
+             * white center line, so it reads as reflected light across a
+             * glass surface rather than a stripe painted on top.
+             */
+            _gfDiagonalSheen = [CAGradientLayer layer];
+            _gfDiagonalSheen.startPoint = CGPointMake(0.96, 0.03);
+            _gfDiagonalSheen.endPoint = CGPointMake(0.04, 0.97);
+            _gfDiagonalSheen.colors = @[
+                (id)[UIColor colorWithWhite:1.0 alpha:0.000].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.018].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.065].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.105].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.118].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.105].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.065].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.018].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.000].CGColor
+            ];
+            _gfDiagonalSheen.locations = @[
+                @0.00, @0.12, @0.25, @0.37, @0.50,
+                @0.63, @0.75, @0.88, @1.00
+            ];
+
+            /*
+             * Strength changes presence only mildly. The sheen should remain
+             * subtle even at high glass strength.
+             */
+            _gfDiagonalSheen.opacity = 0.52 + (0.16 * e);
+
+            [self.layer addSublayer:_gfDiagonalSheen];
         }
     }
 
@@ -343,10 +382,19 @@ static id GFCreateCAFilter(NSString *type) {
     if (self.gfSurfaceHighlight) {
         /*
          * Slight overscan makes the radial field fade naturally before it
-         * reaches the hard clip boundary.
+         * reaches the clipped folder boundary.
          */
         self.gfSurfaceHighlight.frame =
             CGRectInset(self.bounds, -6.0, -6.0);
+    }
+
+    if (self.gfDiagonalSheen) {
+        /*
+         * More overscan for the diagonal field keeps the broad highlight from
+         * revealing rectangular gradient edges near the rounded corners.
+         */
+        self.gfDiagonalSheen.frame =
+            CGRectInset(self.bounds, -14.0, -14.0);
     }
 
 }
@@ -491,13 +539,13 @@ static id GFCreateCAFilter(NSString *type) {
             _gfSurfaceHighlight.startPoint = CGPointMake(0.08, 0.05);
             _gfSurfaceHighlight.endPoint = CGPointMake(0.70, 0.72);
             _gfSurfaceHighlight.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.070].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.026].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.006].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.085].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.032].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.007].CGColor,
                 (id)[UIColor colorWithWhite:1.0 alpha:0.000].CGColor
             ];
             _gfSurfaceHighlight.locations = @[@0.00, @0.34, @0.66, @1.00];
-            _gfSurfaceHighlight.opacity = 0.62 + (0.14 * e);
+            _gfSurfaceHighlight.opacity = 0.64 + (0.14 * e);
 
             [self.layer addSublayer:_gfSurfaceHighlight];
         }
@@ -546,32 +594,144 @@ static id GFCreateCAFilter(NSString *type) {
 @end
 
 
-static UIView *GFOpenedFolderBackgroundReferenceView(UIView *container) {
-    UIView *best = nil;
-    CGFloat bestArea = 0.0;
+static BOOL GFViewIsDescendantOfGlass(UIView *view) {
+    UIView *cursor = view;
 
-    for (UIView *subview in container.subviews) {
+    while (cursor) {
+        if ([cursor isKindOfClass:[GFOpenedFolderGlassView class]]) {
+            return YES;
+        }
+        cursor = cursor.superview;
+    }
+
+    return NO;
+}
+
+static CGFloat GFOpenedHostScore(UIView *view,
+                                 UIView *root,
+                                 NSInteger depth) {
+    if (!view || view == root || GFViewIsDescendantOfGlass(view)) {
+        return -CGFLOAT_MAX;
+    }
+
+    CGRect bounds = view.bounds;
+    CGFloat width = CGRectGetWidth(bounds);
+    CGFloat height = CGRectGetHeight(bounds);
+
+    if (width < 100.0 || height < 100.0) {
+        return -CGFLOAT_MAX;
+    }
+
+    CGFloat rootArea =
+        MAX(1.0, CGRectGetWidth(root.bounds) * CGRectGetHeight(root.bounds));
+    CGFloat area = width * height;
+    CGFloat ratio = area / rootArea;
+
+    /*
+     * Reject almost-fullscreen containers. That exact fallback caused the
+     * 0.5.11–0.6 RC2 "whole screen is blurred" bug.
+     */
+    if (ratio >= 0.90 || ratio <= 0.035) {
+        return -CGFLOAT_MAX;
+    }
+
+    CGFloat aspect = width / MAX(1.0, height);
+
+    /*
+     * Folder panels are broad rounded surfaces, not tall/narrow controls.
+     */
+    if (aspect < 0.48 || aspect > 1.85) {
+        return -CGFLOAT_MAX;
+    }
+
+    NSString *name = NSStringFromClass(view.class);
+    CGFloat score = 0.0;
+
+    /*
+     * Strongest signals first.
+     * These names are resolved dynamically; no private header/link required.
+     */
+    if ([name containsString:@"FloatyFolderBackgroundClip"]) score += 1400.0;
+    if ([name containsString:@"FolderBackground"]) score += 1200.0;
+    if ([name containsString:@"BackgroundClip"]) score += 1000.0;
+    if ([name containsString:@"Background"]) score += 600.0;
+    if ([name containsString:@"Material"]) score += 420.0;
+    if ([name containsString:@"Backdrop"]) score += 420.0;
+
+    /*
+     * Rounded geometry is a useful secondary signal on iOS 16 where class
+     * names can differ between builds.
+     */
+    CGFloat radius = view.layer.cornerRadius;
+    if (radius >= 12.0) score += 300.0;
+    if (radius >= 24.0) score += 180.0;
+
+    /*
+     * Prefer a panel-sized surface around 18–60% of the full container.
+     */
+    if (ratio >= 0.18 && ratio <= 0.60) {
+        score += 260.0;
+    } else if (ratio >= 0.08 && ratio < 0.75) {
+        score += 120.0;
+    }
+
+    /*
+     * Prefer shallower descendants if scores are otherwise similar.
+     */
+    score -= (CGFloat)depth * 8.0;
+
+    return score;
+}
+
+static void GFSearchOpenedFolderHostRecursive(UIView *view,
+                                              UIView *root,
+                                              NSInteger depth,
+                                              UIView **bestView,
+                                              CGFloat *bestScore) {
+    if (!view || depth > 7 || GFViewIsDescendantOfGlass(view)) {
+        return;
+    }
+
+    for (UIView *subview in view.subviews) {
         if ([subview isKindOfClass:[GFOpenedFolderGlassView class]]) {
             continue;
         }
 
-        NSString *name = NSStringFromClass(subview.class);
-        BOOL likelyBackground =
-            [name containsString:@"Background"] ||
-            [name containsString:@"Material"] ||
-            [name containsString:@"Backdrop"];
+        CGFloat score = GFOpenedHostScore(subview, root, depth);
 
-        if (!likelyBackground) {
-            continue;
+        if (score > *bestScore) {
+            *bestScore = score;
+            *bestView = subview;
         }
 
-        CGFloat area =
-            CGRectGetWidth(subview.bounds) * CGRectGetHeight(subview.bounds);
+        GFSearchOpenedFolderHostRecursive(
+            subview,
+            root,
+            depth + 1,
+            bestView,
+            bestScore
+        );
+    }
+}
 
-        if (area > bestArea) {
-            bestArea = area;
-            best = subview;
-        }
+static UIView *GFOpenedFolderPanelHost(UIView *root) {
+    UIView *best = nil;
+    CGFloat bestScore = -CGFLOAT_MAX;
+
+    GFSearchOpenedFolderHostRecursive(
+        root,
+        root,
+        0,
+        &best,
+        &bestScore
+    );
+
+    /*
+     * Require real evidence that this is a panel/background.
+     * Never return root/self as a fallback.
+     */
+    if (!best || bestScore < 430.0) {
+        return nil;
     }
 
     return best;
@@ -667,35 +827,48 @@ static inline void GFSetOpenedGlassView(id object,
         return;
     }
 
+    UIView *host = GFOpenedFolderPanelHost(self);
+
+    /*
+     * Professional fallback policy:
+     * if we cannot identify the real rounded folder panel, do NOT put a
+     * custom backdrop on SBFloatyFolderView itself. Keep stock appearance.
+     */
+    if (!host) {
+        if (glass) {
+            [glass removeFromSuperview];
+            GFSetOpenedGlassView(self, nil);
+        }
+        return;
+    }
+
     if (!glass) {
         glass =
             [[GFOpenedFolderGlassView alloc] initWithStrength:GFGlassStrength];
-
-        [self insertSubview:glass atIndex:0];
         GFSetOpenedGlassView(self, glass);
     }
 
-    UIView *reference = GFOpenedFolderBackgroundReferenceView(self);
-
-    CGRect targetFrame = self.bounds;
-    CGFloat targetRadius = self.layer.cornerRadius;
-
-    if (reference) {
-        targetFrame = reference.frame;
-
-        if (reference.layer.cornerRadius > 0.0) {
-            targetRadius = reference.layer.cornerRadius;
-        }
+    if (glass.superview != host) {
+        [glass removeFromSuperview];
+        [host insertSubview:glass atIndex:0];
     }
 
-    glass.frame = targetFrame;
-    [glass setPreferredRadius:targetRadius];
+    glass.frame = host.bounds;
+
+    CGFloat targetRadius = host.layer.cornerRadius;
 
     /*
-     * SpringBoard may reorder subviews during the transition.
-     * Keep the glass behind folder icons/page controls.
+     * If the clip host itself carries no radius, use a restrained geometric
+     * fallback based on the PANEL, not the full screen.
      */
-    [self sendSubviewToBack:glass];
+    if (targetRadius <= 0.0) {
+        targetRadius =
+            MIN(CGRectGetWidth(host.bounds),
+                CGRectGetHeight(host.bounds)) * 0.085;
+    }
+
+    [glass setPreferredRadius:targetRadius];
+    [host sendSubviewToBack:glass];
 }
 
 - (void)setBackgroundAlpha:(double)alpha {
@@ -705,24 +878,42 @@ static inline void GFSetOpenedGlassView(id object,
     }
 
     GFOpenedFolderGlassView *glass = GFGetOpenedGlassView(self);
+    UIView *host = GFOpenedFolderPanelHost(self);
+
+    /*
+     * If the panel host is unresolved, preserve Apple's stock folder
+     * background. This prevents the old "entire screen blurred" failure.
+     */
+    if (!host) {
+        if (glass) {
+            [glass removeFromSuperview];
+            GFSetOpenedGlassView(self, nil);
+        }
+
+        %orig(alpha);
+        return;
+    }
 
     if (!glass) {
         glass =
             [[GFOpenedFolderGlassView alloc] initWithStrength:GFGlassStrength];
-
-        [self insertSubview:glass atIndex:0];
         GFSetOpenedGlassView(self, glass);
     }
 
+    if (glass.superview != host) {
+        [glass removeFromSuperview];
+        [host insertSubview:glass atIndex:0];
+        glass.frame = host.bounds;
+    }
+
     /*
-     * Apple's existing background-alpha animation drives our glass.
-     * No custom transition animator or continuous renderer is added.
+     * Apple's original folder transition still drives panel opacity.
      */
     glass.alpha = MIN(1.0, MAX(0.0, alpha));
 
     /*
-     * Hide only Apple's original opened-folder panel material.
-     * The surrounding wallpaper blur/dim stays stock.
+     * Only now—after a valid panel host exists—hide Apple's original panel
+     * material. The surrounding full-screen wallpaper blur/dim stays stock.
      */
     %orig(0.0);
 }
