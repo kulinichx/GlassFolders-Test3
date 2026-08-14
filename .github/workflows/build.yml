@@ -1,4 +1,4 @@
-name: Build RootHide 0.7.3 App Library Beta1.1 Fix
+name: Build RootHide 0.7.3 App Library Beta1.3 Runtime Fix.3 Runtime Fix
 
 on:
   workflow_dispatch:
@@ -80,8 +80,8 @@ jobs:
           grep -Fq '%init(GFIconHooks)' Tweak.xm
           grep -Fq 'SBFolderBackgroundView' Tweak.xm
           grep -Fq '%init(GFOpenedPanelHooks)' Tweak.xm
-          grep -Fq 'SBHLibraryCategoryPodBackgroundView' Tweak.xm
-          grep -Fq '%init(GFAppLibraryHooks)' Tweak.xm
+          grep -Fq 'GFResolveAppLibraryBackgroundClass' Tweak.xm
+          grep -Fq 'GFInstallAppLibraryRuntimeHook' Tweak.xm
           grep -Fq 'AppLibraryPodsEnabled' Tweak.xm
 
           echo "Source sanity gate passed."
@@ -185,13 +185,14 @@ jobs:
           grep -Fq 'SBFolderIconImageView' "$STRINGS_FILE"
           grep -Fq 'SBFolderBackgroundView' "$STRINGS_FILE"
           grep -Fq 'SBHLibraryCategoryPodBackgroundView' "$STRINGS_FILE"
+          grep -Fq '_updateVisualStyle' "$STRINGS_FILE"
 
           echo "Narrow visual-surface boundary verified."
 
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.3-Beta1.1-AppLibraryFix-DEB
+          name: GlassFolders-0.7.3-Beta1.3-RuntimeAppLibrary-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
