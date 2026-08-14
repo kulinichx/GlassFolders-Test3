@@ -1,50 +1,58 @@
-# GlassFolders 0.7.2 Beta 3 — Connected Edge Rail
+# GlassFolders 0.7.2 Beta 4 — Apple Edge Intensity
 
-Beta 3 keeps the Beta 2 material calibration and changes only the opened-panel
-edge-lighting distribution.
+Beta 4 is an edge-lighting calibration based on the 75% on-device result and
+the brighter system reference.
 
-## Why
+## Problem fixed
 
-The new reference has a useful property: the glass is not defined by a uniform
-white outline. Instead, the top and bottom edges are bright and clean, while
-the highlight continues through the top-left and bottom-right rounded corners.
+Beta 3 had two issues:
 
-That continuity makes the surface read as one optical object.
+1. left/right straight edges were too prominent;
+2. 55% -> 75% -> 100% did not change edge brightness enough.
 
-## Edge model
+The cause was that several optical gains contained large constant terms. The
+slider therefore changed the material more than the visible edge reflection.
 
-The opened panel now combines five terms:
+## New edge-strength response
 
-1. continuous low-level perimeter filament;
-2. stronger top horizontal highlight rail;
-3. slightly weaker bottom horizontal highlight rail;
-4. top-left / bottom-right corner bridge;
-5. existing directional key specular + far-side secondary rim.
+Beta 4 introduces a dedicated edge curve:
 
-The corner bridge is derived from the rounded-rect SDF surface normal. It is
-not a `CAShapeLayer` stroke and does not draw an explicit rounded rectangle.
+`edge = 0.12*s + 0.88*pow(s, 1.80)`
 
-A small wider core sits under the bright filament so the result should remain
-glass-like rather than neon.
+Approximate response:
 
-## Strength
+- 25% -> 0.10
+- 50% -> 0.29
+- 55% -> 0.35
+- 75% -> 0.62
+- 100% -> 1.00
 
-The Beta 2 strength calibration is unchanged:
+High percentages now have substantially more authority over the specular edge.
 
-- material: `pow(s, 1.10)`
-- specular: `pow(s, 0.80)`
-- tint: `pow(s, 1.35)`
-- recommended daily point: 55%
+## Light distribution
 
-This iteration intentionally leaves blur/tint unchanged so the effect of the
-new edge distribution can be evaluated independently.
+Brightness budget is intentionally non-uniform:
+
+- top rail: strong;
+- bottom rail: strong but slightly below top;
+- top-left rounded corner: strongest connected highlight;
+- bottom-right rounded corner: strong connected highlight;
+- left/right straight sides: reduced by roughly one third to one half;
+- far-side secondary rim: attenuated on vertical straight sides.
+
+A low-level perimeter filament remains so the glass never looks broken.
+
+## Material
+
+Blur, saturation, tint, dark/light adaptation, and the runtime architecture are
+unchanged from Beta 3. This isolates the edge-lighting change.
 
 ## Stability boundary
 
-Unchanged:
+Still unchanged:
 
-- `SBFolderIconImageView` for the closed folder;
-- `SBFolderBackgroundView` for the opened visual panel;
+- closed folder: `SBFolderIconImageView`;
+- opened panel: `SBFolderBackgroundView`;
 - no parent folder container hook;
 - no page-background factory hook;
 - no transition-alpha hook;

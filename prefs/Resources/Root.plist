@@ -10,7 +10,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.2 Connected Edge Beta 3</string>
+			<string>GlassFolders 0.7.2 Apple Edge Beta 4</string>
 			<key>footerText</key>
 			<string>桌面保持稳定光学玻璃；Liquid Glass 打开文件夹改为浅色、半透明、轻磨砂圆角面板，并自动适配系统深色/浅色模式。</string>
 		</dict>
@@ -62,7 +62,7 @@
 			<key>label</key>
 			<string>玻璃强度</string>
 			<key>footerText</key>
-			<string>每 5% 一个档位。55% 为推荐日常档：主体保持通透；上/下细高光更清晰，左上与右下圆角高光连续连接。</string>
+			<string>每 5% 一个档位。55% 为日常档；75% 起边缘高光明显增强；100% 接近强烈清爽的系统玻璃反射。左右直边保持克制，亮度集中在上下边与左上/右下圆角。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -88,7 +88,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>参考新版系统玻璃：上下边缘形成连续清爽的细高光，左上和右下沿圆角自然连接；深色模式峰值更亮，浅色模式继续控制白化。</string>
+			<string>边缘亮度现在直接受百分比驱动：高百分比重点加强顶部、底部以及左上/右下圆角连接，不再平均抬亮整圈边框。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

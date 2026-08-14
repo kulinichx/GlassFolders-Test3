@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.2 Beta 3 — Connected Edge Rail
+ * GlassFolders 0.7.2 Beta 4 — Apple Edge Intensity
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -138,6 +138,25 @@ static inline CGFloat GFSpecularResponse(CGFloat strength) {
 
 static inline CGFloat GFTintResponse(CGFloat strength) {
     return pow(GFClamp01(strength), 1.35);
+}
+
+
+/*
+ * Dedicated optical-edge response.
+ *
+ * 25%  -> ~0.10
+ * 50%  -> ~0.29
+ * 55%  -> ~0.35
+ * 75%  -> ~0.62
+ * 100% -> 1.00
+ *
+ * This gives the slider visible optical authority: high percentages now
+ * increase specular brightness much more clearly instead of mostly changing
+ * the glass body.
+ */
+static inline CGFloat GFEdgeResponse(CGFloat strength) {
+    CGFloat s = GFClamp01(strength);
+    return 0.12 * s + 0.88 * pow(s, 1.80);
 }
 
 static inline CGFloat GFRoundedRectSDF(CGFloat x,
@@ -826,18 +845,29 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              *
              * Directional key light is still strongest at upper-left.
              */
-            CGFloat perimeterGain = darkAppearance
-                ? (0.028 + 0.011 * e)
-                : (0.021 + 0.008 * e);
+            /*
+             * Beta4 separates "glass exists" from "glass is strongly lit".
+             * edgeDrive is the user-visible brightness control for the edge
+             * optics; unlike the old constant-heavy gains, 75% and 100% now
+             * look materially brighter than 55%.
+             */
+            CGFloat edgeDrive =
+                GFEdgeResponse(strength);
 
             /*
-             * Rounded-rect SDF outward normal:
-             * |ny| ~= 1 on top/bottom, ~= 0 on left/right.
-             * At rounded corners it transitions continuously, so this is not
-             * a painted horizontal line.
+             * Surface-axis weights:
+             * horizontalEdge -> top/bottom
+             * verticalEdge   -> left/right
+             *
+             * The Apple reference spends much more luminance budget on the
+             * horizontal rails and the diagonal rounded corners. Straight
+             * left/right sides remain present, but intentionally quieter.
              */
             CGFloat horizontalEdge =
-                pow(fabs(ny), 2.15);
+                pow(fabs(ny), 2.10);
+
+            CGFloat verticalEdge =
+                pow(fabs(nx), 2.10);
 
             CGFloat topFacing =
                 MAX(0.0, -ny);
@@ -845,13 +875,41 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             CGFloat bottomFacing =
                 MAX(0.0, ny);
 
+            /*
+             * Very weak always-on perimeter floor, then strength-dependent
+             * horizontal/vertical gains. Straight side gain is ~40% of the
+             * horizontal baseline, which fixes the Beta3 "left/right too
+             * bright" result.
+             */
+            CGFloat perimeterFloor = darkAppearance
+                ? 0.0060
+                : 0.0045;
+
+            CGFloat horizontalPerimeterGain = darkAppearance
+                ? (0.018 + 0.034 * edgeDrive)
+                : (0.013 + 0.026 * edgeDrive);
+
+            CGFloat verticalPerimeterGain = darkAppearance
+                ? (0.007 + 0.014 * edgeDrive)
+                : (0.006 + 0.011 * edgeDrive);
+
+            CGFloat axisPerimeter =
+                horizontalEdge * horizontalPerimeterGain +
+                verticalEdge * verticalPerimeterGain;
+
+            /*
+             * Top/bottom rails scale aggressively with edgeDrive.
+             * At 75% the rails are already clearly bright; at 100% they
+             * approach the crisp system reference without turning the whole
+             * perimeter into a uniform white stroke.
+             */
             CGFloat topRailGain = darkAppearance
-                ? (0.052 + 0.020 * e)
-                : (0.036 + 0.015 * e);
+                ? (0.022 + 0.160 * edgeDrive)
+                : (0.016 + 0.108 * edgeDrive);
 
             CGFloat bottomRailGain = darkAppearance
-                ? (0.040 + 0.016 * e)
-                : (0.032 + 0.013 * e);
+                ? (0.018 + 0.125 * edgeDrive)
+                : (0.014 + 0.090 * edgeDrive);
 
             CGFloat horizontalRail =
                 horizontalEdge *
@@ -861,45 +919,57 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 );
 
             /*
-             * nx*ny is positive at top-left and bottom-right.
-             * Multiplying by two maps a 45-degree corner normal close to 1.
-             * The bridge naturally fades away as the radius joins the
-             * straight sides.
+             * nx*ny > 0 selects the top-left and bottom-right rounded corners.
+             * The response is made slightly broader than Beta3 so the light
+             * visibly CONNECTS around the radius instead of appearing as an
+             * isolated hot pixel near 45 degrees.
              */
             CGFloat pairedCorner =
                 GFClamp01(
-                    2.0 * MAX(0.0, nx * ny)
+                    2.15 * MAX(0.0, nx * ny)
                 );
 
             CGFloat cornerBridge =
-                pow(pairedCorner, 1.25);
-
-            CGFloat cornerBridgeGain = darkAppearance
-                ? (0.070 + 0.026 * e)
-                : (0.050 + 0.020 * e);
+                pow(pairedCorner, 0.92);
 
             /*
-             * A small wider core under the filament prevents the connected
-             * corner highlight from looking like a one-pixel neon stroke.
+             * Corners receive the strongest percentage-dependent gain.
+             * This is the main answer to the 75% screenshot: TL/BR now scale
+             * much harder than the straight left/right sides.
              */
+            CGFloat cornerBridgeGain = darkAppearance
+                ? (0.025 + 0.245 * edgeDrive)
+                : (0.018 + 0.165 * edgeDrive);
+
             CGFloat horizontalCoreGain = darkAppearance
-                ? (0.018 + 0.007 * e)
-                : (0.013 + 0.005 * e);
+                ? (0.008 + 0.032 * edgeDrive)
+                : (0.006 + 0.023 * edgeDrive);
 
             CGFloat cornerCoreGain = darkAppearance
-                ? (0.022 + 0.008 * e)
-                : (0.015 + 0.006 * e);
+                ? (0.010 + 0.060 * edgeDrive)
+                : (0.007 + 0.040 * edgeDrive);
+
+            /*
+             * The far-side secondary rim was one contributor to Beta3's
+             * strong right straight edge. Keep the lower/bottom response but
+             * attenuate it on vertical straight sides.
+             */
+            CGFloat secondaryAxisWeight =
+                0.42 + 0.58 * horizontalEdge;
 
             CGFloat white =
-                filament * perimeterGain +
+                filament * perimeterFloor +
+                filament * axisPerimeter +
                 filament * horizontalRail +
                 core * horizontalEdge * horizontalCoreGain +
                 filament * cornerBridge * cornerBridgeGain +
                 core * cornerBridge * cornerCoreGain +
-                shoulder * shoulderGain * pow(facing, 1.30) +
-                core * coreGain * pow(facing, 1.45) +
-                filament * filamentGain * pow(facing, 1.65) +
-                secondary * secondaryRimGain * pow(opposite, 1.25);
+                shoulder * shoulderGain * pow(facing, 1.30) * (0.70 + 0.30 * edgeDrive) +
+                core * coreGain * pow(facing, 1.45) * (0.62 + 0.58 * edgeDrive) +
+                filament * filamentGain * pow(facing, 1.65) * (0.58 + 0.72 * edgeDrive) +
+                secondary * secondaryRimGain * pow(opposite, 1.25) *
+                    secondaryAxisWeight *
+                    (0.52 + 0.62 * edgeDrive);
 
             /*
              * Far-side thickness starts inside the edge.  It never occupies
@@ -914,8 +984,13 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 darkShoulderGain *
                 pow(opposite, 1.15);
 
+            CGFloat edgePeak =
+                darkAppearance
+                    ? (0.190 + 0.245 * edgeDrive)
+                    : (0.145 + 0.175 * edgeDrive);
+
             CGFloat signedLight =
-                MIN(0.315, MAX(-0.045, white - dark));
+                MIN(edgePeak, MAX(-0.045, white - dark));
 
             CGFloat alpha =
                 fabs(signedLight) * edgeCoverage;

@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.2~beta3
+Version: 0.7.2~beta4
 Architecture: iphoneos-arm64e
-Description: Connected-edge Liquid Glass calibration: stronger top/bottom highlight rails with continuous top-left and bottom-right corner bridges, while preserving the Beta2 material and safety architecture.
+Description: Apple-reference edge intensity calibration: percentage-driven bright top/bottom rails and stronger connected top-left/bottom-right corner highlights, with quieter left/right straight edges.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks
