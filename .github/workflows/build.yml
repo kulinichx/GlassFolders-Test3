@@ -1,4 +1,4 @@
-name: GlassFolders 0.7.4 Beta1.3.1 CLEAN
+name: GlassFolders 0.7.4 Beta1.3.2 CLEAN
 
 on:
   workflow_dispatch:
@@ -21,8 +21,13 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 0.7.4 BETA1.3.1 PILLOW-CI-FIX ==="
+          echo "=== GLASSFOLDERS 0.7.4 BETA1.3.2 SETUP-PYTHON-FIX ==="
           echo "THEOS=$THEOS"
+
+      - name: Set up Python for PNG verification
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Install dependencies
         shell: bash
@@ -31,13 +36,19 @@ jobs:
 
           brew install ldid xz
 
-          echo "Installing Pillow for PNG alpha verification..."
-          python3 -m pip install --user --upgrade pillow
+          echo "Python selected by actions/setup-python:"
+          which python
+          python --version
+
+          echo "Installing Pillow into setup-python environment..."
+          python -m pip install --upgrade pip
+          python -m pip install pillow
 
           echo "Verifying Pillow import..."
-          python3 - <<'PY'
+          python - <<'PY'
           from PIL import Image
-          print("Pillow OK:", Image.__version__ if hasattr(Image, "__version__") else "imported")
+          print("Pillow import OK")
+          print("PIL image module:", Image)
           PY
 
       - name: Install RootHide Theos
@@ -106,7 +117,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          grep -Fq 'GLASSFOLDERS 0.7.4 BETA1.3.1 PILLOW-CI-FIX' \
+          grep -Fq 'GLASSFOLDERS 0.7.4 BETA1.3.2 SETUP-PYTHON-FIX' \
             .github/workflows/build.yml
 
           grep -Fq '%group GFIconHooks' Tweak.xm
@@ -122,7 +133,7 @@ jobs:
             exit 1
           fi
 
-          python3 - <<'PY'
+          python - <<'PY'
           import plistlib
           from PIL import Image
 
@@ -181,7 +192,7 @@ jobs:
           set -euo pipefail
 
           DEB="${{ steps.package.outputs.deb }}"
-          TMP="/tmp/gf074b131"
+          TMP="/tmp/gf074b132"
           rm -rf "$TMP"
           mkdir -p "$TMP"
           cd "$TMP"
@@ -259,7 +270,7 @@ jobs:
           test -f "$PB/GlassFolders@3x.png"
           test -f "$PB/GlassFoldersLarge.png"
 
-          python3 - "$PL/GlassFolders.plist" \
+          python - "$PL/GlassFolders.plist" \
             "$PL/GlassFolders.png" \
             "$PL/GlassFolders@2x.png" \
             "$PL/GlassFolders@3x.png" \
@@ -304,7 +315,7 @@ jobs:
       - name: Upload deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.4-Beta1.3.1-DEB
+          name: GlassFolders-0.7.4-Beta1.3.2-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
