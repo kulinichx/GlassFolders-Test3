@@ -5,22 +5,22 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.5.2 / Test5.2 — Edge Glass
+ * GlassFolders 0.5.3 / Test5.3 — Backdrop Glass
  *
- * Design goal:
- * - Clear stays extremely light.
- * - Liquid Glass uses Apple's existing material ideas:
- *   background color passes through, subtle depth, stronger top/upper-left
- *   catch-light, very weak remaining edge.
+ * Why:
+ * Test5.2's UIVisualEffectView "Light" material looked like a pale frosted card
+ * on-device. This version instead uses CABackdropLayer + CAFilter when
+ * available, so the wallpaper color remains visible and saturated.
  *
- * Performance goal:
+ * Lightweight-first:
  * - no daemon
  * - no DisplayLink
  * - no timer
- * - no continuous custom animation
- * - no full-screen custom blur
- * - no shadow rendering
- * - preferences loaded once per SpringBoard launch
+ * - no gyroscope
+ * - no continuously animated gradient
+ * - no custom full-screen blur
+ *
+ * The backdrop filters are static and GPU/compositor driven.
  */
 
 static CFStringRef const GFPreferencesDomain = CFSTR("com.local.glassfolders");
@@ -91,23 +91,46 @@ static void GFLoadPreferences(void) {
 }
 
 
-@interface GFGlassFolderPlateView : UIView
-@property (nonatomic, strong) UIVisualEffectView *gfBlurView;
+/*
+ * Avoid linking private classes directly.
+ * Both CABackdropLayer and CAFilter are resolved at runtime.
+ */
+static id GFCreateCAFilter(NSString *type) {
+    Class filterClass = NSClassFromString(@"CAFilter");
+    SEL selector = NSSelectorFromString(@"filterWithType:");
+
+    if (!filterClass || ![filterClass respondsToSelector:selector]) {
+        return nil;
+    }
+
+    IMP imp = [filterClass methodForSelector:selector];
+    id (*func)(id, SEL, id) = (void *)imp;
+    return func(filterClass, selector, type);
+}
+
+
+@interface GFBackdropGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
-@property (nonatomic, strong) CAGradientLayer *gfTopCatchLight;
+@property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
+@property (nonatomic, strong) CAGradientLayer *gfSpecularBand;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) NSInteger gfStyle;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
 - (instancetype)initWithStyle:(NSInteger)style
                      strength:(CGFloat)strength
-               preferredRadius:(CGFloat)radius;
+              preferredRadius:(CGFloat)radius;
 @end
 
-@implementation GFGlassFolderPlateView
+@implementation GFBackdropGlassView
+
++ (Class)layerClass {
+    Class backdropClass = NSClassFromString(@"CABackdropLayer");
+    return backdropClass ?: [CALayer class];
+}
 
 - (instancetype)initWithStyle:(NSInteger)style
                      strength:(CGFloat)strength
-               preferredRadius:(CGFloat)radius {
+              preferredRadius:(CGFloat)radius {
     self = [super initWithFrame:CGRectZero];
 
     if (self) {
@@ -118,47 +141,87 @@ static void GFLoadPreferences(void) {
         self.backgroundColor = UIColor.clearColor;
         self.userInteractionEnabled = NO;
         self.clipsToBounds = YES;
+        self.layer.masksToBounds = YES;
 
-        CGFloat blurAlpha = 0.0;
-        CGFloat tintAlpha = 0.0;
-        CGFloat edgeAlpha = 0.0;
-        CGFloat topCatchAlpha = 0.0;
-        UIBlurEffectStyle blurStyle = UIBlurEffectStyleSystemUltraThinMaterial;
+        BOOL isBackdropLayer =
+            [NSStringFromClass(self.layer.class) containsString:@"Backdrop"];
 
-        if (_gfStyle == 1 && _gfStrength > 0.001) {
+        CGFloat e = sqrt(_gfStrength);
+
+        if (_gfStrength > 0.001 && isBackdropLayer) {
             /*
-             * Medium values become visibly useful sooner without needing
-             * 80-100%. This keeps 40-55% in the main "Liquid Glass" zone.
+             * Preserve wallpaper color instead of whitening it.
+             * At 45–55%, blur stays moderate while saturation is boosted.
              */
-            CGFloat e = sqrt(_gfStrength);
+            CGFloat blurRadius;
+            CGFloat saturation;
+            CGFloat brightness;
 
-            blurStyle = UIBlurEffectStyleSystemUltraThinMaterialLight;
+            if (_gfStyle == 1) {
+                blurRadius = 5.0 + (13.0 * e);     // ~13.7 at 45%
+                saturation = 1.25 + (0.70 * e);   // ~1.72 at 45%
+                brightness = 0.010 + (0.030 * e);
+            } else {
+                blurRadius = 2.0 + (7.0 * e);
+                saturation = 1.05 + (0.30 * e);
+                brightness = 0.0;
+            }
 
-            blurAlpha = MIN(0.93, 0.52 + (0.55 * e));
-            tintAlpha = 0.022 + (0.090 * e);
+            id saturate = GFCreateCAFilter(@"colorSaturate");
+            id brighten = GFCreateCAFilter(@"colorBrightness");
+            id blur = GFCreateCAFilter(@"gaussianBlur");
 
+            NSMutableArray *filters = [NSMutableArray array];
+
+            if (saturate) {
+                [saturate setValue:@(saturation) forKey:@"inputAmount"];
+                [filters addObject:saturate];
+            }
+
+            if (brighten && brightness > 0.0001) {
+                [brighten setValue:@(brightness) forKey:@"inputAmount"];
+                [filters addObject:brighten];
+            }
+
+            if (blur) {
+                [blur setValue:@(blurRadius) forKey:@"inputRadius"];
+                [blur setValue:@YES forKey:@"inputNormalizeEdges"];
+                [blur setValue:@YES forKey:@"inputHardEdges"];
+                [filters addObject:blur];
+            }
+
+            if (filters.count > 0) {
+                [self.layer setValue:filters forKey:@"filters"];
+                [self.layer setValue:@1.0 forKey:@"scale"];
+            }
+        } else if (_gfStrength > 0.001) {
             /*
-             * The full border is deliberately weak.
-             * The visible "glass catch" comes from the upper edge instead.
+             * Conservative fallback for systems where CABackdropLayer cannot
+             * be resolved. This is not the primary iOS 16 path.
              */
-            edgeAlpha = 0.08 + (0.19 * e);
-            topCatchAlpha = 0.20 + (0.34 * e);
-        } else if (_gfStyle == 0) {
-            /*
-             * Clear mode remains close to the stable Test4 behavior.
-             * At 0%, no blur view is allocated.
-             */
-            blurAlpha = 0.70 * _gfStrength;
-            tintAlpha = 0.035 * _gfStrength;
+            UIBlurEffect *effect =
+                [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterial];
+
+            _gfFallbackBlurView =
+                [[UIVisualEffectView alloc] initWithEffect:effect];
+
+            _gfFallbackBlurView.userInteractionEnabled = NO;
+            _gfFallbackBlurView.alpha =
+                (_gfStyle == 1) ? MIN(0.70, 0.30 + 0.50 * e)
+                                : 0.55 * _gfStrength;
+
+            [self addSubview:_gfFallbackBlurView];
         }
 
-        if (blurAlpha > 0.005) {
-            UIBlurEffect *effect = [UIBlurEffect effectWithStyle:blurStyle];
+        /*
+         * Tiny neutral tint only. The wallpaper is meant to provide the color.
+         */
+        CGFloat tintAlpha = 0.0;
 
-            _gfBlurView = [[UIVisualEffectView alloc] initWithEffect:effect];
-            _gfBlurView.alpha = blurAlpha;
-            _gfBlurView.userInteractionEnabled = NO;
-            [self addSubview:_gfBlurView];
+        if (_gfStrength > 0.001) {
+            tintAlpha = (_gfStyle == 1)
+                ? 0.012 + (0.040 * e)
+                : 0.018 * _gfStrength;
         }
 
         if (tintAlpha > 0.001) {
@@ -169,33 +232,31 @@ static void GFLoadPreferences(void) {
             [self addSubview:_gfTintView];
         }
 
-        if (_gfStyle == 1 && edgeAlpha > 0.001) {
-            CGFloat scale = UIScreen.mainScreen.scale;
-
-            self.layer.borderWidth = 1.0 / scale;
-            self.layer.borderColor =
-                [UIColor colorWithWhite:1.0 alpha:edgeAlpha].CGColor;
-
+        if (_gfStyle == 1 && _gfStrength > 0.001) {
             /*
-             * One tiny static gradient only along the top edge.
-             * It is NOT a diagonal full-surface highlight.
-             *
-             * Left/top is strongest, fading toward the right.
-             * No animation, no redraw loop, no motion sensor.
+             * A very light static diagonal specular band.
+             * This is the A/B direction discussed after Edge Glass looked flat.
+             * It never animates and never reads motion sensors.
              */
-            _gfTopCatchLight = [CAGradientLayer layer];
-            _gfTopCatchLight.startPoint = CGPointMake(0.0, 0.5);
-            _gfTopCatchLight.endPoint = CGPointMake(1.0, 0.5);
-            _gfTopCatchLight.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.95].CGColor,
+            CGFloat borderAlpha = 0.17 + (0.32 * e);
+            self.layer.borderWidth = 1.0 / UIScreen.mainScreen.scale;
+            self.layer.borderColor =
+                [UIColor colorWithWhite:1.0 alpha:borderAlpha].CGColor;
+
+            _gfSpecularBand = [CAGradientLayer layer];
+            _gfSpecularBand.startPoint = CGPointMake(0.05, 0.0);
+            _gfSpecularBand.endPoint = CGPointMake(0.95, 1.0);
+            _gfSpecularBand.colors = @[
+                (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.10].CGColor,
                 (id)[UIColor colorWithWhite:1.0 alpha:0.52].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.12].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.10].CGColor,
                 (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor
             ];
-            _gfTopCatchLight.locations = @[@0.00, @0.24, @0.66, @1.00];
-            _gfTopCatchLight.opacity = topCatchAlpha;
+            _gfSpecularBand.locations = @[@0.00, @0.30, @0.46, @0.62, @1.00];
+            _gfSpecularBand.opacity = 0.08 + (0.15 * e);
 
-            [self.layer addSublayer:_gfTopCatchLight];
+            [self.layer addSublayer:_gfSpecularBand];
         }
     }
 
@@ -205,8 +266,9 @@ static void GFLoadPreferences(void) {
 - (void)layoutSubviews {
     [super layoutSubviews];
 
-    self.gfBlurView.frame = self.bounds;
+    self.gfFallbackBlurView.frame = self.bounds;
     self.gfTintView.frame = self.bounds;
+    self.gfSpecularBand.frame = self.bounds;
 
     CGFloat radius = self.gfPreferredRadius;
 
@@ -217,26 +279,7 @@ static void GFLoadPreferences(void) {
     if (radius > 0.0) {
         self.layer.cornerRadius = radius;
         self.layer.cornerCurve = kCACornerCurveContinuous;
-    }
-
-    if (self.gfTopCatchLight) {
-        CGFloat scale = UIScreen.mainScreen.scale;
-        CGFloat lineHeight = MAX(1.0 / scale, 0.45);
-
-        /*
-         * Keep the catch-light just inside the rounded top edge.
-         * Insets prevent it from looking like a hard rectangular rule.
-         */
-        CGFloat horizontalInset = MAX(4.0, radius * 0.20);
-
-        self.gfTopCatchLight.frame = CGRectMake(
-            horizontalInset,
-            0.55 / scale,
-            MAX(0.0, CGRectGetWidth(self.bounds) - (horizontalInset * 2.0)),
-            lineHeight
-        );
-
-        self.gfTopCatchLight.cornerRadius = lineHeight * 0.5;
+        self.gfSpecularBand.cornerRadius = radius;
     }
 }
 
@@ -262,12 +305,24 @@ static void GFLoadPreferences(void) {
         return;
     }
 
-    CGFloat originalRadius = backgroundView ? backgroundView.layer.cornerRadius : 0.0;
+    /*
+     * Stable Test3.1 behavior at Clear 0%.
+     */
+    if (GFStyle == 0 && GFGlassStrength <= 0.001) {
+        UIView *clearPlate = [[UIView alloc] initWithFrame:CGRectZero];
+        clearPlate.backgroundColor = UIColor.clearColor;
+        clearPlate.userInteractionEnabled = NO;
+        %orig(clearPlate);
+        return;
+    }
 
-    GFGlassFolderPlateView *plate =
-        [[GFGlassFolderPlateView alloc] initWithStyle:GFStyle
-                                             strength:GFGlassStrength
-                                       preferredRadius:originalRadius];
+    CGFloat originalRadius =
+        backgroundView ? backgroundView.layer.cornerRadius : 0.0;
+
+    GFBackdropGlassView *plate =
+        [[GFBackdropGlassView alloc] initWithStyle:GFStyle
+                                          strength:GFGlassStrength
+                                   preferredRadius:originalRadius];
 
     %orig(plate);
 }
@@ -287,22 +342,14 @@ static void GFLoadPreferences(void) {
         return;
     }
 
-    if (GFGlassStrength <= 0.001) {
-        %orig(0.0);
-        return;
-    }
-
     /*
-     * Larger surface = slightly "thicker" material.
-     * Still reuses Apple's own opened-folder material.
-     *
-     * No additional full-screen blur is created.
-     * Multiplication preserves Apple's transition curve.
+     * Keep the opened folder lightweight:
+     * reuse Apple's existing large folder material, no new full-screen blur.
      */
     double e = sqrt(GFGlassStrength);
-    double panelFactor = 0.26 + (0.53 * e);
+    double panelFactor = 0.24 + (0.48 * e);
 
-    %orig(alpha * MIN(0.80, panelFactor));
+    %orig(alpha * MIN(0.74, panelFactor));
 }
 
 %end

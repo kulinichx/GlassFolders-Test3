@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.5.2</string>
+			<string>GlassFolders 0.5.3</string>
 			<key>footerText</key>
-			<string>Edge Glass：顶部/左上吃光，整体边缘更淡。无后台进程、无持续刷新、无额外全屏模糊。设置完成后点底部“应用更改并 Respring”。</string>
+			<string>Backdrop Glass：直接采样壁纸做模糊与饱和，不再使用偏白的 Light Material。无后台进程、无持续动画、无额外全屏模糊。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -32,7 +32,7 @@
 			<key>label</key>
 			<string>风格</string>
 			<key>footerText</key>
-			<string>Clear 保持干净透明；Liquid Glass 使用轻薄系统材质 + 极淡整体边缘 + 顶部/左上静态高光。打开文件夹继续复用系统原生材质。</string>
+			<string>Clear 保持极简透明；Liquid Glass 使用 Backdrop blur + saturation + 极轻静态对角高光，尽量保留壁纸颜色。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -62,7 +62,7 @@
 			<key>label</key>
 			<string>玻璃强度</string>
 			<key>footerText</key>
-			<string>Liquid Glass 建议先试 40–55%。右侧显示整数百分比。45–50% 是本版主要观察区间。</string>
+			<string>Liquid Glass 建议先试 40–55%。百分比移到滑块左侧独立区域，不再与横线重叠。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -88,7 +88,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>性能：Clear=0% 不创建模糊视图；Liquid Glass 每个可见文件夹只增加系统轻薄材质、极淡 tint 和一个顶部静态高光层。无动态高光、无陀螺仪、无 DisplayLink。</string>
+			<string>性能：无 daemon、无 Timer、无 DisplayLink、无陀螺仪。Liquid Glass 使用静态 CABackdropLayer 过滤器和静态高光层；打开文件夹继续复用系统原生大面板。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

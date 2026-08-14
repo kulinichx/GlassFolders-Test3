@@ -9,13 +9,6 @@
 extern char **environ;
 
 
-/*
- * Lightweight percent slider.
- *
- * IMPORTANT:
- * PSSliderTableCell is imported from Theos' Preferences headers.
- * Do NOT redeclare it locally — its real superclass is PSControlTableCell.
- */
 @interface GFPercentSliderCell : PSSliderTableCell
 @property (nonatomic, strong) UILabel *gfPercentLabel;
 @property (nonatomic, weak) UISlider *gfBoundSlider;
@@ -24,15 +17,14 @@ extern char **environ;
 @implementation GFPercentSliderCell
 
 - (void)gfEnsurePercentLabel {
-    if (self.gfPercentLabel) {
-        return;
-    }
+    if (self.gfPercentLabel) return;
 
     UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
-    label.textAlignment = NSTextAlignmentRight;
+    label.textAlignment = NSTextAlignmentCenter;
     label.textColor = UIColor.secondaryLabelColor;
-    label.font = [UIFont monospacedDigitSystemFontOfSize:15.0
-                                                  weight:UIFontWeightRegular];
+    label.font =
+        [UIFont monospacedDigitSystemFontOfSize:15.0
+                                         weight:UIFontWeightMedium];
     label.userInteractionEnabled = NO;
 
     [self.contentView addSubview:label];
@@ -40,10 +32,6 @@ extern char **environ;
 }
 
 - (UISlider *)gfSlider {
-    /*
-     * PSControlTableCell exposes -control.
-     * We still verify the runtime class before treating it as UISlider.
-     */
     UIControl *control = [self control];
 
     if ([control isKindOfClass:[UISlider class]]) {
@@ -55,10 +43,7 @@ extern char **environ;
 
 - (void)gfBindSliderIfNeeded {
     UISlider *slider = [self gfSlider];
-
-    if (!slider) {
-        return;
-    }
+    if (!slider) return;
 
     if (self.gfBoundSlider != slider) {
         if (self.gfBoundSlider) {
@@ -110,29 +95,31 @@ extern char **environ;
     CGRect bounds = self.contentView.bounds;
 
     /*
-     * Give the percentage a fixed, generous area so "100%" never clips.
-     * Shrink only the slider — don't let the number overlap the cell edge.
+     * Fix Test5.2 overlap:
+     * percentage owns a dedicated LEFT column.
+     * The slider starts after it, so the track never runs under the number.
      */
-    const CGFloat rightInset = 16.0;
-    const CGFloat valueWidth = 58.0;
-    const CGFloat gap = 10.0;
-
-    CGRect sliderFrame = slider.frame;
-    CGFloat maximumSliderRight =
-        CGRectGetWidth(bounds) - rightInset - valueWidth - gap;
-
-    if (CGRectGetMaxX(sliderFrame) > maximumSliderRight) {
-        sliderFrame.size.width =
-            MAX(90.0, maximumSliderRight - sliderFrame.origin.x);
-        slider.frame = sliderFrame;
-    }
+    const CGFloat leftInset = 14.0;
+    const CGFloat valueWidth = 52.0;
+    const CGFloat gap = 8.0;
+    const CGFloat rightInset = 18.0;
 
     self.gfPercentLabel.frame = CGRectMake(
-        CGRectGetMaxX(slider.frame) + gap,
+        leftInset,
         0.0,
         valueWidth,
         CGRectGetHeight(bounds)
     );
+
+    CGRect sliderFrame = slider.frame;
+    sliderFrame.origin.x = leftInset + valueWidth + gap;
+    sliderFrame.size.width =
+        MAX(120.0,
+            CGRectGetWidth(bounds) -
+            sliderFrame.origin.x -
+            rightInset);
+
+    slider.frame = sliderFrame;
 
     [self gfUpdatePercentLabel];
 }
@@ -144,16 +131,14 @@ extern char **environ;
 
 - (NSArray *)specifiers {
     if (!_specifiers) {
-        _specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
+        _specifiers =
+            [self loadSpecifiersFromPlistName:@"Root" target:self];
     }
 
     return _specifiers;
 }
 
 - (void)respring {
-    /*
-     * Resolve the randomized RootHide jbroot instead of hard-coding it.
-     */
     NSString *sbreloadPath = jbroot(@"/usr/bin/sbreload");
 
     if (sbreloadPath.length > 0) {
@@ -173,9 +158,6 @@ extern char **environ;
         }
     }
 
-    /*
-     * Fallback only if sbreload could not be spawned.
-     */
     NSString *killallPath = jbroot(@"/usr/bin/killall");
 
     if (killallPath.length > 0) {
