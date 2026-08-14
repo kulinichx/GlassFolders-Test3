@@ -1,5 +1,6 @@
 #import "GFRootListController.h"
 #import <UIKit/UIKit.h>
+#import <CoreFoundation/CoreFoundation.h>
 #import <Preferences/PSSpecifier.h>
 #import <Preferences/PSSliderTableCell.h>
 #import <spawn.h>
@@ -90,6 +91,29 @@ extern char **environ;
 
     if ((NSInteger)lroundf(sender.value) != detent) {
         [sender setValue:(float)detent animated:NO];
+    }
+
+    /*
+     * Persist the snapped value explicitly.
+     * PSSliderTableCell also has its own preference-writing target, but target
+     * invocation order is not something we should rely on. Writing the detent
+     * here guarantees that a Respring reads the exact 5% step.
+     */
+    double storedValue = (double)detent;
+    CFNumberRef number = CFNumberCreate(
+        kCFAllocatorDefault,
+        kCFNumberDoubleType,
+        &storedValue
+    );
+
+    if (number) {
+        CFPreferencesSetAppValue(
+            CFSTR("GlassStrength"),
+            number,
+            CFSTR("com.local.glassfolders")
+        );
+        CFPreferencesAppSynchronize(CFSTR("com.local.glassfolders"));
+        CFRelease(number);
     }
 
     if (self.gfLastDetent != detent) {

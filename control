@@ -1,6 +1,6 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.5.4~test5.4
+Version: 0.5.4-1~test5.4
 Architecture: iphoneos-arm64e
 Description: Lightweight RootHide Backdrop Glass with 5 percent magnetic slider detents, haptics, thicker static glass highlights, and built-in Respring.
 Maintainer: Local Test Build
