@@ -1,81 +1,80 @@
-# GlassFolders 0.7.0 Beta 3 — Balanced Optical Edge
+# GlassFolders 0.7.0 Beta 4 — iOS 27 Open Panel Correction
 
-Beta 3 keeps the SDF lighting architecture and focuses on the two device
-observations from Beta 2:
+Beta 4 addresses two specific device observations.
 
-1. the right/bottom edge from an earlier build looked good and should not vanish
-2. the opened panel showed tiny white artifacts around its four corners
+## 1. Closed folder: missing right/bottom edge
 
-## Closed folder
+Beta 3's lower-right shadow was stronger than the neutral edge definition,
+therefore the right/bottom glass edge visually disappeared.
 
-### Directional upper-left light
+Beta 4 separates two physical-looking components:
 
-Still uses:
-- narrow specular filament
-- supporting core
-- wide soft shoulder
+### Back transmitted rim
+- very narrow
+- strongest on lower-right-facing normals
+- low intensity
+- neutral white
 
-This creates the stronger upper-left reflection.
+### Inner dark shoulder
+- wider than the bright rim
+- much lower dark-core strength
+- provides thickness behind the rim
 
-### Faint full-perimeter edge definition
+The intended lower-right profile is now:
 
-A new very-low-gain `baseEdge` is derived from the narrow SDF filament profile
-but does not depend on the light direction.
+`thin bright edge -> faint darker inner shoulder -> normal glass`
 
-Its job is only to preserve the subtle right/bottom glass edge seen in the
-supplied RootHide and Alook references.
+This preserves the user's preferred earlier right/bottom effect while keeping
+the stronger three-zone upper-left specular.
 
-It is intentionally much weaker than the upper-left directional highlight.
+## 2. Opened folder: match the supplied iOS 27 reference
 
-## Opened folder
+The desired opened state is NOT a dark gray card.
 
-### Material
+Beta 4 opened material is:
+- lower blur
+- more wallpaper saturation/color retention
+- noticeably brighter
+- slightly stronger neutral white frost
+- still transparent
 
-Adjusted toward the supplied Apple opened-folder reference:
+The goal is a colored, lightly frosted glass panel.
 
-- slightly less blur
-- slightly brighter backdrop
-- a little more neutral white frost
-- wallpaper color still passes through
+## Four-corner artifact fix
 
-### Corner artifact fix
+Beta 3 intentionally inset the custom rounded mask by 0.42pt.
 
-Two protections are now used:
+That could expose the stock SpringBoard folder material behind the custom panel
+at the four corners.
 
-1. SDF texture boundary uses sub-pixel coverage instead of a binary cutoff
-2. `GFOpenedFolderGlassView` gets a dedicated rounded `CAShapeLayer` mask
+Beta 4:
 
-The mask is inset by less than half a point and uses a slightly safer radius,
-so backdrop filters and lighting texture cannot leak into the four extreme
-corners.
+- removes the mask inset
+- uses exactly `host.bounds`
+- uses exactly the resolved host corner radius
+- makes the real host clip its children to that same radius
+- clears the host background
+- suppresses only large background/material/backdrop/effect subviews inside the
+  resolved panel host
 
-### Opened optical edge
+Icons/content are not targeted by the stock-material suppression helper.
 
-The opened panel keeps:
-- wider soft shoulder
-- softer core
-- weaker/narrower filament
-- extremely faint full-perimeter definition
+## Safety
 
-It should read as a frosted glass panel, not a white outlined card.
+The RC3 panel-host policy is retained:
+
+- custom glass is only attached to a resolved rounded folder panel
+- unresolved host => keep stock SpringBoard panel
+- no full-screen custom fallback
 
 ## Performance
 
-Still no:
+No:
 - daemon
 - Timer
 - DisplayLink
 - gyroscope
-- per-frame Metal renderer
+- per-frame Metal rendering
 - animated gradient
 
-Optical maps are generated on size/radius/5%-strength/open-state changes and
-cached in `NSCache`.
-
-## Opened panel safety
-
-The RC3 host detection remains:
-
-- glass attaches only to the actual rounded folder panel
-- no full-screen custom fallback
-- unresolved panel => keep stock SpringBoard background
+SDF optical maps remain generated on demand and cached.

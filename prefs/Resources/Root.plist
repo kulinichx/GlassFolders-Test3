@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7 Optical Beta 3</string>
+			<string>GlassFolders 0.7 Optical Beta 4</string>
 			<key>footerText</key>
-			<string>平衡光学边缘：左上清晰亮芯 + 柔和肩部；右边/底边保留极淡玻璃轮廓。打开面板修复四角白点。</string>
+			<string>关闭：左上强高光，右边/底边保留细亮玻璃边。打开：更亮、更透色的轻磨砂圆角面板，并修复四角露白。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -32,7 +32,7 @@
 			<key>label</key>
 			<string>风格</string>
 			<key>footerText</key>
-			<string>Liquid Glass：关闭偏清透；打开为更亮、更自然的独立圆角轻磨砂玻璃。</string>
+			<string>Liquid Glass：关闭偏清透；打开按 iOS 27 参考做独立浅色磨砂玻璃面板。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

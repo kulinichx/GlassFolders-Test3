@@ -272,15 +272,15 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
     CGFloat filamentWidth = filamentPoints * renderScale;
 
     CGFloat highlightShoulderGain = opened
-        ? (0.040 + 0.012 * e)
+        ? (0.034 + 0.010 * e)
         : (0.054 + 0.016 * e);
 
     CGFloat highlightCoreGain = opened
-        ? (0.085 + 0.020 * e)
+        ? (0.060 + 0.014 * e)
         : (0.125 + 0.028 * e);
 
     CGFloat highlightFilamentGain = opened
-        ? (0.070 + 0.015 * e)
+        ? (0.032 + 0.010 * e)
         : (0.205 + 0.045 * e);
 
     /*
@@ -293,16 +293,33 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
      * bright corner dots or a painted frame.
      */
     CGFloat baseEdgeGain = opened
-        ? (0.008 + 0.003 * e)
-        : (0.024 + 0.007 * e);
+        ? (0.0035 + 0.0015 * e)
+        : (0.012 + 0.004 * e);
+
+    /*
+     * Back-side transmitted rim.
+     *
+     * On the closed folder this creates the subtle RIGHT/BOTTOM bright edge
+     * visible in the user's preferred earlier build and the Alook reference.
+     *
+     * It uses the narrow filament profile, so it remains thin.
+     * The darker shoulder below it supplies thickness without erasing it.
+     */
+    CGFloat backFilamentGain = opened
+        ? (0.004 + 0.002 * e)
+        : (0.052 + 0.014 * e);
 
     CGFloat shadowShoulderGain = opened
-        ? (0.012 + 0.005 * e)
-        : (0.018 + 0.007 * e);
+        ? (0.009 + 0.004 * e)
+        : (0.020 + 0.006 * e);
 
+    /*
+     * Keep the dark CORE weak. A strong dark core was the reason Beta3 lost
+     * the right/bottom highlight completely.
+     */
     CGFloat shadowCoreGain = opened
-        ? (0.018 + 0.006 * e)
-        : (0.028 + 0.009 * e);
+        ? (0.006 + 0.003 * e)
+        : (0.007 + 0.003 * e);
 
     /*
      * Upper-left fixed light.
@@ -448,12 +465,33 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                     CGFloat baseEdge =
                         filament * baseEdgeGain;
 
+                    /*
+                     * `opposite` is strongest on lower-right-facing normals.
+                     * The exponent keeps this transmitted rim mostly on the
+                     * actual right/bottom edge rather than the whole perimeter.
+                     */
+                    CGFloat backFacing =
+                        pow(opposite, opened ? 1.55 : 1.20);
+
+                    CGFloat backRim =
+                        filament * backFilamentGain * backFacing;
+
                     CGFloat white =
                         baseEdge +
+                        backRim +
                         shoulder * highlightShoulderGain * shoulderFacing +
                         core * highlightCoreGain * coreFacing +
                         filament * highlightFilamentGain * filamentFacing;
 
+                    /*
+                     * The shadow is deliberately wider than `backRim`.
+                     * Visual profile on the lower-right becomes:
+                     *
+                     *   thin bright rim -> subtle dark inner shoulder -> glass
+                     *
+                     * instead of Beta3's:
+                     *   dark edge -> no visible rim.
+                     */
                     CGFloat dark =
                         (
                             shoulder * shadowShoulderGain +
@@ -472,10 +510,10 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
              * new filament is sub-point and highly directional.
              */
             CGFloat positiveCap =
-                opened ? 0.175 : 0.285;
+                opened ? 0.145 : 0.295;
 
             CGFloat negativeCap =
-                opened ? 0.060 : 0.075;
+                opened ? 0.045 : 0.060;
 
             signedLight =
                 MIN(
@@ -830,9 +868,9 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
              * Opened "frosted transparent" calibration:
              * visibly softer than the closed icon, but still transparent.
              */
-            CGFloat blurRadius = 4.8 + (8.2 * e);
-            CGFloat saturation = 1.00 + (0.075 * e);
-            CGFloat brightness = 0.010 + (0.010 * e);
+            CGFloat blurRadius = 3.8 + (7.2 * e);
+            CGFloat saturation = 1.06 + (0.12 * e);
+            CGFloat brightness = 0.026 + (0.020 * e);
 
             id saturate = GFCreateCAFilter(@"colorSaturate");
             id brighten = GFCreateCAFilter(@"colorBrightness");
@@ -878,7 +916,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
          * Keep the opened folder neutral.
          * Wallpaper remains the color source.
          */
-        CGFloat tintAlpha = 0.042 + (0.030 * e);
+        CGFloat tintAlpha = 0.058 + (0.032 * e);
 
         if (_gfStrength > 0.001 && tintAlpha > 0.001) {
             _gfTintView = [[UIView alloc] initWithFrame:CGRectZero];
@@ -935,19 +973,14 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
 
     if (self.gfCornerMask) {
         /*
-         * Tiny inset + slightly larger radius trims the extreme corner pixels
-         * without visibly shrinking the panel.
+         * Exact panel geometry.
+         *
+         * Do NOT inset the custom panel. Beta3's inset could reveal the stock
+         * material behind it at the four corners.
          */
-        CGFloat maskInset = 0.42;
-        CGRect maskRect =
-            CGRectInset(self.bounds, maskInset, maskInset);
-
-        CGFloat maskRadius =
-            MAX(0.0, radius + 0.85 - maskInset);
-
         UIBezierPath *maskPath =
-            [UIBezierPath bezierPathWithRoundedRect:maskRect
-                                       cornerRadius:maskRadius];
+            [UIBezierPath bezierPathWithRoundedRect:self.bounds
+                                       cornerRadius:radius];
 
         self.gfCornerMask.frame = self.bounds;
         self.gfCornerMask.path = maskPath.CGPath;
@@ -1139,6 +1172,98 @@ static UIView *GFOpenedFolderPanelHost(UIView *root) {
 }
 
 
+static BOOL GFLooksLikeStockOpenedMaterialView(UIView *view) {
+    if (!view ||
+        [view isKindOfClass:[GFOpenedFolderGlassView class]]) {
+        return NO;
+    }
+
+    NSString *name = NSStringFromClass(view.class);
+
+    if ([view isKindOfClass:[UIVisualEffectView class]]) {
+        return YES;
+    }
+
+    return
+        [name containsString:@"Backdrop"] ||
+        [name containsString:@"Material"] ||
+        [name containsString:@"BackgroundEffect"] ||
+        [name containsString:@"BackgroundView"] ||
+        [name containsString:@"FolderBackground"];
+}
+
+static void GFHideStockOpenedMaterialRecursive(UIView *container,
+                                               GFOpenedFolderGlassView *glass,
+                                               NSInteger depth) {
+    if (!container || depth > 4) {
+        return;
+    }
+
+    CGFloat containerArea =
+        MAX(1.0,
+            CGRectGetWidth(container.bounds) *
+            CGRectGetHeight(container.bounds));
+
+    for (UIView *subview in container.subviews) {
+        if (subview == glass ||
+            [subview isKindOfClass:[GFOpenedFolderGlassView class]]) {
+            continue;
+        }
+
+        CGFloat area =
+            CGRectGetWidth(subview.bounds) *
+            CGRectGetHeight(subview.bounds);
+
+        CGFloat ratio = area / containerArea;
+
+        /*
+         * Only suppress material-like views that occupy a substantial part of
+         * the resolved PANEL host. Tiny content/background views are ignored.
+         */
+        if (ratio >= 0.55 &&
+            GFLooksLikeStockOpenedMaterialView(subview)) {
+            subview.alpha = 0.0;
+            continue;
+        }
+
+        GFHideStockOpenedMaterialRecursive(
+            subview,
+            glass,
+            depth + 1
+        );
+    }
+}
+
+static void GFPrepareOpenedPanelHost(UIView *host,
+                                     GFOpenedFolderGlassView *glass,
+                                     CGFloat radius) {
+    if (!host) {
+        return;
+    }
+
+    /*
+     * The host itself becomes the authoritative clip geometry.
+     * This prevents any child material from protruding at the corners.
+     */
+    host.clipsToBounds = YES;
+    host.layer.masksToBounds = YES;
+
+    if (radius > 0.0) {
+        host.layer.cornerRadius = radius;
+        host.layer.cornerCurve = kCACornerCurveContinuous;
+    }
+
+    host.backgroundColor = UIColor.clearColor;
+
+    GFHideStockOpenedMaterialRecursive(
+        host,
+        glass,
+        0
+    );
+}
+
+
+
 @interface SBFolderIconImageView : UIView
 - (void)setBackgroundView:(UIView *)backgroundView;
 @end
@@ -1269,6 +1394,17 @@ static inline void GFSetOpenedGlassView(id object,
     }
 
     [glass setPreferredRadius:targetRadius];
+
+    /*
+     * Clip the real host and remove any stock material still peeking behind
+     * the custom glass. This specifically targets the four-corner "ears".
+     */
+    GFPrepareOpenedPanelHost(
+        host,
+        glass,
+        targetRadius
+    );
+
     [host sendSubviewToBack:glass];
 }
 
@@ -1304,8 +1440,27 @@ static inline void GFSetOpenedGlassView(id object,
     if (glass.superview != host) {
         [glass removeFromSuperview];
         [host insertSubview:glass atIndex:0];
-        glass.frame = host.bounds;
     }
+
+    glass.frame = host.bounds;
+
+    CGFloat targetRadius = host.layer.cornerRadius;
+
+    if (targetRadius <= 0.0) {
+        targetRadius =
+            MIN(CGRectGetWidth(host.bounds),
+                CGRectGetHeight(host.bounds)) * 0.085;
+    }
+
+    [glass setPreferredRadius:targetRadius];
+
+    GFPrepareOpenedPanelHost(
+        host,
+        glass,
+        targetRadius
+    );
+
+    [host sendSubviewToBack:glass];
 
     /*
      * Apple's original folder transition still drives panel opacity.
