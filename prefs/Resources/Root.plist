@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.3 App Library Beta 2.5</string>
+			<string>GlassFolders 0.7.4 Beta 1</string>
 			<key>footerText</key>
-			<string>桌面保持稳定光学玻璃；Liquid Glass 打开文件夹改为浅色、半透明、轻磨砂圆角面板，并自动适配系统深色/浅色模式。</string>
+			<string>仅保留桌面关闭文件夹与打开文件夹两条稳定玻璃路径。本版本不包含任何额外系统页面适配。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -55,26 +55,6 @@
 				<integer>0</integer>
 				<integer>1</integer>
 			</array>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>App 资源库</string>
-			<key>footerText</key>
-			<string>单独控制 App 资源库首页分类大文件夹。Beta 2 使用 SBHLibraryPodFolderView 作为分类卡片容器，只隐藏它内部真实的系统分类背景，并在同一几何位置插入玻璃；图标、标题和交互保持系统原生。</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>label</key>
-			<string>资源库大文件夹</string>
-			<key>key</key>
-			<string>AppLibraryPodsEnabled</string>
-			<key>default</key>
-			<false/>
-			<key>defaults</key>
-			<string>com.local.glassfolders</string>
 		</dict>
 		<dict>
 			<key>cell</key>

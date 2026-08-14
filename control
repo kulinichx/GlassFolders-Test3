@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.3~beta2.5
+Version: 0.7.4~beta1
 Architecture: iphoneos-arm64e
-Description: App Library category glass is now a same-superview sibling of the exact system background, copying bounds/center/transform and hiding only the system background. PreferenceLoader icon assets now mirror Powercuff naming exactly.
+Description: Stable folder-only GlassFolders build with all experimental library-page hooks removed. Focuses on closed/open folder glass and deterministic settings icon packaging.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks

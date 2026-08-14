@@ -11,6 +11,7 @@ GlassFoldersPrefs_FILES = GFRootListController.m
 GlassFoldersPrefs_FRAMEWORKS = UIKit CoreFoundation
 GlassFoldersPrefs_PRIVATE_FRAMEWORKS = Preferences
 GlassFoldersPrefs_CFLAGS = -fobjc-arc
+GlassFoldersPrefs_RESOURCE_FILES = Resources/GlassFolders.png Resources/GlassFolders@2x.png Resources/GlassFolders@3x.png Resources/GlassFoldersLarge.png
 
 GlassFoldersPrefs_INSTALL_PATH = /Library/PreferenceBundles
 
