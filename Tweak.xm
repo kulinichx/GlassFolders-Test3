@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 1.9 — Distinct Clear/Liquid Opened Materials + Native App Library Style
+ * GlassFolders 0.7.4 Beta 2.0 — Native-curve continuity + reference Clear
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -761,7 +761,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
     CGFloat materialResponse = GFMaterialResponse(strength);
 
     /*
-     * Beta 1.9: let the native category-pod visual contribute more of its
+     * Native category-pod visual contributes more of its
      * own material. The earlier ~0.61 alpha at 55% was visibly weaker than
      * the real App Library card. This changes only the native view's
      * participation -- no chromatic overlay is introduced.
@@ -1121,7 +1121,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
 
     NSString *cacheKey = [NSString stringWithFormat:
-        @"P9-%@-%@-%zux%zu-r%.2f-s%ld",
+        @"P20-%@-%@-%zux%zu-r%.2f-s%ld",
         (style == 1) ? @"LG" : @"CL",
         darkAppearance ? @"D" : @"L",
         pixelWidth,
@@ -1272,11 +1272,29 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             CGFloat coreRatio =
                 insideDepth / MAX(0.001, coreWidth);
 
+            /*
+             * Beta 2.0: keep the directional optical filament slightly
+             * INSIDE the host's native continuous-corner clip.  The host is
+             * kCACornerCurveContinuous (a squircle-like curve), while this
+             * lightweight CPU texture uses an analytic rounded-rect field.
+             * Centering the filament ~0.6-0.8 pt inward prevents the raster
+             * highlight from grazing the clip exactly at corner/edge tangents.
+             * A very low native CALayer border below provides the exact
+             * continuous-curve continuity floor.
+             */
+            CGFloat filamentInset =
+                ((style == 1) ? 0.78 : 0.58) * renderScale;
+
+            CGFloat secondaryInset =
+                ((style == 1) ? 0.82 : 0.60) * renderScale;
+
             CGFloat filamentRatio =
-                insideDepth / MAX(0.001, filamentWidth);
+                fabs(insideDepth - filamentInset) /
+                MAX(0.001, filamentWidth);
 
             CGFloat secondaryRatio =
-                insideDepth / MAX(0.001, secondaryRimWidth);
+                fabs(insideDepth - secondaryInset) /
+                MAX(0.001, secondaryRimWidth);
 
             CGFloat shoulder =
                 exp(-(shoulderRatio * shoulderRatio));
@@ -1895,7 +1913,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         isBackdropLayer) {
 
         /*
-         * Beta 1.9 style-specific opened material. Chroma always comes from
+         * Style-specific opened material. Chroma always comes from
          * the wallpaper/backdrop. A neutral brightness adjustment is allowed
          * for Liquid Glass in dark appearance so a large blur kernel does not
          * collapse the panel into black; no purple/blue/pink tint is added.
@@ -1907,29 +1925,23 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
         if (self.gfStyle == 0) {
             /*
-             * Beta 1.9 Clear: do not fully replace the pixels behind the
-             * folder with another blurred image. The full-screen folder
-             * presentation is already blurred, so Clear uses a very small
-             * local kernel and blends that filtered sample back over the
-             * underlying presentation. This removes the purple/blue "sheet"
-             * look while keeping wallpaper colour as the only chroma source.
+             * Beta 2.0 Clear follows the supplied Apple reference: the open
+             * folder is a transparent luminous sheet over SpringBoard's
+             * already-blurred open-folder presentation.  Do NOT blur that
+             * presentation a second time; doing so is what produced the
+             * broad purple/blue milky patch from the previous implementation.
+             *
+             * Keep this backdrop sample effectively absent.  The panel body
+             * below is made only by a neutral-white transmission lift plus
+             * the white optical rails, so all chroma stays wallpaper-owned.
              */
-            blurRadius = darkAppearance
-                ? (0.65 + 1.65 * materialResponse)
-                : (0.55 + 1.45 * materialResponse);
-
-            saturation = darkAppearance
-                ? (1.000 + 0.016 * materialResponse)
-                : (1.000 + 0.010 * materialResponse);
-
+            blurRadius = 0.0;
+            saturation = 1.0;
             brightness = 0.0;
-
-            sampleAlpha = darkAppearance
-                ? (0.42 + 0.16 * materialResponse)
-                : (0.38 + 0.14 * materialResponse);
+            sampleAlpha = 0.0;
         } else {
             /*
-             * Beta 1.9 Liquid Glass: a thicker but not blackened backdrop.
+             * Liquid Glass: a thicker but not blackened backdrop.
              * The old ~9-10 pt dark-mode kernel smeared bright wallpaper
              * islands into a mostly black body. A slightly smaller kernel,
              * modest saturation recovery and a neutral brightness lift keep
@@ -2011,7 +2023,8 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             setValue:@1.0
               forKey:@"scale"];
 
-        self.gfBackdropSampleView.hidden = NO;
+        self.gfBackdropSampleView.hidden =
+            (self.gfStyle == 0);
 
         if (self.gfFallbackBlurView) {
             [self.gfFallbackBlurView
@@ -2022,32 +2035,33 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     } else if (self.gfStrength > 0.001) {
         self.gfBackdropSampleView.hidden = YES;
 
-        if (!self.gfFallbackBlurView) {
-            UIBlurEffectStyle fallbackStyle =
-                (self.gfStyle == 0)
-                    ? UIBlurEffectStyleSystemUltraThinMaterial
-                    : UIBlurEffectStyleSystemThinMaterial;
-
-            UIBlurEffect *effect =
-                [UIBlurEffect effectWithStyle:fallbackStyle];
-
-            self.gfFallbackBlurView =
-                [[UIVisualEffectView alloc]
-                    initWithEffect:effect];
-
-            self.gfFallbackBlurView.userInteractionEnabled =
-                NO;
-
-            [self insertSubview:self.gfFallbackBlurView
-                   aboveSubview:self.gfBackdropSampleView];
-        }
-
         if (self.gfStyle == 0) {
-            self.gfFallbackBlurView.alpha =
-                darkAppearance
-                    ? MIN(0.20, 0.10 + 0.12 * materialResponse)
-                    : MIN(0.17, 0.08 + 0.10 * materialResponse);
+            /*
+             * Clear must stay a transparent transmission sheet even on the
+             * fallback path. Do not silently turn it back into UltraThin
+             * Material, which would reintroduce a second local blur.
+             */
+            if (self.gfFallbackBlurView) {
+                [self.gfFallbackBlurView removeFromSuperview];
+                self.gfFallbackBlurView = nil;
+            }
         } else {
+            if (!self.gfFallbackBlurView) {
+                UIBlurEffect *effect =
+                    [UIBlurEffect effectWithStyle:
+                        UIBlurEffectStyleSystemThinMaterial];
+
+                self.gfFallbackBlurView =
+                    [[UIVisualEffectView alloc]
+                        initWithEffect:effect];
+
+                self.gfFallbackBlurView.userInteractionEnabled =
+                    NO;
+
+                [self insertSubview:self.gfFallbackBlurView
+                       aboveSubview:self.gfBackdropSampleView];
+            }
+
             self.gfFallbackBlurView.alpha =
                 darkAppearance
                     ? MIN(0.48, 0.20 + 0.30 * materialResponse)
@@ -2071,16 +2085,18 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
         if (self.gfStyle == 0) {
             /*
-             * Clear gets only a very small neutral transmission lift. The
-             * filtered backdrop itself is partially blended (sampleAlpha),
-             * which is the main difference from Liquid Glass.
+             * Reference Clear: a visible but still neutral transmission
+             * sheet.  At the common 55% setting this is ~5.5% white in dark
+             * appearance and ~3% in light appearance.  There is deliberately
+             * no chromatic tint and no second local blur, so pink/purple/blue
+             * areas move only with the wallpaper behind the folder.
              */
             neutralLift = darkAppearance
-                ? (0.010 + 0.018 * tintResponse) * self.gfStrength
-                : (0.006 + 0.012 * tintResponse) * self.gfStrength;
+                ? (0.055 + 0.100 * tintResponse) * self.gfStrength
+                : (0.025 + 0.065 * tintResponse) * self.gfStrength;
 
             self.gfTintView.alpha =
-                MIN(darkAppearance ? 0.020 : 0.013, neutralLift);
+                MIN(darkAppearance ? 0.140 : 0.085, neutralLift);
         } else {
             /*
              * Liquid Glass needs a little more neutral transmission in dark
@@ -2105,14 +2121,43 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
      * renderer's dark shoulder so the edge does not become a white outline.
      */
     if (self.gfStyle == 0) {
+        /* Clear is luminous, not metallic: keep the rail present but softer. */
         self.gfOpticalLayer.opacity = darkAppearance
-            ? (0.62 + 0.10 * materialResponse)
-            : (0.50 + 0.08 * materialResponse);
+            ? (0.46 + 0.08 * materialResponse)
+            : (0.38 + 0.07 * materialResponse);
     } else {
         self.gfOpticalLayer.opacity = darkAppearance
             ? 1.0
             : 0.88;
     }
+
+    /*
+     * Beta 2.0 continuity floor. CALayer draws this border with the SAME
+     * kCACornerCurveContinuous geometry that clips the panel, so it cannot
+     * develop the tiny TL<->top or BR<->bottom tangent gap seen in the
+     * hand-rasterized rail. It is intentionally faint; the directional
+     * optical texture still provides the visible white highlight.
+     */
+    CGFloat continuityEdge = GFEdgeResponse(self.gfStrength);
+    CGFloat continuityAlpha;
+
+    if (self.gfStyle == 0) {
+        continuityAlpha = darkAppearance
+            ? (0.040 + 0.055 * continuityEdge)
+            : (0.028 + 0.040 * continuityEdge);
+        self.layer.borderWidth =
+            (self.gfStrength > 0.001) ? 0.58 : 0.0;
+    } else {
+        continuityAlpha = darkAppearance
+            ? (0.025 + 0.040 * continuityEdge)
+            : (0.018 + 0.030 * continuityEdge);
+        self.layer.borderWidth =
+            (self.gfStrength > 0.001) ? 0.50 : 0.0;
+    }
+
+    self.layer.borderColor =
+        [UIColor colorWithWhite:1.0
+                          alpha:GFClamp01(continuityAlpha)].CGColor;
 
     /*
      * Force the optical texture to be regenerated when light/dark mode

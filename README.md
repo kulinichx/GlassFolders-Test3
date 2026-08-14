@@ -1,42 +1,23 @@
-# GlassFolders 0.7.4 Beta 1.9
+# GlassFolders 0.7.4 Beta 2.0
 
-Beta 1.9 is a cleanup release focused on making the two selectable opened-folder styles genuinely different and on keeping package/version metadata synchronized with the code.
+Beta 2.0 focuses on the two remaining opened-folder problems seen on device: Liquid Glass tangent continuity and the Clear reference match.
 
-## Opened folder: Clear
+## Liquid Glass opened folder
 
-Clear no longer replaces the whole panel with a fully weighted second blur. The folder presentation is already blurred by SpringBoard, so Clear now uses a very small local Gaussian kernel and blends that filtered backdrop back over the underlying presentation at partial alpha. This keeps the panel transparent and prevents a dark wallpaper from turning into a large purple/blue milky sheet.
+The host panel is clipped with `kCACornerCurveContinuous`. Apple describes the continuous corner as a squircle-style corner, so a hand-rasterized circular edge can show a hairline tangent mismatch even when its segment masks are mathematically continuous. Beta 2.0 therefore uses two layers of protection: the directional optical filament is centered slightly inside the clip, and a very faint native `CALayer` border supplies an exact continuous-corner continuity floor. The native border is not the visible highlight by itself; the white directional rails remain responsible for the Liquid Glass reflection.
 
-- wallpaper/backdrop remains the only chromatic source;
-- no purple, blue, pink, or other hue tint is added;
-- only a very small neutral-white transmission lift is used;
-- white specular rails remain;
-- dark and light interface appearances use separate optical strengths.
+This specifically targets upper-left corner -> top/left and bottom-right corner -> bottom/right continuity without returning to the expensive 2x lighting-map experiment. The cached opened-panel lighting map remains 1.5x.
 
-## Opened folder: Liquid Glass
+## Clear opened folder
 
-Liquid Glass remains the thicker material, but the dark-mode blur kernel has been reduced from the previous overly dark response. A small neutral brightness compensation and neutral-white transmission lift keep bright wallpaper information alive through the thicker blur without introducing a color tint.
+Clear now follows the supplied Apple reference instead of acting like a weak Liquid Glass preset. SpringBoard already blurs the presentation behind an opened folder, so Clear no longer applies a second local Gaussian blur. The panel is a transparent sheet with a neutral-white transmission lift plus soft white edge reflection. Purple, blue, pink, orange, and every other hue come only from the wallpaper / desktop behind it.
 
-- thicker blur than Clear;
-- restrained saturation recovery;
-- neutral brightness compensation, stronger in dark appearance;
-- stronger white specular rails than Clear;
-- separate dark/light appearance tuning.
+Dark appearance uses a stronger neutral transmission and edge definition; light appearance reduces both to avoid a milky white card. At 0% the Clear panel remains fully transparent.
 
-## Continuous edge optics
+## App Library path
 
-The established continuous-rail geometry is retained: the upper-left corner joins both the top and left continuation, and the lower-right joins both the bottom and right continuation. The 1.5x cached CPU lighting map is retained for stability; Beta 1.9 does not bring back the heavier 2x render experiment.
+The existing closed-folder App Library reuse remains enabled: an independent `SBHLibraryCategoryPodBackgroundView` is created for Liquid Glass folders and its own `_updateVisualStyle` is invoked after hierarchy/frame/radius are valid. The real App Library is not hooked or modified.
 
-## App Library category material
+## Stability
 
-Closed Liquid Glass folders continue to create an independent `SBHLibraryCategoryPodBackgroundView`, attach it to the folder background, and trigger its own `_updateVisualStyle` only after frame/radius/hierarchy are valid. Beta 1.9 increases the native pod visual's participation so it contributes more of the App Library card material. The real App Library is not hooked or modified.
-
-## Safety / compatibility
-
-- RootHide arm64e target retained;
-- SpringBoard-only injection;
-- private classes resolved dynamically;
-- no App Library controller hooks;
-- no daemon, timer, DisplayLink, gyro, or Metal render loop;
-- opened-panel lighting map remains cached at a maximum of 1.5x.
-
-Author: `kulinich`
+No timer, display link, continuous CPU renderer, or 2x/3x opened-panel texture was added. The optical image remains cached and regenerated only for material-relevant changes.

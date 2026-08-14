@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.4~beta1.9
+Version: 0.7.4~beta2.0
 Architecture: iphoneos-arm64e
-Description: Beta 1.9 separates Clear and Liquid Glass opened-folder materials, adds dark/light appearance tuning, preserves wallpaper-only chroma with white optical highlights, and strengthens the native SBHLibraryCategoryPodBackgroundView contribution for closed Liquid Glass folders.
+Description: Beta 2.0 rebuilds opened-folder continuity around the host native continuous corner, moves Liquid Glass optical rails safely inside the clip, and makes Clear match the supplied Apple reference: no second local blur, wallpaper-owned chroma, neutral-white transmission, and dark/light adaptive highlights.
 Maintainer: kulinich
 Author: kulinich
 Section: Tweaks
