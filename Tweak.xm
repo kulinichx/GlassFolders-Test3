@@ -1255,7 +1255,6 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             CGFloat ny = dy / normalLength;
 
             CGFloat ndotl = nx * lightX + ny * lightY;
-            CGFloat facing = MAX(0.0, ndotl);
             CGFloat opposite = MAX(0.0, -ndotl);
 
             CGFloat shoulderRatio =
