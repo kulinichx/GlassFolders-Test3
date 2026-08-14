@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.2 Beta 1 — Adaptive Open Glass
+ * GlassFolders 0.7.2 Beta 3 — Connected Edge Rail
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -82,7 +82,7 @@ static void GFLoadPreferences(void) {
 
     GFEnabled = GFReadBool(CFSTR("Enabled"), YES);
     GFStyle = GFReadInteger(CFSTR("Style"), 0);
-    GFGlassStrength = GFReadPercent(CFSTR("GlassStrength"), 0.0);
+    GFGlassStrength = GFReadPercent(CFSTR("GlassStrength"), 55.0);
 
     if (GFStyle < 0 || GFStyle > 1) {
         GFStyle = 0;
@@ -111,6 +111,33 @@ static id GFCreateCAFilter(NSString *type) {
 
 static inline CGFloat GFClamp01(CGFloat value) {
     return MIN(1.0, MAX(0.0, value));
+}
+
+
+/*
+ * Glass Strength is deliberately NOT mapped through one sqrt() curve.
+ *
+ * Material:
+ *   slightly slower than linear -> 55% remains transparent instead of
+ *   already behaving like ~74%.
+ *
+ * Specular:
+ *   slightly faster -> edge reflection is visible without requiring a
+ *   heavily blurred body.
+ *
+ * Tint:
+ *   slower still -> high strength does not turn into a milky white card.
+ */
+static inline CGFloat GFMaterialResponse(CGFloat strength) {
+    return pow(GFClamp01(strength), 1.10);
+}
+
+static inline CGFloat GFSpecularResponse(CGFloat strength) {
+    return pow(GFClamp01(strength), 0.80);
+}
+
+static inline CGFloat GFTintResponse(CGFloat strength) {
+    return pow(GFClamp01(strength), 1.35);
 }
 
 static inline CGFloat GFRoundedRectSDF(CGFloat x,
@@ -193,28 +220,28 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
     CGFloat width = (CGFloat)pixelWidth;
     CGFloat height = (CGFloat)pixelHeight;
     CGFloat radius = MAX(0.0, cornerRadius * renderScale);
-    CGFloat e = sqrt(GFClamp01(strength));
+    CGFloat e = GFSpecularResponse(strength);
 
     /* Upper-left: filament -> core -> soft shoulder. */
-    CGFloat shoulderWidth = (4.8 + 1.8 * e) * renderScale;
-    CGFloat coreWidth = (0.90 + 0.30 * e) * renderScale;
-    CGFloat filamentWidth = (0.35 + 0.10 * e) * renderScale;
+    CGFloat shoulderWidth = (4.4 + 1.4 * e) * renderScale;
+    CGFloat coreWidth = (0.82 + 0.24 * e) * renderScale;
+    CGFloat filamentWidth = (0.42 + 0.10 * e) * renderScale;
 
-    CGFloat highlightShoulderGain = 0.052 + 0.014 * e;
-    CGFloat highlightCoreGain = 0.125 + 0.030 * e;
-    CGFloat highlightFilamentGain = 0.190 + 0.045 * e;
+    CGFloat highlightShoulderGain = 0.042 + 0.012 * e;
+    CGFloat highlightCoreGain = 0.145 + 0.040 * e;
+    CGFloat highlightFilamentGain = 0.235 + 0.060 * e;
 
     /*
      * Right/bottom Alook-style secondary rim.
      * Bright rim stays at the edge; darker shoulder begins farther inside.
      */
-    CGFloat baseEdgeGain = 0.008 + 0.003 * e;
-    CGFloat secondaryRimWidth = (0.55 + 0.12 * e) * renderScale;
-    CGFloat secondaryRimGain = 0.095 + 0.022 * e;
+    CGFloat baseEdgeGain = 0.018 + 0.006 * e;
+    CGFloat secondaryRimWidth = (0.62 + 0.12 * e) * renderScale;
+    CGFloat secondaryRimGain = 0.118 + 0.030 * e;
 
     CGFloat shadowCenter = (2.20 + 0.40 * e) * renderScale;
     CGFloat shadowWidth = (1.60 + 0.30 * e) * renderScale;
-    CGFloat shadowGain = 0.012 + 0.004 * e;
+    CGFloat shadowGain = 0.010 + 0.003 * e;
 
     const CGFloat invSqrt2 = 0.70710678118;
     CGFloat lightX = -invSqrt2;
@@ -374,7 +401,8 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
         BOOL isBackdropLayer =
             [NSStringFromClass(self.layer.class) containsString:@"Backdrop"];
 
-        CGFloat e = sqrt(_gfStrength);
+        CGFloat materialResponse = GFMaterialResponse(_gfStrength);
+        CGFloat tintResponse = GFTintResponse(_gfStrength);
 
         if (_gfStrength > 0.001 && isBackdropLayer) {
             /*
@@ -386,12 +414,12 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
             CGFloat brightness;
 
             if (_gfStyle == 1) {
-                blurRadius = 1.8 + (5.0 * e);
-                saturation = 1.04 + (0.20 * e);
-                brightness = 0.001 + (0.004 * e);
+                blurRadius = 1.6 + (4.2 * materialResponse);
+                saturation = 1.04 + (0.16 * materialResponse);
+                brightness = 0.001 + (0.003 * materialResponse);
             } else {
-                blurRadius = 2.0 + (7.0 * e);
-                saturation = 1.05 + (0.30 * e);
+                blurRadius = 1.8 + (6.0 * materialResponse);
+                saturation = 1.05 + (0.24 * materialResponse);
                 brightness = 0.0;
             }
 
@@ -435,7 +463,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
 
             _gfFallbackBlurView.userInteractionEnabled = NO;
             _gfFallbackBlurView.alpha =
-                (_gfStyle == 1) ? MIN(0.70, 0.30 + 0.50 * e)
+                (_gfStyle == 1) ? MIN(0.64, 0.24 + 0.42 * materialResponse)
                                 : 0.55 * _gfStrength;
 
             [self addSubview:_gfFallbackBlurView];
@@ -448,7 +476,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
 
         if (_gfStrength > 0.001) {
             tintAlpha = (_gfStyle == 1)
-                ? 0.0015 + (0.007 * e)
+                ? 0.0010 + (0.006 * tintResponse)
                 : 0.018 * _gfStrength;
         }
 
@@ -643,7 +671,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     CGFloat width = (CGFloat)pixelWidth;
     CGFloat height = (CGFloat)pixelHeight;
     CGFloat radius = MAX(0.0, cornerRadius * renderScale);
-    CGFloat e = sqrt(GFClamp01(strength));
+    CGFloat e = GFSpecularResponse(strength);
 
     /*
      * Large surfaces should read "thicker" than the closed folder:
@@ -651,23 +679,23 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
      * a hard white rounded-rect stroke.
      */
     CGFloat shoulderWidth =
-        (9.5 + 3.0 * e) * renderScale;
+        (8.0 + 2.4 * e) * renderScale;
     CGFloat coreWidth =
-        (1.55 + 0.42 * e) * renderScale;
+        (1.30 + 0.34 * e) * renderScale;
     CGFloat filamentWidth =
-        (0.50 + 0.10 * e) * renderScale;
+        (0.62 + 0.12 * e) * renderScale;
 
     CGFloat shoulderGain = darkAppearance
-        ? (0.026 + 0.008 * e)
-        : (0.018 + 0.006 * e);
+        ? (0.030 + 0.010 * e)
+        : (0.020 + 0.007 * e);
 
     CGFloat coreGain = darkAppearance
-        ? (0.082 + 0.018 * e)
-        : (0.055 + 0.014 * e);
+        ? (0.120 + 0.040 * e)
+        : (0.078 + 0.028 * e);
 
     CGFloat filamentGain = darkAppearance
-        ? (0.125 + 0.026 * e)
-        : (0.080 + 0.020 * e);
+        ? (0.205 + 0.065 * e)
+        : (0.135 + 0.045 * e);
 
     /*
      * The far edge remains visible in both appearances.
@@ -675,11 +703,11 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
      * not erase the shape.
      */
     CGFloat secondaryRimWidth =
-        (0.72 + 0.10 * e) * renderScale;
+        (0.78 + 0.12 * e) * renderScale;
 
     CGFloat secondaryRimGain = darkAppearance
-        ? (0.052 + 0.012 * e)
-        : (0.046 + 0.012 * e);
+        ? (0.092 + 0.032 * e)
+        : (0.082 + 0.030 * e);
 
     CGFloat darkShoulderCenter =
         (2.8 + 0.5 * e) * renderScale;
@@ -688,8 +716,8 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         (2.4 + 0.5 * e) * renderScale;
 
     CGFloat darkShoulderGain = darkAppearance
-        ? (0.010 + 0.003 * e)
-        : (0.018 + 0.004 * e);
+        ? (0.008 + 0.003 * e)
+        : (0.020 + 0.005 * e);
 
     const CGFloat invSqrt2 = 0.70710678118;
     const CGFloat lightX = -invSqrt2;
@@ -779,7 +807,95 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             CGFloat secondary =
                 exp(-pow(secondaryRatio, 2.30));
 
+            /*
+             * Connected edge rail model
+             *
+             * 1. perimeterGain:
+             *    a very fine continuous reflection so no side disappears.
+             *
+             * 2. horizontalRail:
+             *    top and bottom receive a stronger clean highlight, matching
+             *    the reference where the glass reads brighter along both
+             *    horizontal edges.
+             *
+             * 3. cornerBridge:
+             *    specifically reinforces the top-left and bottom-right
+             *    rounded corners. The highlight therefore bends around the
+             *    radius and connects naturally into the top/bottom rails
+             *    instead of ending abruptly at the straight edge.
+             *
+             * Directional key light is still strongest at upper-left.
+             */
+            CGFloat perimeterGain = darkAppearance
+                ? (0.028 + 0.011 * e)
+                : (0.021 + 0.008 * e);
+
+            /*
+             * Rounded-rect SDF outward normal:
+             * |ny| ~= 1 on top/bottom, ~= 0 on left/right.
+             * At rounded corners it transitions continuously, so this is not
+             * a painted horizontal line.
+             */
+            CGFloat horizontalEdge =
+                pow(fabs(ny), 2.15);
+
+            CGFloat topFacing =
+                MAX(0.0, -ny);
+
+            CGFloat bottomFacing =
+                MAX(0.0, ny);
+
+            CGFloat topRailGain = darkAppearance
+                ? (0.052 + 0.020 * e)
+                : (0.036 + 0.015 * e);
+
+            CGFloat bottomRailGain = darkAppearance
+                ? (0.040 + 0.016 * e)
+                : (0.032 + 0.013 * e);
+
+            CGFloat horizontalRail =
+                horizontalEdge *
+                (
+                    topFacing * topRailGain +
+                    bottomFacing * bottomRailGain
+                );
+
+            /*
+             * nx*ny is positive at top-left and bottom-right.
+             * Multiplying by two maps a 45-degree corner normal close to 1.
+             * The bridge naturally fades away as the radius joins the
+             * straight sides.
+             */
+            CGFloat pairedCorner =
+                GFClamp01(
+                    2.0 * MAX(0.0, nx * ny)
+                );
+
+            CGFloat cornerBridge =
+                pow(pairedCorner, 1.25);
+
+            CGFloat cornerBridgeGain = darkAppearance
+                ? (0.070 + 0.026 * e)
+                : (0.050 + 0.020 * e);
+
+            /*
+             * A small wider core under the filament prevents the connected
+             * corner highlight from looking like a one-pixel neon stroke.
+             */
+            CGFloat horizontalCoreGain = darkAppearance
+                ? (0.018 + 0.007 * e)
+                : (0.013 + 0.005 * e);
+
+            CGFloat cornerCoreGain = darkAppearance
+                ? (0.022 + 0.008 * e)
+                : (0.015 + 0.006 * e);
+
             CGFloat white =
+                filament * perimeterGain +
+                filament * horizontalRail +
+                core * horizontalEdge * horizontalCoreGain +
+                filament * cornerBridge * cornerBridgeGain +
+                core * cornerBridge * cornerCoreGain +
                 shoulder * shoulderGain * pow(facing, 1.30) +
                 core * coreGain * pow(facing, 1.45) +
                 filament * filamentGain * pow(facing, 1.65) +
@@ -799,7 +915,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 pow(opposite, 1.15);
 
             CGFloat signedLight =
-                MIN(0.190, MAX(-0.045, white - dark));
+                MIN(0.315, MAX(-0.045, white - dark));
 
             CGFloat alpha =
                 fabs(signedLight) * edgeCoverage;
@@ -942,7 +1058,11 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
     self.gfHasAppearance = YES;
 
-    CGFloat e = sqrt(self.gfStrength);
+    CGFloat materialResponse =
+        GFMaterialResponse(self.gfStrength);
+
+    CGFloat tintResponse =
+        GFTintResponse(self.gfStrength);
 
     BOOL isBackdropLayer =
         [NSStringFromClass(self.layer.class)
@@ -961,16 +1081,16 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
          *   an opaque milky card on a bright wallpaper.
          */
         CGFloat blurRadius = darkAppearance
-            ? (5.2 + 6.6 * e)
-            : (4.7 + 5.5 * e);
+            ? (5.6 + 5.2 * materialResponse)
+            : (5.0 + 4.4 * materialResponse);
 
         CGFloat saturation = darkAppearance
-            ? (1.05 + 0.11 * e)
-            : (1.03 + 0.08 * e);
+            ? (1.04 + 0.11 * materialResponse)
+            : (1.03 + 0.07 * materialResponse);
 
         CGFloat brightness = darkAppearance
-            ? (0.018 + 0.018 * e)
-            : (0.002 + 0.006 * e);
+            ? (0.010 + 0.018 * materialResponse)
+            : (0.000 + 0.004 * materialResponse);
 
         id saturate =
             GFCreateCAFilter(@"colorSaturate");
@@ -1050,8 +1170,8 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
         self.gfFallbackBlurView.alpha =
             darkAppearance
-                ? MIN(0.62, 0.24 + 0.42 * e)
-                : MIN(0.52, 0.18 + 0.34 * e);
+                ? MIN(0.56, 0.20 + 0.34 * materialResponse)
+                : MIN(0.46, 0.15 + 0.28 * materialResponse);
     }
 
     /*
@@ -1061,8 +1181,8 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         self.gfStrength > 0.001
             ? (
                 darkAppearance
-                    ? (0.026 + 0.030 * e)
-                    : (0.008 + 0.014 * e)
+                    ? (0.012 + 0.028 * tintResponse)
+                    : (0.004 + 0.012 * tintResponse)
               )
             : 0.0;
 

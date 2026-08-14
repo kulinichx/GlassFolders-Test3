@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.2~beta1
+Version: 0.7.2~beta3
 Architecture: iphoneos-arm64e
-Description: Adaptive Liquid Glass for closed and opened folders. Open panel uses SBFolderBackgroundView only, with dark/light appearance adaptation and no SBFloatyFolderView transition hooks.
+Description: Connected-edge Liquid Glass calibration: stronger top/bottom highlight rails with continuous top-left and bottom-right corner bridges, while preserving the Beta2 material and safety architecture.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks

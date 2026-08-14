@@ -1,75 +1,53 @@
-# GlassFolders 0.7.2 Beta 1 — Adaptive Open Glass
+# GlassFolders 0.7.2 Beta 3 — Connected Edge Rail
 
-This build keeps the verified closed-folder path and adds the opened folder
-through a deliberately narrow visual hook.
+Beta 3 keeps the Beta 2 material calibration and changes only the opened-panel
+edge-lighting distribution.
 
-## Opened-folder architecture
+## Why
 
-The tweak hooks `SBFolderBackgroundView` only.
+The new reference has a useful property: the glass is not defined by a uniform
+white outline. Instead, the top and bottom edges are bright and clean, while
+the highlight continues through the top-left and bottom-right rounded corners.
 
-It does **not** hook:
+That continuity makes the surface read as one optical object.
 
-- `SBFloatyFolderView`
-- `_newPageBackgroundView`
-- `setBackgroundAlpha:`
-- `SBFolderControllerBackgroundView`
+## Edge model
 
-SpringBoard is allowed to create and animate its folder hierarchy normally.
-When the real `SBFolderBackgroundView` reaches the window, the tweak:
+The opened panel now combines five terms:
 
-1. clears only the background view's own dark fill;
-2. keeps the stock material subviews alive but hides them;
-3. adds one `CABackdropLayer`-backed glass child;
-4. lets the native parent alpha/transform animate that child automatically.
+1. continuous low-level perimeter filament;
+2. stronger top horizontal highlight rail;
+3. slightly weaker bottom horizontal highlight rail;
+4. top-left / bottom-right corner bridge;
+5. existing directional key specular + far-side secondary rim.
 
-No private factory return values are replaced and no transition methods are
-overridden.
+The corner bridge is derived from the rounded-rect SDF surface normal. It is
+not a `CAShapeLayer` stroke and does not draw an explicit rounded rectangle.
 
-## Visual target
+A small wider core sits under the bright filament so the result should remain
+glass-like rather than neon.
 
-Opened Liquid Glass is a distinct rounded rectangle:
+## Strength
 
-- transparent wallpaper color transmission;
-- moderate frost, not a gray/white opaque card;
-- softer and wider upper-left specular than the desktop folder;
-- subtle right/bottom secondary rim and inner thickness;
-- icons remain outside this visual background and therefore stay crisp.
+The Beta 2 strength calibration is unchanged:
 
-## Dark / light appearance
+- material: `pow(s, 1.10)`
+- specular: `pow(s, 0.80)`
+- tint: `pow(s, 1.35)`
+- recommended daily point: 55%
 
-The same Glass Strength slider drives both appearances.
+This iteration intentionally leaves blur/tint unchanged so the effect of the
+new edge distribution can be evaluated independently.
 
-Dark mode:
-- slightly stronger brightness lift;
-- slightly stronger neutral-white specular;
-- enough transparency to avoid the stock deep-gray look.
+## Stability boundary
 
-Light mode:
-- lower brightness and white tint;
-- lower primary specular;
-- slightly stronger far-side dark shoulder so the shape remains visible on a
-  pale wallpaper.
+Unchanged:
 
-The material refreshes through `traitCollectionDidChange:` only. There is no
-timer or polling.
+- `SBFolderIconImageView` for the closed folder;
+- `SBFolderBackgroundView` for the opened visual panel;
+- no parent folder container hook;
+- no page-background factory hook;
+- no transition-alpha hook;
+- no outside wallpaper-background hook.
 
-## Performance
-
-No daemon, DisplayLink, timer, gyroscope, continuous Metal renderer, or
-per-frame lighting calculation.
-
-The large-panel optical map is generated at up to 1.5x scale and cached by
-size/radius/5%-strength/appearance. The actual wallpaper transmission is
-handled by `CABackdropLayer`.
-
-## Build safety gate
-
-GitHub Actions fails if the compiled tweak contains any of these paths:
-
-- `SBFloatyFolderView`
-- `_newPageBackgroundView`
-- `setBackgroundAlpha:`
-- `SBFolderControllerBackgroundView`
-
-The dylib must contain only the intended folder visual classes:
-`SBFolderIconImageView` and `SBFolderBackgroundView`.
+No daemon, timer, DisplayLink, gyroscope, or continuous Metal rendering.
