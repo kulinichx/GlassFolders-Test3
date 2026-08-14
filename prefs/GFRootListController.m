@@ -13,26 +13,39 @@ extern char **environ;
 @interface GFPercentSliderCell : PSSliderTableCell
 @property (nonatomic, strong) UILabel *gfPercentLabel;
 @property (nonatomic, weak) UISlider *gfBoundSlider;
-@property (nonatomic, strong) UISelectionFeedbackGenerator *gfFeedback;
+@property (nonatomic, strong) UIImpactFeedbackGenerator *gfImpactFeedback;
 @property (nonatomic, assign) NSInteger gfLastDetent;
+@property (nonatomic, assign) NSInteger gfPendingDetent;
 @end
 
 @implementation GFPercentSliderCell
 
 - (void)gfEnsurePercentLabel {
-    if (self.gfPercentLabel) return;
+    if (self.gfPercentLabel) {
+        return;
+    }
 
     UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
     label.textAlignment = NSTextAlignmentCenter;
     label.textColor = UIColor.secondaryLabelColor;
     label.font =
         [UIFont monospacedDigitSystemFontOfSize:15.0
-                                         weight:UIFontWeightMedium];
+                                         weight:UIFontWeightSemibold];
+
+    /*
+     * This opaque dynamic background also masks any internal slider track
+     * that PSSliderTableCell may attempt to draw under the number.
+     */
+    label.backgroundColor = UIColor.secondarySystemGroupedBackgroundColor;
+    label.layer.cornerRadius = 7.0;
+    label.clipsToBounds = YES;
     label.userInteractionEnabled = NO;
 
     [self.contentView addSubview:label];
+
     self.gfPercentLabel = label;
     self.gfLastDetent = NSIntegerMin;
+    self.gfPendingDetent = NSIntegerMin;
 }
 
 - (UISlider *)gfSlider {
@@ -45,60 +58,14 @@ extern char **environ;
     return nil;
 }
 
-- (void)gfBindSliderIfNeeded {
-    UISlider *slider = [self gfSlider];
-    if (!slider) return;
-
-    if (self.gfBoundSlider != slider) {
-        if (self.gfBoundSlider) {
-            [self.gfBoundSlider removeTarget:self
-                                       action:@selector(gfSliderChanged:)
-                             forControlEvents:UIControlEventValueChanged];
-        }
-
-        self.gfBoundSlider = slider;
-
-        [slider addTarget:self
-                   action:@selector(gfSliderChanged:)
-         forControlEvents:UIControlEventValueChanged];
-    }
+- (NSInteger)gfDetentForValue:(float)value {
+    NSInteger detent = (NSInteger)lroundf(value / 5.0f) * 5;
+    return MAX(0, MIN(100, detent));
 }
 
-- (void)gfUpdatePercentLabel {
-    UISlider *slider = [self gfSlider];
-
-    if (!slider) {
-        self.gfPercentLabel.text = @"";
-        return;
-    }
-
-    NSInteger percent = (NSInteger)lroundf(slider.value / 5.0f) * 5;
-    percent = MAX(0, MIN(100, percent));
-    self.gfPercentLabel.text =
-        [NSString stringWithFormat:@"%ld%%", (long)percent];
-}
-
-- (void)gfSliderChanged:(UISlider *)sender {
-    /*
-     * 5% magnetic detents: 0, 5, 10 ... 100.
-     *
-     * The slider remains interactive, but the value is quantized immediately
-     * to the nearest 5%. This avoids meaningless 43.7 / 47.2 values and gives
-     * a system-picker-like stepping feel.
-     */
-    NSInteger detent = (NSInteger)lroundf(sender.value / 5.0f) * 5;
+- (void)gfPersistDetent:(NSInteger)detent {
     detent = MAX(0, MIN(100, detent));
 
-    if ((NSInteger)lroundf(sender.value) != detent) {
-        [sender setValue:(float)detent animated:NO];
-    }
-
-    /*
-     * Persist the snapped value explicitly.
-     * PSSliderTableCell also has its own preference-writing target, but target
-     * invocation order is not something we should rely on. Writing the detent
-     * here guarantees that a Respring reads the exact 5% step.
-     */
     double storedValue = (double)detent;
     CFNumberRef number = CFNumberCreate(
         kCFAllocatorDefault,
@@ -115,19 +82,132 @@ extern char **environ;
         CFPreferencesAppSynchronize(CFSTR("com.local.glassfolders"));
         CFRelease(number);
     }
+}
+
+- (void)gfEnsureImpactGenerator {
+    if (!self.gfImpactFeedback) {
+        /*
+         * Rigid is intentionally more mechanical/crisp than selection haptics.
+         * It is still instantiated only inside Settings and only used while
+         * the user is actively moving across 5% detents.
+         */
+        self.gfImpactFeedback =
+            [[UIImpactFeedbackGenerator alloc]
+                initWithStyle:UIImpactFeedbackStyleRigid];
+    }
+}
+
+- (void)gfBindSliderIfNeeded {
+    UISlider *slider = [self gfSlider];
+
+    if (!slider) {
+        return;
+    }
+
+    if (self.gfBoundSlider != slider) {
+        if (self.gfBoundSlider) {
+            [self.gfBoundSlider
+                removeTarget:self
+                      action:NULL
+            forControlEvents:UIControlEventAllEvents];
+        }
+
+        self.gfBoundSlider = slider;
+        slider.continuous = YES;
+
+        [slider addTarget:self
+                   action:@selector(gfSliderTouchDown:)
+         forControlEvents:UIControlEventTouchDown];
+
+        [slider addTarget:self
+                   action:@selector(gfSliderChanged:)
+         forControlEvents:UIControlEventValueChanged];
+
+        [slider addTarget:self
+                   action:@selector(gfSliderTouchEnded:)
+         forControlEvents:(UIControlEventTouchUpInside |
+                           UIControlEventTouchUpOutside |
+                           UIControlEventTouchCancel)];
+
+        NSInteger initial = [self gfDetentForValue:slider.value];
+        self.gfLastDetent = initial;
+        self.gfPendingDetent = initial;
+    }
+}
+
+- (void)gfUpdatePercentLabel {
+    UISlider *slider = [self gfSlider];
+
+    if (!slider) {
+        self.gfPercentLabel.text = @"";
+        return;
+    }
+
+    NSInteger detent = [self gfDetentForValue:slider.value];
+
+    self.gfPercentLabel.text =
+        [NSString stringWithFormat:@"%ld%%", (long)detent];
+}
+
+- (void)gfSliderTouchDown:(UISlider *)sender {
+    NSInteger detent = [self gfDetentForValue:sender.value];
+
+    self.gfLastDetent = detent;
+    self.gfPendingDetent = detent;
+
+    [self gfEnsureImpactGenerator];
+    [self.gfImpactFeedback prepare];
+}
+
+- (void)gfSliderChanged:(UISlider *)sender {
+    /*
+     * Alarm-wheel style:
+     * - thumb remains smooth under the finger
+     * - every 5% threshold emits one crisp "tick"
+     * - displayed value follows the nearest 5% detent
+     * - thumb magnetically settles to the exact detent on release
+     */
+    NSInteger detent = [self gfDetentForValue:sender.value];
+    self.gfPendingDetent = detent;
 
     if (self.gfLastDetent != detent) {
         self.gfLastDetent = detent;
 
-        if (!self.gfFeedback) {
-            self.gfFeedback = [[UISelectionFeedbackGenerator alloc] init];
-        }
+        [self gfEnsureImpactGenerator];
 
-        [self.gfFeedback prepare];
-        [self.gfFeedback selectionChanged];
+        /*
+         * Stronger than the previous selection haptic.
+         * 0.68 is intentionally noticeable without feeling like a heavy tap.
+         */
+        [self.gfImpactFeedback impactOccurredWithIntensity:0.68];
+        [self.gfImpactFeedback prepare];
     }
 
-    [self gfUpdatePercentLabel];
+    self.gfPercentLabel.text =
+        [NSString stringWithFormat:@"%ld%%", (long)detent];
+}
+
+- (void)gfSliderTouchEnded:(UISlider *)sender {
+    NSInteger detent = self.gfPendingDetent;
+
+    if (detent == NSIntegerMin) {
+        detent = [self gfDetentForValue:sender.value];
+    }
+
+    detent = MAX(0, MIN(100, detent));
+
+    /*
+     * Magnetic settle only at finger release.
+     * This preserves smooth dragging while still ending on exact 5% values.
+     */
+    [sender setValue:(float)detent animated:YES];
+    [self gfPersistDetent:detent];
+
+    self.gfPercentLabel.text =
+        [NSString stringWithFormat:@"%ld%%", (long)detent];
+
+    self.gfPendingDetent = detent;
+    self.gfLastDetent = detent;
 }
 
 - (void)layoutSubviews {
@@ -148,20 +228,19 @@ extern char **environ;
     CGRect bounds = self.contentView.bounds;
 
     /*
-     * Fix Test5.2 overlap:
-     * percentage owns a dedicated LEFT column.
-     * The slider starts after it, so the track never runs under the number.
+     * Reserve a real percentage column with a visible empty gap after it.
+     * The slider track begins only after this area.
      */
     const CGFloat leftInset = 14.0;
-    const CGFloat valueWidth = 52.0;
-    const CGFloat gap = 8.0;
+    const CGFloat valueWidth = 64.0;
+    const CGFloat gap = 18.0;
     const CGFloat rightInset = 18.0;
 
     self.gfPercentLabel.frame = CGRectMake(
         leftInset,
-        0.0,
+        5.0,
         valueWidth,
-        CGRectGetHeight(bounds)
+        MAX(28.0, CGRectGetHeight(bounds) - 10.0)
     );
 
     CGRect sliderFrame = slider.frame;
@@ -173,6 +252,13 @@ extern char **environ;
             rightInset);
 
     slider.frame = sliderFrame;
+
+    /*
+     * Keep the opaque percentage badge above the slider's internal subviews.
+     * Even if Preferences relayouts its track, it cannot visually cross the
+     * number.
+     */
+    [self.contentView bringSubviewToFront:self.gfPercentLabel];
 
     [self gfUpdatePercentLabel];
 }

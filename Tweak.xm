@@ -253,31 +253,42 @@ static id GFCreateCAFilter(NSString *type) {
              * Both are static CAGradientLayer objects: no timer / no motion /
              * no continuous animation.
              */
+            /*
+             * Wider "glass catch" zone.
+             * The broad layer creates the thick refractive highlight region;
+             * the narrow layer provides a brighter specular core.
+             */
             _gfSoftEdgeGlow = [CAGradientLayer layer];
             _gfSoftEdgeGlow.startPoint = CGPointMake(0.02, 0.0);
             _gfSoftEdgeGlow.endPoint = CGPointMake(0.98, 1.0);
             _gfSoftEdgeGlow.colors = @[
                 (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.16].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.34].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.12].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.06].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.24].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.54].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.28].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.07].CGColor,
                 (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor
             ];
-            _gfSoftEdgeGlow.locations = @[@0.00, @0.24, @0.43, @0.68, @1.00];
-            _gfSoftEdgeGlow.opacity = 0.10 + (0.20 * e);
+            _gfSoftEdgeGlow.locations =
+                @[@0.00, @0.17, @0.31, @0.47, @0.63, @0.81, @1.00];
+            _gfSoftEdgeGlow.opacity = 0.17 + (0.34 * e);
 
             _gfSpecularBand = [CAGradientLayer layer];
-            _gfSpecularBand.startPoint = CGPointMake(0.04, 0.0);
-            _gfSpecularBand.endPoint = CGPointMake(0.96, 1.0);
+            _gfSpecularBand.startPoint = CGPointMake(0.03, 0.0);
+            _gfSpecularBand.endPoint = CGPointMake(0.97, 1.0);
             _gfSpecularBand.colors = @[
                 (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.14].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.62].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.14].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.06].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.20].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.76].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.22].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.06].CGColor,
                 (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor
             ];
-            _gfSpecularBand.locations = @[@0.00, @0.32, @0.47, @0.61, @1.00];
-            _gfSpecularBand.opacity = 0.07 + (0.16 * e);
+            _gfSpecularBand.locations =
+                @[@0.00, @0.27, @0.38, @0.48, @0.58, @0.70, @1.00];
+            _gfSpecularBand.opacity = 0.11 + (0.23 * e);
 
             [self.layer addSublayer:_gfSoftEdgeGlow];
             [self.layer addSublayer:_gfSpecularBand];
@@ -292,8 +303,8 @@ static id GFCreateCAFilter(NSString *type) {
 
     self.gfFallbackBlurView.frame = self.bounds;
     self.gfTintView.frame = self.bounds;
-    self.gfSoftEdgeGlow.frame = CGRectInset(self.bounds, 1.4, 1.4);
-    self.gfSpecularBand.frame = CGRectInset(self.bounds, 0.4, 0.4);
+    self.gfSoftEdgeGlow.frame = CGRectInset(self.bounds, 0.8, 0.8);
+    self.gfSpecularBand.frame = CGRectInset(self.bounds, 0.25, 0.25);
 
     CGFloat radius = self.gfPreferredRadius;
 
@@ -304,8 +315,8 @@ static id GFCreateCAFilter(NSString *type) {
     if (radius > 0.0) {
         self.layer.cornerRadius = radius;
         self.layer.cornerCurve = kCACornerCurveContinuous;
-        self.gfSoftEdgeGlow.cornerRadius = MAX(0.0, radius - 1.4);
-        self.gfSpecularBand.cornerRadius = MAX(0.0, radius - 0.4);
+        self.gfSoftEdgeGlow.cornerRadius = MAX(0.0, radius - 0.8);
+        self.gfSpecularBand.cornerRadius = MAX(0.0, radius - 0.25);
     }
 }
 
