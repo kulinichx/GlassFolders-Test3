@@ -12,6 +12,8 @@ extern char **environ;
 @interface GFPercentSliderCell : PSSliderTableCell
 @property (nonatomic, strong) UILabel *gfPercentLabel;
 @property (nonatomic, weak) UISlider *gfBoundSlider;
+@property (nonatomic, strong) UISelectionFeedbackGenerator *gfFeedback;
+@property (nonatomic, assign) NSInteger gfLastDetent;
 @end
 
 @implementation GFPercentSliderCell
@@ -29,6 +31,7 @@ extern char **environ;
 
     [self.contentView addSubview:label];
     self.gfPercentLabel = label;
+    self.gfLastDetent = NSIntegerMin;
 }
 
 - (UISlider *)gfSlider {
@@ -68,12 +71,38 @@ extern char **environ;
         return;
     }
 
-    NSInteger percent = (NSInteger)lroundf(slider.value);
+    NSInteger percent = (NSInteger)lroundf(slider.value / 5.0f) * 5;
+    percent = MAX(0, MIN(100, percent));
     self.gfPercentLabel.text =
         [NSString stringWithFormat:@"%ld%%", (long)percent];
 }
 
 - (void)gfSliderChanged:(UISlider *)sender {
+    /*
+     * 5% magnetic detents: 0, 5, 10 ... 100.
+     *
+     * The slider remains interactive, but the value is quantized immediately
+     * to the nearest 5%. This avoids meaningless 43.7 / 47.2 values and gives
+     * a system-picker-like stepping feel.
+     */
+    NSInteger detent = (NSInteger)lroundf(sender.value / 5.0f) * 5;
+    detent = MAX(0, MIN(100, detent));
+
+    if ((NSInteger)lroundf(sender.value) != detent) {
+        [sender setValue:(float)detent animated:NO];
+    }
+
+    if (self.gfLastDetent != detent) {
+        self.gfLastDetent = detent;
+
+        if (!self.gfFeedback) {
+            self.gfFeedback = [[UISelectionFeedbackGenerator alloc] init];
+        }
+
+        [self.gfFeedback prepare];
+        [self.gfFeedback selectionChanged];
+    }
+
     [self gfUpdatePercentLabel];
 }
 
