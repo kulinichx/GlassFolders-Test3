@@ -1,4 +1,4 @@
-name: GlassFolders 0.7.4 Beta1.4 CLEAN
+name: GlassFolders 0.7.4 Beta1.6 CLEAN
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 0.7.4 BETA1.4 AUTHOR-CREDIT ==="
+          echo "=== GLASSFOLDERS 0.7.4 BETA1.6 CONTINUOUS-RAILS ==="
           echo "THEOS=$THEOS"
 
       - name: Set up Python for PNG verification
@@ -117,7 +117,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          grep -Fq 'GLASSFOLDERS 0.7.4 BETA1.4 AUTHOR-CREDIT' \
+          grep -Fq 'GLASSFOLDERS 0.7.4 BETA1.6 CONTINUOUS-RAILS' \
             .github/workflows/build.yml
 
           grep -Fq '%group GFIconHooks' Tweak.xm
@@ -158,6 +158,19 @@ jobs:
 
           print("Rounded-alpha source icons verified.")
           PY
+
+          echo "Checking Beta1.6 continuous specular rails..."
+          grep -Fq 'primaryRailMask' Tweak.xm
+          grep -Fq 'secondaryRailMask' Tweak.xm
+          grep -Fq 'topLeftCornerBridge' Tweak.xm
+          grep -Fq 'bottomRightCornerBridge' Tweak.xm
+          grep -Fq 'sideMiddleMask' Tweak.xm
+          grep -Fq 'primaryDirectionalMicro' Tweak.xm
+
+          if grep -Eq 'leftCornerBridge|rightCornerBridge|sideRailGain|darkAxisWeight|pairedCorner' Tweak.xm; then
+            echo "ERROR: obsolete Beta1.5/older edge-distribution model remains."
+            exit 1
+          fi
 
           echo "Checking About / Author credit..."
           python - <<'PY'
@@ -218,7 +231,7 @@ jobs:
           set -euo pipefail
 
           DEB="${{ steps.package.outputs.deb }}"
-          TMP="/tmp/gf074b14"
+          TMP="/tmp/gf074b16"
           rm -rf "$TMP"
           mkdir -p "$TMP"
           cd "$TMP"
@@ -366,7 +379,7 @@ jobs:
       - name: Upload deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.4-Beta1.4-DEB
+          name: GlassFolders-0.7.4-Beta1.6-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
