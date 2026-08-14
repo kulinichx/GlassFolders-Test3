@@ -67,3 +67,18 @@ is open.
 - crisp rigid haptic ticks
 - magnetic settle on release
 - 应用并注销
+
+
+## Fix1 build correction
+
+The initial 0.5.11 source stored the opened glass using a Logos-added property
+on `SBFloatyFolderView`. Clang rejected property access on the private class in
+this build environment.
+
+Fix1 uses Objective-C associated objects instead:
+
+- `objc_getAssociatedObject`
+- `objc_setAssociatedObject`
+- `OBJC_ASSOCIATION_RETAIN_NONATOMIC`
+
+No opened/closed glass visual parameters were changed.

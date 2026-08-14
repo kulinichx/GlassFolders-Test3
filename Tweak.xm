@@ -672,34 +672,54 @@ static UIView *GFOpenedFolderBackgroundReferenceView(UIView *container) {
 %end
 
 
+/*
+ * Opened-folder glass storage:
+ * use Objective-C associated objects instead of adding a property to the
+ * private SpringBoard class. This keeps Clang/Logos type checking simple.
+ */
+static char kGFOpenedFolderGlassAssociationKey;
+
+static inline GFOpenedFolderGlassView *GFGetOpenedGlassView(id object) {
+    return (GFOpenedFolderGlassView *)objc_getAssociatedObject(
+        object,
+        &kGFOpenedFolderGlassAssociationKey
+    );
+}
+
+static inline void GFSetOpenedGlassView(id object,
+                                       GFOpenedFolderGlassView *glass) {
+    objc_setAssociatedObject(
+        object,
+        &kGFOpenedFolderGlassAssociationKey,
+        glass,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+}
+
+
 %group GFOpenedFolderHooks
 
 %hook SBFloatyFolderView
 
-%property (nonatomic, retain) GFOpenedFolderGlassView *gfOpenedGlassView;
-
 - (void)layoutSubviews {
     %orig;
 
+    GFOpenedFolderGlassView *glass = GFGetOpenedGlassView(self);
+
     if (!GFEnabled || GFStyle != 1) {
-        if (self.gfOpenedGlassView) {
-            [self.gfOpenedGlassView removeFromSuperview];
-            self.gfOpenedGlassView = nil;
+        if (glass) {
+            [glass removeFromSuperview];
+            GFSetOpenedGlassView(self, nil);
         }
         return;
     }
 
-    if (!self.gfOpenedGlassView) {
-        GFOpenedFolderGlassView *glass =
+    if (!glass) {
+        glass =
             [[GFOpenedFolderGlassView alloc] initWithStrength:GFGlassStrength];
 
-        /*
-         * Keep it behind every folder content subview.
-         * The system background remains present for animation/layout, but its
-         * opacity is forced to zero in setBackgroundAlpha:.
-         */
         [self insertSubview:glass atIndex:0];
-        self.gfOpenedGlassView = glass;
+        GFSetOpenedGlassView(self, glass);
     }
 
     UIView *reference = GFOpenedFolderBackgroundReferenceView(self);
@@ -715,14 +735,14 @@ static UIView *GFOpenedFolderBackgroundReferenceView(UIView *container) {
         }
     }
 
-    self.gfOpenedGlassView.frame = targetFrame;
-    [self.gfOpenedGlassView setPreferredRadius:targetRadius];
+    glass.frame = targetFrame;
+    [glass setPreferredRadius:targetRadius];
 
     /*
-     * Ensure the custom glass stays behind icons/page dots even if SpringBoard
-     * rearranges subviews during the open/close transition.
+     * SpringBoard may reorder subviews during the transition.
+     * Keep the glass behind folder icons/page controls.
      */
-    [self sendSubviewToBack:self.gfOpenedGlassView];
+    [self sendSubviewToBack:glass];
 }
 
 - (void)setBackgroundAlpha:(double)alpha {
@@ -731,22 +751,25 @@ static UIView *GFOpenedFolderBackgroundReferenceView(UIView *container) {
         return;
     }
 
-    if (!self.gfOpenedGlassView) {
-        GFOpenedFolderGlassView *glass =
+    GFOpenedFolderGlassView *glass = GFGetOpenedGlassView(self);
+
+    if (!glass) {
+        glass =
             [[GFOpenedFolderGlassView alloc] initWithStrength:GFGlassStrength];
+
         [self insertSubview:glass atIndex:0];
-        self.gfOpenedGlassView = glass;
+        GFSetOpenedGlassView(self, glass);
     }
 
     /*
-     * Let Apple's own animation drive our glass alpha.
-     * This keeps open/close interruptible and spatially identical to stock.
+     * Apple's existing background-alpha animation drives our glass.
+     * No custom transition animator or continuous renderer is added.
      */
-    self.gfOpenedGlassView.alpha = MIN(1.0, MAX(0.0, alpha));
+    glass.alpha = MIN(1.0, MAX(0.0, alpha));
 
     /*
-     * Hide only Apple's original folder panel material.
-     * The surrounding wallpaper blur/dim is left entirely to SpringBoard.
+     * Hide only Apple's original opened-folder panel material.
+     * The surrounding wallpaper blur/dim stays stock.
      */
     %orig(0.0);
 }
