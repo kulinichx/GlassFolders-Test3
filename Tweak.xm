@@ -380,12 +380,258 @@ static id GFCreateCAFilter(NSString *type) {
 @end
 
 
+/*
+ * Large opened-folder glass panel.
+ *
+ * It deliberately has its own calibration instead of scaling the small icon
+ * plate 1:1. A larger surface should read slightly "thicker", while still
+ * letting wallpaper color pass through clearly.
+ *
+ * Still lightweight:
+ * - one CABackdropLayer-backed view
+ * - static CAFilter chain
+ * - one faint outline
+ * - one neutral-white rim gradient
+ * - no animation loop / timer / motion sensor
+ */
+@interface GFOpenedFolderGlassView : UIView
+@property (nonatomic, strong) UIView *gfTintView;
+@property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
+@property (nonatomic, strong) CAShapeLayer *gfBaseOutline;
+@property (nonatomic, strong) CAGradientLayer *gfWhiteRimGlow;
+@property (nonatomic, strong) CAShapeLayer *gfWhiteRimMask;
+@property (nonatomic, assign) CGFloat gfStrength;
+@property (nonatomic, assign) CGFloat gfPreferredRadius;
+- (instancetype)initWithStrength:(CGFloat)strength;
+- (void)setPreferredRadius:(CGFloat)radius;
+@end
+
+@implementation GFOpenedFolderGlassView
+
++ (Class)layerClass {
+    Class backdropClass = NSClassFromString(@"CABackdropLayer");
+    return backdropClass ?: [CALayer class];
+}
+
+- (instancetype)initWithStrength:(CGFloat)strength {
+    self = [super initWithFrame:CGRectZero];
+
+    if (self) {
+        _gfStrength = MIN(1.0, MAX(0.0, strength));
+
+        self.backgroundColor = UIColor.clearColor;
+        self.userInteractionEnabled = NO;
+        self.clipsToBounds = YES;
+        self.layer.masksToBounds = YES;
+
+        BOOL isBackdropLayer =
+            [NSStringFromClass(self.layer.class) containsString:@"Backdrop"];
+
+        CGFloat e = sqrt(_gfStrength);
+
+        if (_gfStrength > 0.001 && isBackdropLayer) {
+            /*
+             * Slightly thicker than the closed-folder plate:
+             * - more blur because the surface is much larger
+             * - still restrained saturation
+             * - almost no brightness lift
+             */
+            CGFloat blurRadius = 4.8 + (10.8 * e);
+            CGFloat saturation = 1.06 + (0.30 * e);
+            CGFloat brightness = 0.002 + (0.008 * e);
+
+            id saturate = GFCreateCAFilter(@"colorSaturate");
+            id brighten = GFCreateCAFilter(@"colorBrightness");
+            id blur = GFCreateCAFilter(@"gaussianBlur");
+
+            NSMutableArray *filters = [NSMutableArray array];
+
+            if (saturate) {
+                [saturate setValue:@(saturation) forKey:@"inputAmount"];
+                [filters addObject:saturate];
+            }
+
+            if (brighten && brightness > 0.0001) {
+                [brighten setValue:@(brightness) forKey:@"inputAmount"];
+                [filters addObject:brighten];
+            }
+
+            if (blur) {
+                [blur setValue:@(blurRadius) forKey:@"inputRadius"];
+                [blur setValue:@YES forKey:@"inputNormalizeEdges"];
+                [blur setValue:@YES forKey:@"inputHardEdges"];
+                [filters addObject:blur];
+            }
+
+            if (filters.count > 0) {
+                [self.layer setValue:filters forKey:@"filters"];
+                [self.layer setValue:@1.0 forKey:@"scale"];
+            }
+        } else if (_gfStrength > 0.001) {
+            UIBlurEffect *effect =
+                [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterial];
+
+            _gfFallbackBlurView =
+                [[UIVisualEffectView alloc] initWithEffect:effect];
+            _gfFallbackBlurView.userInteractionEnabled = NO;
+            _gfFallbackBlurView.alpha =
+                MIN(0.66, 0.24 + (0.46 * e));
+
+            [self addSubview:_gfFallbackBlurView];
+        }
+
+        /*
+         * Keep the opened folder neutral.
+         * Wallpaper remains the color source.
+         */
+        CGFloat tintAlpha = 0.002 + (0.010 * e);
+
+        if (_gfStrength > 0.001 && tintAlpha > 0.001) {
+            _gfTintView = [[UIView alloc] initWithFrame:CGRectZero];
+            _gfTintView.userInteractionEnabled = NO;
+            _gfTintView.backgroundColor = UIColor.whiteColor;
+            _gfTintView.alpha = tintAlpha;
+            [self addSubview:_gfTintView];
+        }
+
+        if (_gfStrength > 0.001) {
+            /*
+             * Same Apple-style white edge language as the closed folder,
+             * slightly wider because this is a much larger surface.
+             */
+            _gfBaseOutline = [CAShapeLayer layer];
+            _gfBaseOutline.fillColor = UIColor.clearColor.CGColor;
+            _gfBaseOutline.strokeColor =
+                [UIColor colorWithWhite:1.0
+                                  alpha:(0.030 + 0.022 * e)].CGColor;
+            _gfBaseOutline.lineCap = kCALineCapRound;
+            _gfBaseOutline.lineJoin = kCALineJoinRound;
+
+            _gfWhiteRimGlow = [CAGradientLayer layer];
+            _gfWhiteRimGlow.startPoint = CGPointMake(0.00, 0.00);
+            _gfWhiteRimGlow.endPoint = CGPointMake(1.00, 1.00);
+            _gfWhiteRimGlow.colors = @[
+                (id)[UIColor colorWithWhite:1.0 alpha:0.50].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.30].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.12].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.040].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.012].CGColor
+            ];
+            _gfWhiteRimGlow.locations =
+                @[@0.00, @0.18, @0.44, @0.72, @1.00];
+            _gfWhiteRimGlow.opacity = 0.12 + (0.16 * e);
+
+            _gfWhiteRimMask = [CAShapeLayer layer];
+            _gfWhiteRimMask.fillColor = UIColor.clearColor.CGColor;
+            _gfWhiteRimMask.strokeColor = UIColor.whiteColor.CGColor;
+            _gfWhiteRimMask.lineCap = kCALineCapRound;
+            _gfWhiteRimMask.lineJoin = kCALineJoinRound;
+            _gfWhiteRimGlow.mask = _gfWhiteRimMask;
+
+            [self.layer addSublayer:_gfBaseOutline];
+            [self.layer addSublayer:_gfWhiteRimGlow];
+        }
+    }
+
+    return self;
+}
+
+- (void)setPreferredRadius:(CGFloat)radius {
+    self.gfPreferredRadius = MAX(0.0, radius);
+    [self setNeedsLayout];
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+
+    self.gfFallbackBlurView.frame = self.bounds;
+    self.gfTintView.frame = self.bounds;
+
+    CGFloat radius = self.gfPreferredRadius;
+
+    if (radius <= 0.0 && self.superview) {
+        radius = self.superview.layer.cornerRadius;
+    }
+
+    /*
+     * Fallback only when SpringBoard does not expose a radius on the
+     * container/background view.
+     */
+    if (radius <= 0.0) {
+        radius = MIN(CGRectGetWidth(self.bounds),
+                     CGRectGetHeight(self.bounds)) * 0.095;
+    }
+
+    if (radius > 0.0) {
+        self.layer.cornerRadius = radius;
+        self.layer.cornerCurve = kCACornerCurveContinuous;
+    }
+
+    if (self.gfBaseOutline && self.gfWhiteRimGlow && self.gfWhiteRimMask) {
+        CGFloat baseWidth = 0.70;
+        CGFloat rimWidth = 1.90;
+        CGFloat inset = MAX(baseWidth, rimWidth) * 0.5 + 0.35;
+
+        CGRect pathRect = CGRectInset(self.bounds, inset, inset);
+        CGFloat pathRadius = MAX(0.0, radius - inset);
+
+        UIBezierPath *edgePath =
+            [UIBezierPath bezierPathWithRoundedRect:pathRect
+                                       cornerRadius:pathRadius];
+
+        self.gfBaseOutline.frame = self.bounds;
+        self.gfBaseOutline.path = edgePath.CGPath;
+        self.gfBaseOutline.lineWidth = baseWidth;
+
+        self.gfWhiteRimGlow.frame = self.bounds;
+        self.gfWhiteRimMask.frame = self.bounds;
+        self.gfWhiteRimMask.path = edgePath.CGPath;
+        self.gfWhiteRimMask.lineWidth = rimWidth;
+    }
+}
+
+@end
+
+
+static UIView *GFOpenedFolderBackgroundReferenceView(UIView *container) {
+    UIView *best = nil;
+    CGFloat bestArea = 0.0;
+
+    for (UIView *subview in container.subviews) {
+        if ([subview isKindOfClass:[GFOpenedFolderGlassView class]]) {
+            continue;
+        }
+
+        NSString *name = NSStringFromClass(subview.class);
+        BOOL likelyBackground =
+            [name containsString:@"Background"] ||
+            [name containsString:@"Material"] ||
+            [name containsString:@"Backdrop"];
+
+        if (!likelyBackground) {
+            continue;
+        }
+
+        CGFloat area =
+            CGRectGetWidth(subview.bounds) * CGRectGetHeight(subview.bounds);
+
+        if (area > bestArea) {
+            bestArea = area;
+            best = subview;
+        }
+    }
+
+    return best;
+}
+
+
 @interface SBFolderIconImageView : UIView
 - (void)setBackgroundView:(UIView *)backgroundView;
 @end
 
 @interface SBFloatyFolderView : UIView
 - (void)setBackgroundAlpha:(double)alpha;
+- (void)layoutSubviews;
 @end
 
 
@@ -430,20 +676,79 @@ static id GFCreateCAFilter(NSString *type) {
 
 %hook SBFloatyFolderView
 
+%property (nonatomic, retain) GFOpenedFolderGlassView *gfOpenedGlassView;
+
+- (void)layoutSubviews {
+    %orig;
+
+    if (!GFEnabled || GFStyle != 1) {
+        if (self.gfOpenedGlassView) {
+            [self.gfOpenedGlassView removeFromSuperview];
+            self.gfOpenedGlassView = nil;
+        }
+        return;
+    }
+
+    if (!self.gfOpenedGlassView) {
+        GFOpenedFolderGlassView *glass =
+            [[GFOpenedFolderGlassView alloc] initWithStrength:GFGlassStrength];
+
+        /*
+         * Keep it behind every folder content subview.
+         * The system background remains present for animation/layout, but its
+         * opacity is forced to zero in setBackgroundAlpha:.
+         */
+        [self insertSubview:glass atIndex:0];
+        self.gfOpenedGlassView = glass;
+    }
+
+    UIView *reference = GFOpenedFolderBackgroundReferenceView(self);
+
+    CGRect targetFrame = self.bounds;
+    CGFloat targetRadius = self.layer.cornerRadius;
+
+    if (reference) {
+        targetFrame = reference.frame;
+
+        if (reference.layer.cornerRadius > 0.0) {
+            targetRadius = reference.layer.cornerRadius;
+        }
+    }
+
+    self.gfOpenedGlassView.frame = targetFrame;
+    [self.gfOpenedGlassView setPreferredRadius:targetRadius];
+
+    /*
+     * Ensure the custom glass stays behind icons/page dots even if SpringBoard
+     * rearranges subviews during the open/close transition.
+     */
+    [self sendSubviewToBack:self.gfOpenedGlassView];
+}
+
 - (void)setBackgroundAlpha:(double)alpha {
     if (!GFEnabled || GFStyle != 1) {
         %orig(alpha);
         return;
     }
 
-    /*
-     * Keep the opened folder lightweight:
-     * reuse Apple's existing large folder material, no new full-screen blur.
-     */
-    double e = sqrt(GFGlassStrength);
-    double panelFactor = 0.24 + (0.48 * e);
+    if (!self.gfOpenedGlassView) {
+        GFOpenedFolderGlassView *glass =
+            [[GFOpenedFolderGlassView alloc] initWithStrength:GFGlassStrength];
+        [self insertSubview:glass atIndex:0];
+        self.gfOpenedGlassView = glass;
+    }
 
-    %orig(alpha * MIN(0.74, panelFactor));
+    /*
+     * Let Apple's own animation drive our glass alpha.
+     * This keeps open/close interruptible and spatially identical to stock.
+     */
+    self.gfOpenedGlassView.alpha = MIN(1.0, MAX(0.0, alpha));
+
+    /*
+     * Hide only Apple's original folder panel material.
+     * The surrounding wallpaper blur/dim is left entirely to SpringBoard.
+     */
+    %orig(0.0);
 }
 
 %end

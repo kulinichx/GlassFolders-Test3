@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.5.10</string>
+			<string>GlassFolders 0.5.11</string>
 			<key>footerText</key>
-			<string>Native Transparent Glass：极淡完整白色轮廓 + 左上更明显、向右下自然衰减的柔和白色高光。高光本身不跟随壁纸染色。</string>
+			<string>Native Transparent Glass：关闭与打开文件夹统一使用透明玻璃语言。打开状态继续保留系统缩放动画与外围背景效果，不新增全屏 Blur。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -32,7 +32,7 @@
 			<key>label</key>
 			<string>风格</string>
 			<key>footerText</key>
-			<string>Clear 保持极简透明；Liquid Glass 继续由真实壁纸提供玻璃颜色，高光固定为中性白，只通过透明度表达光照层次。</string>
+			<string>Clear 保持关闭状态极简透明；Liquid Glass 同时应用到关闭文件夹和打开后的大玻璃面板，壁纸负责颜色，高光固定为中性白。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -88,7 +88,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>性能：无 daemon、无 Timer、无 DisplayLink、无陀螺仪。Liquid Glass 使用静态 CABackdropLayer 过滤器和静态高光层；打开文件夹继续复用系统原生大面板。</string>
+			<string>性能：无 daemon、无 Timer、无 DisplayLink、无陀螺仪。打开文件夹只增加一层静态 Backdrop Glass，并跟随 SpringBoard 原生动画；外围模糊仍由系统处理。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

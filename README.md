@@ -1,56 +1,67 @@
-# GlassFolders 0.5.10 — Apple Transparent Rim
+# GlassFolders 0.5.11 — Opened Native Transparent Glass
 
-Calibrated against the supplied Apple "透明 / Transparent" appearance reference.
+## Target
 
-## Material
+This version combines the closed-folder calibration with the supplied Apple
+opened-folder reference.
 
-Backdrop rendering is unchanged from 0.5.9:
+Desired opened-folder look:
 
-- light blur
-- natural wallpaper saturation
+- one large translucent glass panel
+- wallpaper color clearly passes through
+- app icons remain crisp
+- rounded white rim is subtle and neutral
+- no diagonal white stripe
+- no white/gray frosted-card look
+- surrounding desktop blur/dim remains Apple's stock effect
+
+## Implementation
+
+`SBFloatyFolderView` now receives one lightweight
+`GFOpenedFolderGlassView` behind its content.
+
+The custom opened glass uses:
+
+- `CABackdropLayer` when available
+- static saturation / brightness / Gaussian blur filters
 - nearly zero white tint
-- almost no brightness lift
-- wallpaper remains the glass color source
+- one faint complete white outline
+- one neutral-white gradient rim
 
-## Edge model
+The large surface is intentionally a little "thicker" than the closed folder:
 
-The previous local path that ended part-way across the top has been removed.
+- slightly stronger blur
+- slightly lower saturation boost
+- still wallpaper-colored
 
-0.5.10 uses two neutral-white static edge layers:
+## Animation
 
-### 1. Base outline
-- complete rounded rectangle
-- ~0.60pt
-- extremely low white alpha
-- exists only to keep the glass silhouette coherent
+No open/close animation is rewritten.
 
-### 2. Soft white rim
-- complete rounded rectangle mask
-- ~1.60pt
-- upper-left is brightest
-- smoothly fades toward lower-right
-- no abrupt ending point
-- no purple/blue tint in the highlight itself
+The system continues calling `setBackgroundAlpha:`. GlassFolders maps that
+same alpha directly to the custom glass view, so the panel follows Apple's
+existing zoom/fade transition automatically.
 
-The wallpaper may visually influence the perceived color underneath, but the
-actual highlight colors are all neutral white.
+Apple's original folder panel material is set to zero opacity only in
+Liquid Glass mode.
+
+The surrounding wallpaper blur/dim is not replaced or duplicated.
 
 ## Performance
 
-Still no:
+No:
 - daemon
 - Timer
 - DisplayLink
 - gyroscope
-- animated highlight
+- animated gradient
 - custom full-screen blur
+- custom transition animator
 
-The edge effect consists of:
-- one CAShapeLayer base outline
-- one CAGradientLayer
-- one CAShapeLayer mask
+At runtime the opened effect adds only one static backdrop view while a folder
+is open.
 
-## UX unchanged
+## Existing UX retained
 
 - 5% magnetic detents
 - crisp rigid haptic ticks
