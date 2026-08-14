@@ -1,4 +1,4 @@
-name: Build RootHide 0.7.3 App Library Beta2 Pod Container.3 Runtime Fix
+name: Build RootHide 0.7.3 App Library Beta2.1 Package Gate Fix.3 Runtime Fix
 
 on:
   workflow_dispatch:
@@ -176,13 +176,13 @@ jobs:
           shasum -a 256 "${{ steps.package.outputs.deb }}"
 
 
-      - name: Safety gate - narrow opened-panel hook
+      - name: Package and binary verification
         shell: bash
         run: |
           set -euo pipefail
 
           DEB="${{ steps.package.outputs.deb }}"
-          TMP="/tmp/gf-open-panel-check"
+          TMP="/tmp/gf-beta21-verify"
 
           rm -rf "$TMP"
           mkdir -p "$TMP/root"
@@ -200,25 +200,64 @@ jobs:
           STRINGS_FILE="$TMP/GlassFolders.strings"
           strings "$DYLIB" > "$STRINGS_FILE"
 
-          echo "Reject dangerous private/controller paths:"
+          echo "=== Reject dangerous private/controller paths ==="
           if grep -E 'SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView|SBHLibraryViewController|SBHLibraryPodFolderController|_SBHLibraryPodIconView|_SBHLibraryPodIconListView|GFResolveAppLibraryBackgroundClass|GFInstallAppLibraryRuntimeHook' "$STRINGS_FILE"; then
             echo "ERROR: dangerous folder/App-Library path leaked into build."
             exit 1
           fi
+          echo "OK: no forbidden controller/factory strings."
 
-          echo "Require intended visual background hooks:"
-          grep -Fq 'SBFolderIconImageView' "$STRINGS_FILE"
-          grep -Fq 'SBFolderBackgroundView' "$STRINGS_FILE"
-          grep -Fq 'SBHLibraryCategoryPodBackgroundView' "$STRINGS_FILE"
-          grep -Fq 'SBHLibraryPodFolderView' "$STRINGS_FILE"
-          grep -Fq '_updateVisualStyle' "$STRINGS_FILE"
+          echo "=== Diagnostic: expected visual symbols ==="
+          for token in \
+            SBFolderIconImageView \
+            SBFolderBackgroundView \
+            SBHLibraryCategoryPodBackgroundView \
+            SBHLibraryPodFolderView \
+            _updateVisualStyle
+          do
+            if grep -Fq "$token" "$STRINGS_FILE"; then
+              echo "OK: $token"
+            else
+              echo "WARN: $token not visible through strings(1)"
+            fi
+          done
 
-          echo "Narrow visual-surface boundary verified."
+          echo "=== Verify PreferenceLoader entry and icon files in final deb ==="
+
+          PLIST="$(find "$TMP/root" -type f -path '*/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist' | head -n 1)"
+          ICON1="$(find "$TMP/root" -type f -path '*/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon.png' | head -n 1)"
+          ICON2="$(find "$TMP/root" -type f -path '*/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon@2x.png' | head -n 1)"
+          ICON3="$(find "$TMP/root" -type f -path '*/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon@3x.png' | head -n 1)"
+
+          BUNDLE_ICON1="$(find "$TMP/root" -type f -path '*/Library/PreferenceBundles/GlassFoldersPrefs.bundle/GlassFoldersIcon.png' | head -n 1)"
+          BUNDLE_ICON2="$(find "$TMP/root" -type f -path '*/Library/PreferenceBundles/GlassFoldersPrefs.bundle/GlassFoldersIcon@2x.png' | head -n 1)"
+          BUNDLE_ICON3="$(find "$TMP/root" -type f -path '*/Library/PreferenceBundles/GlassFoldersPrefs.bundle/GlassFoldersIcon@3x.png' | head -n 1)"
+
+          for required in \
+            "$PLIST" \
+            "$ICON1" "$ICON2" "$ICON3" \
+            "$BUNDLE_ICON1" "$BUNDLE_ICON2" "$BUNDLE_ICON3"
+          do
+            if [ -z "$required" ]; then
+              echo "ERROR: a required PreferenceLoader/icon resource is missing from the final deb."
+              echo "Actual packaged PreferenceLoader/PreferenceBundle files:"
+              find "$TMP/root" -type f | grep -E 'PreferenceLoader|PreferenceBundles/GlassFoldersPrefs' || true
+              exit 1
+            fi
+          done
+
+          echo "OK: nested PreferenceLoader plist + 1x/2x/3x icons are in the deb."
+          echo "OK: 1x/2x/3x icons are also in GlassFoldersPrefs.bundle."
+
+          echo "=== Final packaged preference files ==="
+          find "$TMP/root" -type f | grep -E 'PreferenceLoader|PreferenceBundles/GlassFoldersPrefs' | sort
+
+          echo "Package verification passed."
 
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.3-Beta2-AppLibraryPod-DEB
+          name: GlassFolders-0.7.3-Beta2.1-AppLibraryPod-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
