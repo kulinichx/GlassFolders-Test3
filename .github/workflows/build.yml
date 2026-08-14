@@ -1,4 +1,4 @@
-name: Build RootHide Test5.7
+name: Build RootHide Test5.10
 
 on:
   workflow_dispatch:
@@ -80,9 +80,9 @@ jobs:
           DEB="${{ steps.package.outputs.deb }}"
           DEB_ABS="$GITHUB_WORKSPACE/$DEB"
 
-          rm -rf /tmp/gf-test57
-          mkdir -p /tmp/gf-test57
-          cd /tmp/gf-test57
+          rm -rf /tmp/gf-test510
+          mkdir -p /tmp/gf-test510
+          cd /tmp/gf-test510
 
           ar -x "$DEB_ABS"
           DATA_TAR="$(find . -maxdepth 1 -type f -name 'data.tar.*' | head -n 1)"
@@ -122,7 +122,7 @@ jobs:
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-Test5.7-DEB
+          name: GlassFolders-Test5.10-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
