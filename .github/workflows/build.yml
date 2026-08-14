@@ -1,4 +1,4 @@
-name: Build RootHide 0.7.1 Safe Optical Beta1.1
+name: Build RootHide 0.7.2 Adaptive Open Glass Beta1
 
 on:
   workflow_dispatch:
@@ -69,15 +69,17 @@ jobs:
           grep -Fq '#import <dispatch/dispatch.h>' Tweak.xm
           grep -Fq '#import <math.h>' Tweak.xm
 
-          echo "Rejecting opened-folder experimental code..."
-          if grep -Eq 'SBFloatyFolderView|GFOpenedFolder|_newPageBackgroundView|GFOpenedFolderHooks' Tweak.xm; then
-            echo "ERROR: opened-folder experimental code is not allowed in Safe Optical."
+          echo "Rejecting dangerous opened-folder paths..."
+          if grep -Eq 'SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView' Tweak.xm; then
+            echo "ERROR: forbidden folder transition/controller hook found."
             exit 1
           fi
 
-          echo "Checking stable icon hook..."
+          echo "Checking intended hooks..."
           grep -Fq 'SBFolderIconImageView' Tweak.xm
           grep -Fq '%init(GFIconHooks)' Tweak.xm
+          grep -Fq 'SBFolderBackgroundView' Tweak.xm
+          grep -Fq '%init(GFOpenedPanelHooks)' Tweak.xm
 
           echo "Source sanity gate passed."
 
@@ -106,9 +108,9 @@ jobs:
           DEB="${{ steps.package.outputs.deb }}"
           DEB_ABS="$GITHUB_WORKSPACE/$DEB"
 
-          rm -rf /tmp/gf-070b4
-          mkdir -p /tmp/gf-070b4
-          cd /tmp/gf-070b4
+          rm -rf /tmp/gf-072b1
+          mkdir -p /tmp/gf-072b1
+          cd /tmp/gf-072b1
 
           ar -x "$DEB_ABS"
           DATA_TAR="$(find . -maxdepth 1 -type f -name 'data.tar.*' | head -n 1)"
@@ -146,13 +148,13 @@ jobs:
           shasum -a 256 "${{ steps.package.outputs.deb }}"
 
 
-      - name: Safety gate - closed-folder only
+      - name: Safety gate - narrow opened-panel hook
         shell: bash
         run: |
           set -euo pipefail
 
           DEB="${{ steps.package.outputs.deb }}"
-          TMP="/tmp/gf-safe-optical-check"
+          TMP="/tmp/gf-open-panel-check"
 
           rm -rf "$TMP"
           mkdir -p "$TMP/root"
@@ -170,21 +172,22 @@ jobs:
           STRINGS_FILE="$TMP/GlassFolders.strings"
           strings "$DYLIB" > "$STRINGS_FILE"
 
-          echo "Reject opened-folder symbols:"
-          if grep -E 'SBFloatyFolderView|GFOpenedFolder|_newPageBackgroundView' "$STRINGS_FILE"; then
-            echo "ERROR: opened-folder code leaked into Safe Optical build."
+          echo "Reject dangerous private paths:"
+          if grep -E 'SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView' "$STRINGS_FILE"; then
+            echo "ERROR: dangerous opened-folder path leaked into build."
             exit 1
           fi
 
-          echo "Require verified closed-folder hook:"
+          echo "Require intended visual background hooks:"
           grep -Fq 'SBFolderIconImageView' "$STRINGS_FILE"
+          grep -Fq 'SBFolderBackgroundView' "$STRINGS_FILE"
 
-          echo "Safe Optical boundary verified."
+          echo "Narrow opened-panel boundary verified."
 
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.1-Beta1.1-SafeOptical-DEB
+          name: GlassFolders-0.7.2-Beta1-AdaptiveOpenGlass-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
