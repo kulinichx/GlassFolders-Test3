@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.4~beta2.4
+Version: 0.7.4~beta2.5
 Architecture: iphoneos-arm64e
-Description: Beta 2.4 keeps the accepted Liquid Glass closed/open baselines locked and changes Clear Glass Strength into a blur-dominant control: wallpaper color remains the only chroma source while neutral transmission/highlight settle early and dark/light mode retain separate compensation.
+Description: Beta 2.5 keeps the accepted Liquid Glass closed/open baselines locked and changes Clear and Liquid Glass into independent saved strength controls, with Clear remaining blur-dominant: wallpaper color remains the only chroma source while neutral transmission/highlight settle early and dark/light mode retain separate compensation.
 Maintainer: kulinich
 Author: kulinich
 Section: Tweaks
