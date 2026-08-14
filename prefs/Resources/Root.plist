@@ -10,7 +10,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.1 Safe Optical Beta 1</string>
+			<string>GlassFolders 0.7.1 Safe Optical Beta 1.1</string>
 			<key>footerText</key>
 			<string>稳定基线：本版只修改桌面关闭状态。左上为多层镜面高光，右边/底边为独立细亮玻璃边；打开文件夹暂时保持系统原生。</string>
 		</dict>

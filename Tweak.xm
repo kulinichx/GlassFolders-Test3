@@ -1,5 +1,12 @@
+#import <UIKit/UIKit.h>
+#import <CoreFoundation/CoreFoundation.h>
+#import <QuartzCore/QuartzCore.h>
+#import <objc/runtime.h>
+#import <dispatch/dispatch.h>
+#import <math.h>
+
 /*
- * GlassFolders 0.7.1 Beta 1 — Safe Optical
+ * GlassFolders 0.7.1 Beta 1.1 — Safe Optical
  *
  * Stable scope:
  * - closed SpringBoard folder icons only
@@ -532,20 +539,6 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
 @end
 
 
-/*
- * Large opened-folder glass panel.
- *
- * It deliberately has its own calibration instead of scaling the small icon
- * plate 1:1. A larger surface should read slightly "thicker", while still
- * letting wallpaper color pass through clearly.
- *
- * Still lightweight:
- * - one CABackdropLayer-backed view
- * - static CAFilter chain
- * - one faint outline
- * - one neutral-white rim gradient
- * - no animation loop / timer / motion sensor
- */
 @interface SBFolderIconImageView : UIView
 - (void)setBackgroundView:(UIView *)backgroundView;
 @end

@@ -1,6 +1,6 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.1~beta1
+Version: 0.7.1~beta1.1
 Architecture: iphoneos-arm64e
 Description: Safe closed-folder Optical Glass with Alook-inspired upper-left specular and independent right/bottom secondary rim. Opened folders remain stock for stability.
 Maintainer: Local Test Build

@@ -1,4 +1,12 @@
-# GlassFolders 0.7.1 Beta 1 — Safe Optical
+# GlassFolders 0.7.1 Beta 1.1 — Safe Optical
+
+## Beta 1.1 build correction
+
+Beta 1 accidentally lost the framework import block during source generation.
+Beta 1.1 restores UIKit, CoreFoundation, QuartzCore, Objective-C runtime,
+dispatch, and math imports. GitHub Actions now validates those imports before
+compiling.
+
 
 This build returns to the last stable architecture boundary.
 
