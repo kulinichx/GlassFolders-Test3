@@ -1,4 +1,4 @@
-name: GlassFolders 0.7.4 Beta1 RootHide Build
+name: GlassFolders 0.7.4 Beta1.2 CLEAN
 
 on:
   workflow_dispatch:
@@ -9,126 +9,251 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    name: RootHide arm64e folder-only
+    runs-on: macos-latest
+
+    env:
+      THEOS: ${{ github.workspace }}/theos
 
     steps:
-      - name: Checkout project
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Workflow stamp
         run: |
-          echo "GLASSFOLDERS 0.7.4 BETA1 - FOLDER ONLY"
+          echo "=== GLASSFOLDERS 0.7.4 BETA1.2 FORCED-THEOS WORKFLOW ==="
+          echo "THEOS will be forced to: $THEOS"
 
       - name: Install dependencies
         run: |
-          brew install ldid dpkg make
-          echo "/opt/homebrew/opt/make/libexec/gnubin" >> "$GITHUB_PATH"
+          brew install ldid xz
 
       - name: Install RootHide Theos
+        shell: bash
         run: |
-          git clone --recursive --depth=1 https://github.com/roothide/theos.git "$HOME/theos"
-          echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
+          set -euo pipefail
+          rm -rf "$THEOS"
+          git clone --recursive https://github.com/roothide/theos.git "$THEOS"
+          test -f "$THEOS/makefiles/common.mk"
+          echo "Using THEOS=$THEOS"
 
-      - name: Install patched SDK
+      - name: Install and normalize patched iOS 16.5 SDK
+        shell: bash
         run: |
-          git clone --depth=1 https://github.com/roothide/Procursus-SDK.git /tmp/Procursus-SDK || true
-          SDK_FOUND="$(find /tmp/Procursus-SDK -type d -name '*.sdk' | head -n 1 || true)"
-          if [ -n "$SDK_FOUND" ]; then
-            mkdir -p "$THEOS/sdks"
-            cp -R "$SDK_FOUND" "$THEOS/sdks/"
+          set -euo pipefail
+
+          SDK_ROOT="$THEOS/sdks"
+          SDK_EXACT="$SDK_ROOT/iPhoneOS16.5.sdk"
+          SDK_ARCHIVE="/tmp/iPhoneOS16.5.sdk.tar.xz"
+          SDK_URL="https://github.com/theos/sdks/releases/latest/download/iPhoneOS16.5.sdk.tar.xz"
+
+          mkdir -p "$SDK_ROOT"
+          rm -rf "$SDK_EXACT"
+          rm -f "$SDK_ARCHIVE"
+
+          echo "Downloading official patched 16.5 SDK..."
+          curl -fL --retry 3 --retry-delay 2 \
+            "$SDK_URL" \
+            -o "$SDK_ARCHIVE"
+
+          echo "Archive:"
+          ls -lh "$SDK_ARCHIVE"
+
+          echo "Extracting into $SDK_ROOT ..."
+          tar -xJf "$SDK_ARCHIVE" -C "$SDK_ROOT"
+
+          echo "SDK directories after extraction:"
+          find "$SDK_ROOT" -maxdepth 3 -type d -name 'iPhoneOS*.sdk' -print
+
+          FOUND="$(find "$SDK_ROOT" -maxdepth 3 -type d -name 'iPhoneOS16.5.sdk' -print -quit)"
+
+          if [ -z "$FOUND" ]; then
+            echo "ERROR: archive extracted but iPhoneOS16.5.sdk was not found."
+            find "$SDK_ROOT" -maxdepth 3 -print
+            exit 1
           fi
+
+          if [ "$FOUND" != "$SDK_EXACT" ]; then
+            echo "Normalizing SDK path:"
+            echo "  from: $FOUND"
+            echo "  to:   $SDK_EXACT"
+            rm -rf "$SDK_EXACT"
+            ditto "$FOUND" "$SDK_EXACT"
+          fi
+
+          test -d "$SDK_EXACT"
+          test -d "$SDK_EXACT/System/Library/Frameworks/UIKit.framework"
+
+          PREF="$SDK_EXACT/System/Library/PrivateFrameworks/Preferences.framework"
+          test -d "$PREF"
+
+          if ! find "$PREF" -type f \( -name '*.tbd' -o -name 'Preferences' \) | grep -q .; then
+            echo "ERROR: patched Preferences framework link stub is missing."
+            find "$PREF" -maxdepth 2 -print
+            exit 1
+          fi
+
+          echo "Exact SDK path verified:"
+          ls -ld "$SDK_EXACT"
+          echo "THEOS tree:"
+          ls -ld "$THEOS" "$THEOS/sdks"
 
       - name: Source sanity gate
         shell: bash
         run: |
           set -euo pipefail
 
+          echo "Checking this exact workflow is active..."
+          grep -Fq 'GLASSFOLDERS 0.7.4 BETA1.2 FORCED-THEOS WORKFLOW' \
+            .github/workflows/build.yml
+
+          echo "Checking Makefile target..."
+          grep -Fq 'TARGET = iphone:clang:16.5:16.0' Makefile
+          grep -Fq 'ARCHS = arm64e' Makefile
+          grep -Fq 'THEOS_PACKAGE_SCHEME = roothide' Makefile
+
+          echo "Checking stable folder hooks..."
           grep -Fq '%group GFIconHooks' Tweak.xm
           grep -Fq '%init(GFIconHooks);' Tweak.xm
           grep -Fq 'SBFolderIconImageView' Tweak.xm
 
           grep -Fq '%group GFOpenedPanelHooks' Tweak.xm
           grep -Fq '%init(GFOpenedPanelHooks);' Tweak.xm
-          grep -Fq 'SBFolderBackgroundView' Tweak.xm
+          grep -Fq '%hook SBFolderBackgroundView' Tweak.xm
 
-          if grep -Eq 'SBHLibrary|AppLibraryPods|GFAppLibrary|SpringBoardHome\.framework|GFShouldUseAppLibraryPods|MSHookMessageEx' Tweak.xm; then
-            echo "ERROR: removed experimental system-page code is still present."
+          echo "Rejecting all removed App Library paths..."
+          if grep -Eq 'SBHLibrary|AppLibraryPods|GFAppLibrary|GFShouldUseAppLibraryPods|SpringBoardHome\.framework|MSHookMessageEx|SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView' Tweak.xm; then
+            echo "ERROR: removed/unsafe symbol exists in Tweak.xm"
             exit 1
           fi
 
+          echo "Checking icon entry/resources..."
           python3 - <<'PY'
           import plistlib
-          with open("prefs/Resources/Root.plist", "rb") as f:
+
+          with open("layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist", "rb") as f:
               p = plistlib.load(f)
-          blob = repr(p)
+
+          e = p["entry"]
+          assert e["bundle"] == "GlassFoldersPrefs"
+          assert e["icon"] == "GlassFolders.png"
+
+          with open("prefs/Resources/Root.plist", "rb") as f:
+              root = plistlib.load(f)
+
+          blob = repr(root)
           for token in ("AppLibraryPodsEnabled", "App 资源库", "资源库大文件夹"):
-              if token in blob:
-                  raise SystemExit(f"Removed setting still present: {token}")
+              assert token not in blob
           PY
 
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png
+          for f in \
+            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png \
+            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png \
+            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png \
+            prefs/Resources/GlassFolders.png \
+            prefs/Resources/GlassFolders@2x.png \
+            prefs/Resources/GlassFolders@3x.png \
+            prefs/Resources/GlassFoldersLarge.png
+          do
+            test -f "$f"
+          done
 
           grep -Fq 'GlassFoldersPrefs_RESOURCE_FILES' prefs/Makefile
 
           echo "Source sanity gate passed."
 
       - name: Build RootHide package
+        shell: bash
         run: |
-          make clean
-          make package FINALPACKAGE=1
+          set -euo pipefail
 
-      - name: Locate package
+          SDK="$THEOS/sdks/iPhoneOS16.5.sdk"
+
+          echo "Pre-build path verification:"
+          echo "PWD=$(pwd)"
+          echo "THEOS=$THEOS"
+          ls -ld "$THEOS"
+          ls -ld "$SDK"
+          test -f "$THEOS/makefiles/common.mk"
+          test -d "$SDK"
+
+          echo "Forcing THEOS on every make invocation..."
+          make THEOS="$THEOS" clean
+          make THEOS="$THEOS" package FINALPACKAGE=1
+
+      - name: Locate deb
         id: package
         shell: bash
         run: |
-          DEB="$(find packages -type f -name '*.deb' | sort | tail -n 1)"
+          set -euo pipefail
+          DEB="$(find packages -maxdepth 1 -type f -name '*.deb' | sort | tail -n 1)"
           test -n "$DEB"
           echo "deb=$DEB" >> "$GITHUB_OUTPUT"
-          echo "Built: $DEB"
+          ls -lh "$DEB"
 
-      - name: Verify final deb
+      - name: Verify actual final deb
         shell: bash
         run: |
           set -euo pipefail
 
           DEB="${{ steps.package.outputs.deb }}"
-          TMP="/tmp/glassfolders074b1"
+          TMP="/tmp/gf074b12"
 
           rm -rf "$TMP"
           mkdir -p "$TMP"
           cd "$TMP"
 
-          ar x "$GITHUB_WORKSPACE/$DEB"
+          ar -x "$GITHUB_WORKSPACE/$DEB"
           DATA="$(find . -maxdepth 1 -type f -name 'data.tar*' | head -n 1)"
+          CONTROL="$(find . -maxdepth 1 -type f -name 'control.tar*' | head -n 1)"
           test -n "$DATA"
+          test -n "$CONTROL"
 
-          mkdir root
+          mkdir root ctrl
           tar -xf "$DATA" -C root
+          tar -xf "$CONTROL" -C ctrl
 
           DYLIB="$(find root -type f -name 'GlassFolders.dylib' | head -n 1)"
+          PREFBIN="$(find root -type f -path '*GlassFoldersPrefs.bundle/GlassFoldersPrefs' | head -n 1)"
+          FILTER="$(find root -type f -path '*MobileSubstrate/DynamicLibraries/GlassFolders.plist' | head -n 1)"
+          PL="$(find root -type d -path '*/Library/PreferenceLoader/Preferences/GlassFolders' | head -n 1)"
+          PB="$(find root -type d -path '*/Library/PreferenceBundles/GlassFoldersPrefs.bundle' | head -n 1)"
+
           test -n "$DYLIB"
-          strings "$DYLIB" > strings.txt
+          test -n "$PREFBIN"
+          test -n "$FILTER"
+          test -n "$PL"
+          test -n "$PB"
 
-          grep -Fq 'SBFolderIconImageView' strings.txt
-          grep -Fq 'SBFolderBackgroundView' strings.txt
+          echo "Mach-O verification:"
+          file "$DYLIB"
+          file "$PREFBIN"
+          file "$DYLIB" | grep -qi 'arm64e'
+          file "$PREFBIN" | grep -qi 'arm64e'
 
-          if grep -Eq 'SBHLibrary|AppLibraryPods|GFAppLibrary|SpringBoardHome' strings.txt; then
-            echo "ERROR: removed experimental symbols leaked into dylib."
+          echo "Injection filter:"
+          grep -q 'com.apple.springboard' "$FILTER"
+          if grep -qi 'launchd' "$FILTER"; then
+            echo "ERROR: launchd injection present"
             exit 1
           fi
 
-          PL="$(find root -type d -path '*/Library/PreferenceLoader/Preferences/GlassFolders' | head -n 1)"
-          test -n "$PL"
+          strings "$DYLIB" > tweak.strings
+          grep -Fq 'SBFolderIconImageView' tweak.strings
+          grep -Fq 'SBFolderBackgroundView' tweak.strings
+
+          if grep -Eq 'SBHLibrary|AppLibraryPods|GFAppLibrary|SpringBoardHome|SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView' tweak.strings; then
+            echo "ERROR: removed/unsafe symbol leaked into final dylib"
+            exit 1
+          fi
+
+          echo "PreferenceLoader icon set:"
           test -f "$PL/GlassFolders.plist"
           test -f "$PL/GlassFolders.png"
           test -f "$PL/GlassFolders@2x.png"
           test -f "$PL/GlassFolders@3x.png"
 
-          PB="$(find root -type d -path '*/Library/PreferenceBundles/GlassFoldersPrefs.bundle' | head -n 1)"
-          test -n "$PB"
+          echo "PreferenceBundle icon set:"
           test -f "$PB/GlassFolders.png"
           test -f "$PB/GlassFolders@2x.png"
           test -f "$PB/GlassFolders@3x.png"
@@ -139,22 +264,30 @@ jobs:
 
           with open(sys.argv[1], "rb") as f:
               entry = plistlib.load(f)
-          expected = "/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png"
-          if entry["entry"]["icon"] != expected:
-              raise SystemExit("PreferenceLoader icon path mismatch")
+          assert entry["entry"]["icon"] == "GlassFolders.png"
 
           with open(sys.argv[2], "rb") as f:
               info = plistlib.load(f)
-          if info.get("CFBundleIconFile") != "GlassFolders":
-              raise SystemExit("PreferenceBundle icon metadata mismatch")
+          assert info["CFBundleIconFile"] == "GlassFolders"
 
-          print("Icon package verification passed.")
+          print("Final icon metadata verified.")
           PY
 
-          echo "Final deb verification passed."
+          if find ctrl -maxdepth 1 -type f \( -name preinst -o -name postinst -o -name prerm -o -name postrm \) | grep -q .; then
+            echo "ERROR: unexpected maintainer script present"
+            exit 1
+          fi
 
-      - name: Upload deb artifact
+          echo "FINAL DEB VERIFICATION PASSED"
+
+      - name: SHA256
+        run: |
+          shasum -a 256 "${{ steps.package.outputs.deb }}"
+
+      - name: Upload deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.4-Beta1-FolderOnly-DEB
+          name: GlassFolders-0.7.4-Beta1.2-DEB
           path: ${{ steps.package.outputs.deb }}
+          if-no-files-found: error
+          retention-days: 14
