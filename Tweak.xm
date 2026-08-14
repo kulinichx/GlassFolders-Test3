@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 2.7 — balanced Clear luminance + locked blur/Liquid baselines
+ * GlassFolders 0.7.4 Beta 2.8 — brighter light-Clear transmission + locked blur/Liquid baselines
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -94,7 +94,7 @@ static void GFLoadPreferences(void) {
     GFStyle = GFReadInteger(CFSTR("Style"), 0);
 
     /*
-     * Beta 2.7 keeps the split-control migration contract: Clear and Liquid Glass keep independent strength
+     * Beta 2.8 keeps the split-control migration contract: Clear and Liquid Glass keep independent strength
      * values. Existing installs inherit the legacy GlassStrength value the
      * first time these new keys are absent, so upgrading does not silently
      * change the user's current appearance.
@@ -213,8 +213,8 @@ static inline CGFloat GFClearBlurResponse(CGFloat strength) {
 
 /*
  * Opened folders already sit over SpringBoard's full-screen blur, therefore
- * small 2–8 pt local kernels are visually swallowed by the host blur. Beta2.7
- * makes ClearStrength an intentionally high-authority blur control while
+ * small 2–8 pt local kernels are visually swallowed by the host blur. Beta2.8
+ * keeps ClearStrength as an intentionally high-authority blur control while
  * keeping the material itself colorless and thin:
  *   0%   ->  0.0 pt
  *   10%  -> ~2.8 pt
@@ -1442,7 +1442,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 );
 
             /*
-             * Beta 2.7 — locked symmetric continuous tangent rails.
+             * Beta 2.8 — locked symmetric continuous tangent rails.
              *
              * Do not splice a "corner mask" into a separate straight-edge
              * mask. The SDF normal is already unit length, so in the owned
@@ -2036,11 +2036,10 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             /*
              * Clear reference target: a THIN wallpaper-owned material.
              *
-             * Beta2.7 keeps ClearStrength blur-dominant and leaves the wide
-             * local Gaussian curve unchanged. Neutral optics still settle early;
-             * this pass raises neutral optical transmission in BOTH appearances:
-             * light mode receives the larger correction, while dark mode receives a
-             * deliberately smaller lift so the 40 pt reference blur stays luminous
+             * Beta2.8 keeps ClearStrength blur-dominant and leaves the wide
+             * local Gaussian curve unchanged. Neutral optics still settle early. This pass
+             * raises ONLY light-appearance transmission/brightness; dark mode remains
+             * on the accepted calibration so the 40 pt reference blur stays luminous
              * without turning into a milky card.
              *
              * At the 55% baseline the local blur is ~20.1 pt in both appearances;
@@ -2059,11 +2058,11 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
             saturation = darkAppearance
                 ? (1.045 + 0.020 * clearActivation)
-                : (1.045 + 0.015 * clearActivation);
+                : (1.045 + 0.030 * clearActivation);
 
             brightness = darkAppearance
                 ? (0.033 + 0.008 * clearActivation)
-                : (0.024 + 0.008 * clearActivation);
+                : (0.040 + 0.030 * clearActivation);
 
             /*
              * Keep most of the filtered backdrop visible. The previous pass blended
@@ -2231,15 +2230,15 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              * Clear body is not white and not colored. This is only a small
              * neutral transmission lift on top of the shallow wallpaper blur.
              * Above the first 15% it settles near ~5.1% white in dark
-             * appearance and ~3.5% in light appearance. Beta2.7 gives dark mode
-             * a smaller additional neutral lift than light mode so both remain
-             * luminous without adding hue or turning into a white card.
+             * appearance and ~5.8% in light appearance. Beta2.8 deliberately gives
+             * light appearance more neutral transmission so the strong 40 pt
+             * blur stays bright and clear without changing wallpaper hue.
              */
             neutralLift = clearActivation *
-                (darkAppearance ? 0.051 : 0.035);
+                (darkAppearance ? 0.051 : 0.058);
 
             self.gfTintView.alpha =
-                MIN(darkAppearance ? 0.054 : 0.038, neutralLift);
+                MIN(darkAppearance ? 0.054 : 0.062, neutralLift);
         } else {
             /*
              * Liquid Glass needs a little more neutral transmission in dark
@@ -2264,7 +2263,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
      */
     if (self.gfStyle == 0) {
         self.gfOpticalLayer.opacity = clearActivation *
-            (darkAppearance ? 0.82 : 0.70);
+            (darkAppearance ? 0.82 : 0.77);
     } else {
         self.gfOpticalLayer.opacity = darkAppearance
             ? 1.0
@@ -2283,7 +2282,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
     if (self.gfStyle == 0) {
         continuityAlpha = clearActivation *
-            (darkAppearance ? 0.048 : 0.032);
+            (darkAppearance ? 0.048 : 0.040);
         self.layer.borderWidth =
             (clearActivation > 0.001) ? 0.45 : 0.0;
     } else {

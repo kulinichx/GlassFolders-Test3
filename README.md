@@ -1,6 +1,6 @@
-# GlassFolders 0.7.4 Beta 2.7
+# GlassFolders 0.7.4 Beta 2.8
 
-Beta 2.7 keeps Clear and Liquid Glass on independent saved controls, locks the accepted Liquid Glass baselines and the 40 pt opened-Clear blur curve, and raises Clear neutral luminance/transmission in both appearances: light mode gets the larger correction and dark mode a smaller lift. Strong blur should stay luminous and glass-like instead of gray, while wallpaper remains the sole hue source. App Library experimentation remains deferred in this pass.
+Beta 2.8 keeps Clear and Liquid Glass on independent saved controls, locks the accepted Liquid Glass baselines and the 40 pt opened-Clear blur curve, and raises ONLY light-appearance Clear neutral luminance/transmission more decisively. Dark Clear stays on the accepted calibration. Strong blur should look brighter and more translucent without becoming a white card, while wallpaper remains the sole hue source. App Library experimentation remains deferred in this pass.
 
 ## 1. Independent controls
 
@@ -17,7 +17,7 @@ Clear is a colorless wallpaper-owned material. It does not inject purple, blue, 
 
 `ClearStrength` primarily controls local Gaussian blur. Neutral-white transmission, edge highlight and saturation establish the Clear appearance early and then remain nearly constant, so increasing strength changes blur rather than simply making the panel whiter.
 
-Opened Clear sits over SpringBoard's existing full-screen blur, so Beta 2.7 keeps the validated high-authority local range:
+Opened Clear sits over SpringBoard's existing full-screen blur, so Beta 2.8 keeps the validated high-authority local range:
 
 - 0%: 0 pt
 - 10%: ~2.8 pt
@@ -33,7 +33,7 @@ The same blur curve is used in light and dark appearance so a Clear percentage h
 
 ### Light appearance optical calibration
 
-Beta 2.7 leaves the 40 pt blur curve unchanged and calibrates neutral optics separately by appearance. Above the first 15% Clear activation, light mode targets roughly **+3.2% neutral brightness**, **~3.5% neutral-white transmission**, **~1.06 saturation**, and **0.70 soft specular opacity**. Dark mode receives the smaller additional lift requested after on-device comparison: roughly **+4.1% neutral brightness**, **~5.1% neutral-white transmission**, unchanged **~1.065 saturation**, and **0.82 soft specular opacity**. These are neutral luminance adjustments only: wallpaper remains the sole hue source.
+Beta 2.8 leaves the 40 pt blur curve unchanged and changes only light-appearance Clear optics. Above the first 15% Clear activation, light mode now targets roughly **+7.0% neutral brightness**, **~5.8% neutral-white transmission**, **~1.075 saturation**, **0.77 soft specular opacity**, and a slightly stronger **~4.0% continuous white edge floor**. Dark mode remains on the accepted calibration: roughly **+4.1% neutral brightness**, **~5.1% neutral-white transmission**, **~1.065 saturation**, and **0.82 soft specular opacity**. These are neutral luminance adjustments only: wallpaper remains the sole hue source.
 
 Closed Clear keeps its separately accepted response and is driven by the same independent `ClearStrength` setting.
 

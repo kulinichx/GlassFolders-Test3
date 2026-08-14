@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.4 Beta 2.7</string>
+			<string>GlassFolders 0.7.4 Beta 2.8</string>
 			<key>footerText</key>
-			<string>Beta 2.7：保持 Clear 最高约 40pt 的独立模糊曲线与 Liquid Glass 既有基线不变；浅色模式提高中性亮度/白色透光，深色模式也小幅提高透亮度与柔和高光，让强模糊下两种外观都更通透而不是偏灰。颜色仍全部来自壁纸，不添加紫、蓝、粉等彩色 tint。</string>
+			<string>Beta 2.8：保持 Clear 最高约 40pt 的独立模糊曲线、深色 Clear 现有校准与 Liquid Glass 既有基线不变；只把浅色模式 Clear 的中性亮度、白色透光、柔和高光和连续边缘白光明显提高，让 40pt 强模糊下更接近苹果参考图的明亮透明感。颜色仍全部来自壁纸，不添加紫、蓝、粉等彩色 tint。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -32,7 +32,7 @@
 			<key>label</key>
 			<string>风格</string>
 			<key>footerText</key>
-			<string>Clear：颜色只来自壁纸/桌面 backdrop，本身不添加紫、蓝、粉等彩色 tint；以高透明度、低白雾和柔和白色高光保持“薄玻璃”观感，独立模糊滑杆可以使用最高约 40pt 的 Gaussian 半径，明显揉开已经被 SpringBoard 模糊过的背景。深浅模式只做中性光学补偿；Beta 2.7 浅色模式提高亮度/白色透光，深色模式也小幅提高透亮度与柔和高光，始终保持无色。Liquid Glass：继续使用更明显的 saturation、白色透光与镜面高光形成厚玻璃感。</string>
+			<string>Clear：颜色只来自壁纸/桌面 backdrop，本身不添加紫、蓝、粉等彩色 tint；以高透明度、低白雾和柔和白色高光保持“薄玻璃”观感，独立模糊滑杆可以使用最高约 40pt 的 Gaussian 半径，明显揉开已经被 SpringBoard 模糊过的背景。深浅模式只做中性光学补偿；Beta 2.8 只进一步提高浅色模式的中性亮度/白色透光与柔和高光；深色模式保持现有校准，始终保持无色。Liquid Glass：继续使用更明显的 saturation、白色透光与镜面高光形成厚玻璃感。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
