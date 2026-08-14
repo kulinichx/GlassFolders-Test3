@@ -1,51 +1,63 @@
-# GlassFolders 0.7.3 Beta 2.1 — Package Gate Fix
+# GlassFolders 0.7.3 Beta 2.2 — Opened Group Restore
 
-The SpringBoard runtime code is byte-for-byte identical to Beta 2.
+This fixes the Logos preprocessing failure shown by GitHub Actions:
 
-## Why the Beta 2 GitHub Action failed
+`%init for an undefined %group GFOpenedPanelHooks`
 
-Compilation and `.deb` packaging completed successfully.
+## Root cause
 
-The failure happened only in the custom post-build safety gate, where a chain
-of `strings | grep -Fq` checks treated every expected Objective-C string as a
-mandatory binary invariant.
+During the Beta 2 App Library rewrite, the source replacement range started at
+the old App Library helper section and extended too far. That accidentally
+removed the already-stable `GFOpenedPanelHooks` group, while `%ctor` still
+contained:
 
-That is too brittle for a stripped Mach-O: absence from `strings(1)` does not
-by itself prove the Logos hook was omitted.
+`%init(GFOpenedPanelHooks);`
 
-Beta 2.1 keeps forbidden controller/factory symbols as a hard failure, but
-prints the intended visual class strings as diagnostics.
+Logos therefore stopped during preprocessing before Clang compilation.
 
-## Settings icon packaging fix
+## Beta 2.2 fix
 
-Inspection of an earlier real GlassFolders `.deb` showed the actual package did
-not contain any PNG icon files. That directly explains the blank Settings icon.
+The complete opened-folder group is restored byte-for-byte from the previously
+working Beta 1.4.1 source:
 
-Beta 2.1 explicitly sets:
+- `SBFolderBackgroundView`
+- `didAddSubview:`
+- `didMoveToWindow`
+- `layoutSubviews`
+- `setBackgroundColor:`
+- `traitCollectionDidChange:`
 
-`GlassFoldersPrefs_RESOURCE_FILES`
+The Beta 2 App Library Pod-container code remains in place after that group.
 
-for the 1x/2x/3x and large PNG assets.
+## Build guard
 
-The post-build verifier now opens the actual `.deb` and hard-fails unless it
-contains:
+The GitHub source sanity gate now explicitly requires both the `%group`
+definition and `%init` call for:
 
-- nested PreferenceLoader `GlassFolders.plist`;
-- PreferenceLoader icon 1x/2x/3x;
-- GlassFoldersPrefs.bundle icon 1x/2x/3x.
+- `GFIconHooks`
+- `GFOpenedPanelHooks`
+- `GFAppLibraryHooks`
 
-This prevents another build where the source tree contains icons but the
-installed package does not.
+This catches the exact class of source-structure error before Logos preprocessing.
 
-## App Library runtime
+## Settings icon
 
-Unchanged from Beta 2:
+The Beta 2.1 packaging correction remains:
 
-- `SBHLibraryPodFolderView` is the pod lifecycle/container;
-- its exact `SBHLibraryCategoryPodBackgroundView` descendant supplies card
-  frame/radius;
-- the stock category background view is hidden;
-- custom glass is inserted at index 0 of the pod;
-- icon/title/touch/expansion behavior remains system-managed.
+- PreferenceLoader nested plist + 1x/2x/3x PNG files;
+- PreferenceBundle 1x/2x/3x/large PNG resources explicitly declared with
+  `GlassFoldersPrefs_RESOURCE_FILES`;
+- final `.deb` verification checks the actual packaged files.
 
-No controller, icon-list, search-controller, timer, or polling hook is added.
+## Runtime scope
+
+- closed folder: `SBFolderIconImageView`;
+- opened folder: `SBFolderBackgroundView`;
+- App Library pod container: `SBHLibraryPodFolderView`;
+- App Library card background reference:
+  `SBHLibraryCategoryPodBackgroundView`;
+- SpringBoard-only injection;
+- RootHide arm64e.
+
+No daemon, timer, polling loop, DisplayLink, gyroscope, broad App Library
+controller hook, or continuous Metal renderer.

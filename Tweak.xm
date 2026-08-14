@@ -7,7 +7,7 @@
 #import <dlfcn.h>
 
 /*
- * GlassFolders 0.7.3 Beta 2 — Pod Container Glass
+ * GlassFolders 0.7.3 Beta 2.2 — Opened Group Restore
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -1761,6 +1761,77 @@ static void GFUpdateOpenedFolderBackground(
 }
 
 
+
+
+@interface SBFolderBackgroundView : UIView
+@end
+
+
+%group GFOpenedPanelHooks
+
+%hook SBFolderBackgroundView
+
+- (void)didAddSubview:(UIView *)subview {
+    %orig(subview);
+
+    if (GFShouldUseOpenedPanel() &&
+        ![subview isKindOfClass:
+            [GFPanelGlassView class]]) {
+
+        /*
+         * Synchronous suppression means newly-created stock material cannot
+         * become the first rendered dark frame.
+         */
+        GFSetStockPanelSubviewSuppressed(
+            subview,
+            YES
+        );
+    }
+}
+
+- (void)didMoveToWindow {
+    %orig;
+
+    /*
+     * This is after SpringBoard constructed the background object and its
+     * material children, but before normal on-screen compositing.
+     * We do not insert our view during the private object's initializer.
+     */
+    GFUpdateOpenedFolderBackground(self);
+}
+
+- (void)layoutSubviews {
+    %orig;
+
+    GFUpdateOpenedFolderBackground(self);
+}
+
+- (void)setBackgroundColor:(UIColor *)color {
+    if (GFShouldUseOpenedPanel()) {
+        %orig(UIColor.clearColor);
+    } else {
+        %orig(color);
+    }
+}
+
+- (void)traitCollectionDidChange:
+    (UITraitCollection *)previousTraitCollection {
+
+    %orig(previousTraitCollection);
+
+    GFPanelGlassView *glass =
+        GFPanelGlassForBackground(self);
+
+    if (glass) {
+        [glass gfRefreshMaterial];
+    }
+
+    GFUpdateOpenedFolderBackground(self);
+}
+
+%end
+
+%end
 
 
 #pragma mark - App Library Pod container glass
