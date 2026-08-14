@@ -113,8 +113,9 @@ static id GFCreateCAFilter(NSString *type) {
 @interface GFBackdropGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
-@property (nonatomic, strong) CAGradientLayer *gfContinuousEdgeGlow;
-@property (nonatomic, strong) CAShapeLayer *gfContinuousEdgeMask;
+@property (nonatomic, strong) CAShapeLayer *gfBaseOutline;
+@property (nonatomic, strong) CAGradientLayer *gfWhiteRimGlow;
+@property (nonatomic, strong) CAShapeLayer *gfWhiteRimMask;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) NSInteger gfStyle;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
@@ -160,9 +161,9 @@ static id GFCreateCAFilter(NSString *type) {
             CGFloat brightness;
 
             if (_gfStyle == 1) {
-                blurRadius = 5.0 + (13.0 * e);     // ~13.7 at 45%
-                saturation = 1.25 + (0.70 * e);   // ~1.72 at 45%
-                brightness = 0.010 + (0.030 * e);
+                blurRadius = 3.2 + (9.2 * e);
+                saturation = 1.08 + (0.38 * e);
+                brightness = 0.003 + (0.010 * e);
             } else {
                 blurRadius = 2.0 + (7.0 * e);
                 saturation = 1.05 + (0.30 * e);
@@ -222,7 +223,7 @@ static id GFCreateCAFilter(NSString *type) {
 
         if (_gfStrength > 0.001) {
             tintAlpha = (_gfStyle == 1)
-                ? 0.012 + (0.040 * e)
+                ? 0.003 + (0.014 * e)
                 : 0.018 * _gfStrength;
         }
 
@@ -240,11 +241,6 @@ static id GFCreateCAFilter(NSString *type) {
              * This is the A/B direction discussed after Edge Glass looked flat.
              * It never animates and never reads motion sensors.
              */
-            CGFloat borderAlpha = 0.17 + (0.32 * e);
-            self.layer.borderWidth = 1.0 / UIScreen.mainScreen.scale;
-            self.layer.borderColor =
-                [UIColor colorWithWhite:1.0 alpha:borderAlpha].CGColor;
-
             /*
              * Two static layers:
              * 1) a broader, soft internal glow (the "thick glass edge")
@@ -267,29 +263,63 @@ static id GFCreateCAFilter(NSString *type) {
              * Brightness falls from upper-left -> lower-right.
              * Static only: no animation / timer / motion sensor.
              */
-            _gfContinuousEdgeGlow = [CAGradientLayer layer];
-            _gfContinuousEdgeGlow.startPoint = CGPointMake(0.00, 0.00);
-            _gfContinuousEdgeGlow.endPoint = CGPointMake(1.00, 1.00);
-            _gfContinuousEdgeGlow.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.82].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.54].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.24].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.07].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor
+            /*
+             * Native-style local rim:
+             * keep a relatively soft/wide highlight region, but only around
+             * the upper-left corner and upper edge.
+             *
+             * This avoids the "neon outline" look seen in Test5.7.
+             */
+            /*
+             * Native Transparent Glass:
+             * a short, soft upper-left catch-light only.
+             * The material remains the main visual effect.
+             */
+            /*
+             * Apple-style transparent rim:
+             *
+             * 1) A very faint COMPLETE white outline keeps the glass shape
+             *    coherent on every wallpaper.
+             *
+             * 2) A wider white rim uses a full rounded-rect stroke mask, but
+             *    its gradient is strongest at the upper-left and smoothly
+             *    fades toward the lower-right.
+             *
+             * The highlight itself is neutral white. Wallpaper color only
+             * comes from the backdrop material underneath it.
+             */
+            _gfBaseOutline = [CAShapeLayer layer];
+            _gfBaseOutline.fillColor = UIColor.clearColor.CGColor;
+            _gfBaseOutline.strokeColor =
+                [UIColor colorWithWhite:1.0
+                                  alpha:(0.038 + 0.026 * e)].CGColor;
+            _gfBaseOutline.lineCap = kCALineCapRound;
+            _gfBaseOutline.lineJoin = kCALineJoinRound;
+
+            _gfWhiteRimGlow = [CAGradientLayer layer];
+            _gfWhiteRimGlow.startPoint = CGPointMake(0.00, 0.00);
+            _gfWhiteRimGlow.endPoint = CGPointMake(1.00, 1.00);
+            _gfWhiteRimGlow.colors = @[
+                (id)[UIColor colorWithWhite:1.0 alpha:0.58].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.38].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.18].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.065].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.018].CGColor
             ];
-            _gfContinuousEdgeGlow.locations =
-                @[@0.00, @0.22, @0.48, @0.73, @1.00];
-            _gfContinuousEdgeGlow.opacity = 0.18 + (0.30 * e);
+            _gfWhiteRimGlow.locations =
+                @[@0.00, @0.18, @0.44, @0.72, @1.00];
+            _gfWhiteRimGlow.opacity = 0.14 + (0.18 * e);
 
-            _gfContinuousEdgeMask = [CAShapeLayer layer];
-            _gfContinuousEdgeMask.fillColor = UIColor.clearColor.CGColor;
-            _gfContinuousEdgeMask.strokeColor = UIColor.whiteColor.CGColor;
-            _gfContinuousEdgeMask.lineCap = kCALineCapRound;
-            _gfContinuousEdgeMask.lineJoin = kCALineJoinRound;
+            _gfWhiteRimMask = [CAShapeLayer layer];
+            _gfWhiteRimMask.fillColor = UIColor.clearColor.CGColor;
+            _gfWhiteRimMask.strokeColor = UIColor.whiteColor.CGColor;
+            _gfWhiteRimMask.lineCap = kCALineCapRound;
+            _gfWhiteRimMask.lineJoin = kCALineJoinRound;
 
-            _gfContinuousEdgeGlow.mask = _gfContinuousEdgeMask;
+            _gfWhiteRimGlow.mask = _gfWhiteRimMask;
 
-            [self.layer addSublayer:_gfContinuousEdgeGlow];
+            [self.layer addSublayer:_gfBaseOutline];
+            [self.layer addSublayer:_gfWhiteRimGlow];
         }
     }
 
@@ -315,32 +345,34 @@ static id GFCreateCAFilter(NSString *type) {
         self.layer.cornerRadius = radius;
         self.layer.cornerCurve = kCACornerCurveContinuous;
     }
-    if (self.gfContinuousEdgeGlow && self.gfContinuousEdgeMask) {
-        self.gfContinuousEdgeGlow.frame = self.bounds;
-        self.gfContinuousEdgeMask.frame = self.bounds;
-
+    if (self.gfBaseOutline && self.gfWhiteRimGlow && self.gfWhiteRimMask) {
         /*
-         * A soft 2.8pt edge region gives the iOS 27-style thicker catch-light
-         * without becoming a hard white border.
+         * Both layers use the SAME continuous rounded-rectangle geometry.
+         * Nothing ends abruptly at 30% / 50%, so there is no artificial seam.
          *
-         * The path is inset by half the stroke width so the entire highlight
-         * remains inside the clipped folder shape.
+         * The base outline is ~0.6pt and almost invisible.
+         * The brighter rim is ~1.6pt but remains soft because its actual
+         * brightness comes from a low-opacity white gradient.
          */
-        CGFloat strokeWidth = 2.8;
-        CGFloat pathInset = strokeWidth * 0.5 + 0.35;
-        CGRect pathRect = CGRectInset(self.bounds, pathInset, pathInset);
+        CGFloat baseWidth = 0.60;
+        CGFloat rimWidth = 1.60;
+        CGFloat inset = MAX(baseWidth, rimWidth) * 0.5 + 0.28;
 
-        CGFloat pathRadius = MAX(
-            0.0,
-            radius - pathInset
-        );
+        CGRect pathRect = CGRectInset(self.bounds, inset, inset);
+        CGFloat pathRadius = MAX(0.0, radius - inset);
 
         UIBezierPath *edgePath =
             [UIBezierPath bezierPathWithRoundedRect:pathRect
                                        cornerRadius:pathRadius];
 
-        self.gfContinuousEdgeMask.path = edgePath.CGPath;
-        self.gfContinuousEdgeMask.lineWidth = strokeWidth;
+        self.gfBaseOutline.frame = self.bounds;
+        self.gfBaseOutline.path = edgePath.CGPath;
+        self.gfBaseOutline.lineWidth = baseWidth;
+
+        self.gfWhiteRimGlow.frame = self.bounds;
+        self.gfWhiteRimMask.frame = self.bounds;
+        self.gfWhiteRimMask.path = edgePath.CGPath;
+        self.gfWhiteRimMask.lineWidth = rimWidth;
     }
 
 }

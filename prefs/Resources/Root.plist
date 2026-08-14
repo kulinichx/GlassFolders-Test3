@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.5.7</string>
+			<string>GlassFolders 0.5.10</string>
 			<key>footerText</key>
-			<string>Backdrop Glass + 连续圆角边缘高光。修复左上圆角高光断层，不再使用两条独立高光条。无后台进程、无持续动画。</string>
+			<string>Native Transparent Glass：极淡完整白色轮廓 + 左上更明显、向右下自然衰减的柔和白色高光。高光本身不跟随壁纸染色。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -32,7 +32,7 @@
 			<key>label</key>
 			<string>风格</string>
 			<key>footerText</key>
-			<string>Clear 保持极简透明；Liquid Glass 使用连续圆角高光路径，左上最亮并沿顶部/左侧自然衰减，右下接近透明。</string>
+			<string>Clear 保持极简透明；Liquid Glass 继续由真实壁纸提供玻璃颜色，高光固定为中性白，只通过透明度表达光照层次。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -62,7 +62,7 @@
 			<key>label</key>
 			<string>玻璃强度</string>
 			<key>footerText</key>
-			<string>每 5% 一个档位。拖动保持顺滑，跨档时触发清脆触感，松手后磁吸到准确档位。数值与滑条之间保留独立空隙。</string>
+			<string>每 5% 一个磁吸档位。建议先看 50–60%；新版保留 0.5.9 的轻 blur 与自然透色，仅重新校准 Apple 风格白色边缘高光。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

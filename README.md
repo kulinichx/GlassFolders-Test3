@@ -1,44 +1,58 @@
-# GlassFolders 0.5.7 / Test5.7 — Continuous Edge Glass
+# GlassFolders 0.5.10 — Apple Transparent Rim
 
-## Fix
+Calibrated against the supplied Apple "透明 / Transparent" appearance reference.
 
-Test5.6 used two separate static gradient strips:
-- one along the top edge
-- one along the left edge
+## Material
 
-Because both strips were inset and clipped independently, the rounded
-top-left corner could look like the highlight was missing.
+Backdrop rendering is unchanged from 0.5.9:
 
-Test5.7 replaces both strips with:
+- light blur
+- natural wallpaper saturation
+- nearly zero white tint
+- almost no brightness lift
+- wallpaper remains the glass color source
 
-- one `CAGradientLayer`
-- one `CAShapeLayer` rounded-rectangle stroke mask
+## Edge model
 
-The highlight is now a single continuous perimeter path.
+The previous local path that ended part-way across the top has been removed.
 
-## Visual behavior
+0.5.10 uses two neutral-white static edge layers:
 
-- strongest at the upper-left corner
-- still visible across the top and left
-- fades toward the lower-right
-- no diagonal white stripe across the folder interior
-- no seam at the rounded corner
+### 1. Base outline
+- complete rounded rectangle
+- ~0.60pt
+- extremely low white alpha
+- exists only to keep the glass silhouette coherent
 
-The highlight region is about 2.8pt wide, intentionally thicker than a
-1-pixel border but still soft.
+### 2. Soft white rim
+- complete rounded rectangle mask
+- ~1.60pt
+- upper-left is brightest
+- smoothly fades toward lower-right
+- no abrupt ending point
+- no purple/blue tint in the highlight itself
+
+The wallpaper may visually influence the perceived color underneath, but the
+actual highlight colors are all neutral white.
 
 ## Performance
 
-This is actually simpler than Test5.6:
-- one gradient layer
-- one static shape mask
-- no animation
-- no DisplayLink
-- no timer
-- no gyroscope
+Still no:
+- daemon
+- Timer
+- DisplayLink
+- gyroscope
+- animated highlight
+- custom full-screen blur
 
-Backdrop Glass, 5% detents, crisp haptics, and `应用并注销` remain unchanged.
+The edge effect consists of:
+- one CAShapeLayer base outline
+- one CAGradientLayer
+- one CAShapeLayer mask
 
-## Fix1
+## UX unchanged
 
-Build fix only: resolve `radius` before it is used to construct the continuous rounded-edge mask. Visual parameters are unchanged.
+- 5% magnetic detents
+- crisp rigid haptic ticks
+- magnetic settle on release
+- 应用并注销
