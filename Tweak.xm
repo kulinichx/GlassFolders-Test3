@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 2.5 — independent Clear/Liquid strength controls + locked Liquid baselines
+ * GlassFolders 0.7.4 Beta 2.6 — high-authority Clear blur + independent Liquid control
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -94,7 +94,7 @@ static void GFLoadPreferences(void) {
     GFStyle = GFReadInteger(CFSTR("Style"), 0);
 
     /*
-     * Beta 2.5 migration: Clear and Liquid Glass keep independent strength
+     * Beta 2.6 keeps the split-control migration contract: Clear and Liquid Glass keep independent strength
      * values. Existing installs inherit the legacy GlassStrength value the
      * first time these new keys are absent, so upgrading does not silently
      * change the user's current appearance.
@@ -212,15 +212,26 @@ static inline CGFloat GFClearBlurResponse(CGFloat strength) {
 }
 
 /*
- * Opened folders already sit over SpringBoard's full-screen blur. A 2–4 pt
- * local Gaussian barely changes an already blurred source, so Beta2.4 looked
- * almost static even at 100%. Calibrate opened Clear separately so the slider
- * has visible authority without disturbing closed Clear:
- * 25% -> ~1.9 pt, 50% -> ~3.9 pt, 55% -> ~4.3 pt,
- * 75% -> ~5.9 pt, 100% -> 8.0 pt.
+ * Opened folders already sit over SpringBoard's full-screen blur, therefore
+ * small 2–8 pt local kernels are visually swallowed by the host blur. Beta2.6
+ * makes ClearStrength an intentionally high-authority blur control while
+ * keeping the material itself colorless and thin:
+ *   0%   ->  0.0 pt
+ *   10%  -> ~2.8 pt
+ *   25%  -> ~8.1 pt
+ *   50%  -> ~18.0 pt
+ *   55%  -> ~20.1 pt
+ *   75%  -> ~28.7 pt
+ *   100% -> 40.0 pt
+ *
+ * The 1.15 exponent keeps the very bottom usable but deliberately opens the
+ * low/middle range sooner. This is important because SpringBoard has already
+ * blurred the full-screen background before the folder-local material samples
+ * it; a timid local kernel is visually swallowed. Closed Clear retains its
+ * separately locked response.
  */
 static inline CGFloat GFClearOpenedBlurResponse(CGFloat strength) {
-    return pow(GFClamp01(strength), 1.05);
+    return pow(GFClamp01(strength), 1.15);
 }
 
 
@@ -1431,7 +1442,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 );
 
             /*
-             * Beta 2.5 — locked symmetric continuous tangent rails.
+             * Beta 2.6 — locked symmetric continuous tangent rails.
              *
              * Do not splice a "corner mask" into a separate straight-edge
              * mask. The SDF normal is already unit length, so in the owned
@@ -2025,16 +2036,16 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             /*
              * Clear reference target: a THIN wallpaper-owned material.
              *
-             * Beta2.5 gives ClearStrength one dominant job: control the
-             * local Gaussian blur.  The surrounding neutral optics barely
+             * Beta2.6 gives ClearStrength one dominant job: control the
+             * local Gaussian blur with a deliberately wide visible range.  The surrounding neutral optics barely
              * change after the first 15%, which prevents a high percentage
              * from turning Clear into a milky/brighter pseudo-LiquidGlass.
              *
-             * At the 55% baseline the local blur is ~4.3 pt in both appearances;
-             * at 100% it reaches 8 pt. This keeps Clear below Liquid Glass at
-             * the same maximum setting while still giving the slider visible
-             * authority over an already-blurred SpringBoard source. Color
-             * still comes only from backdrop.
+             * At the 55% baseline the local blur is ~20.1 pt in both appearances;
+             * at 100% it reaches 40 pt.  Clear is intentionally NOT constrained
+             * to a numerically smaller radius than Liquid Glass: the two styles
+             * are separated by tint/lift/specular behavior, not by blur radius
+             * alone.  Color still comes only from the wallpaper backdrop.
              */
             /*
              * Clear strength is now calibrated against the *already blurred*
@@ -2042,7 +2053,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              * appearance so the slider has one predictable meaning; only the
              * neutral optical compensation differs by appearance.
              */
-            blurRadius = 8.0 * clearBlurResponse;
+            blurRadius = 40.0 * clearBlurResponse;
 
             saturation = darkAppearance
                 ? (1.045 + 0.020 * clearActivation)
@@ -2057,8 +2068,14 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              * 16–21% of the unfiltered underlying composition back in, which
              * further hid small blur changes. This remains colorless.
              */
+            /*
+             * Nearly all of the panel should show the locally filtered sample.
+             * Leaving 5-7% of the unfiltered host composition visible still
+             * masks large-radius changes, especially above 50%. Keep only a
+             * tiny appearance-dependent reserve while remaining fully colorless.
+             */
             sampleAlpha = clearActivation *
-                (darkAppearance ? 0.95 : 0.93);
+                (darkAppearance ? 0.995 : 0.990);
         } else {
             /*
              * Liquid Glass: a thicker but not blackened backdrop.

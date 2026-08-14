@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.4 Beta 2.5</string>
+			<string>GlassFolders 0.7.4 Beta 2.6</string>
 			<key>footerText</key>
-			<string>Beta 2.5：Clear 与 Liquid Glass 使用独立强度记忆。Clear 强度主要控制局部模糊；Liquid Glass 强度继续控制综合玻璃响应。Liquid Glass 已确认的关闭态浅色基线与打开态连续高光几何保持锁定。两种风格都不添加紫、蓝、粉等彩色 tint，颜色仍来自壁纸。</string>
+			<string>Beta 2.6：Clear 与 Liquid Glass 继续使用独立强度。Clear 打开态的模糊控制范围大幅扩展：低档仍保持清透，中高档会大幅增加局部高斯模糊；Liquid Glass 已确认的关闭态浅色基线与打开态连续高光几何保持锁定。两种风格都不添加紫、蓝、粉等彩色 tint，颜色仍来自壁纸。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -32,7 +32,7 @@
 			<key>label</key>
 			<string>风格</string>
 			<key>footerText</key>
-			<string>Clear：颜色只来自壁纸/桌面 backdrop，本身不添加紫、蓝、粉等彩色 tint；使用比 Liquid Glass 更浅的局部 blur、更高的 backdrop 保留率与柔和白色高光。深色模式增加少量中性亮度/白色透光，浅色模式自动收弱。Liquid Glass：保持更厚的 blur / saturation 与更强白色镜面高光。</string>
+			<string>Clear：颜色只来自壁纸/桌面 backdrop，本身不添加紫、蓝、粉等彩色 tint；以高透明度、低白雾和柔和白色高光保持“薄玻璃”观感，独立模糊滑杆可以使用最高约 40pt 的 Gaussian 半径，明显揉开已经被 SpringBoard 模糊过的背景。深色模式增加少量中性亮度/白色透光，浅色模式自动收弱。Liquid Glass：继续使用更明显的 saturation、白色透光与镜面高光形成厚玻璃感。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -62,7 +62,7 @@
 			<key>label</key>
 			<string>Clear 模糊强度</string>
 			<key>footerText</key>
-			<string>只用于 Clear。强度主要控制打开/关闭文件夹的局部模糊程度；白色透光和高光只做轻微补偿，不会随着滑杆明显变白。与 Liquid Glass 强度分开记忆。</string>
+			<string>只用于 Clear。打开态采用高权重模糊范围：低档保持清透，中高档会非常明显地揉开壁纸/图标色块，100% 上限约 40pt；白色透光和高光只做轻微补偿，不会随着滑杆明显变白。与 Liquid Glass 强度分开记忆。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
