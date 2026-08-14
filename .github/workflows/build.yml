@@ -1,4 +1,4 @@
-name: GlassFolders 0.7.4 Beta2.4 CLEAR-BLUR-CONTROL
+name: GlassFolders 0.7.4 Beta2.5 SPLIT-STRENGTH-CONTROLS
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 0.7.4 BETA2.4 CLEAR-BLUR-CONTROL ==="
+          echo "=== GLASSFOLDERS 0.7.4 BETA2.5 SPLIT-STRENGTH-CONTROLS ==="
           echo "THEOS=$THEOS"
 
       - name: Set up Python for PNG verification
@@ -117,8 +117,25 @@ jobs:
         run: |
           set -euo pipefail
 
-          grep -Fq 'GLASSFOLDERS 0.7.4 BETA2.4 CLEAR-BLUR-CONTROL' \
+          grep -Fq 'GLASSFOLDERS 0.7.4 BETA2.5 SPLIT-STRENGTH-CONTROLS' \
             .github/workflows/build.yml
+
+          # Beta2.5 separates the two style controls while retaining a read-only
+          # legacy GlassStrength migration path for existing installations.
+          grep -Fq 'CFSTR("ClearStrength")' Tweak.xm
+          grep -Fq 'CFSTR("LiquidGlassStrength")' Tweak.xm
+          grep -Fq 'CFSTR("GlassStrength")' Tweak.xm
+          python - <<'PY'
+          import plistlib
+          with open('prefs/Resources/Root.plist', 'rb') as f:
+              root = plistlib.load(f)
+          sliders = [x for x in root['items'] if x.get('cell') == 'PSSliderCell']
+          keys = [x.get('key') for x in sliders]
+          assert keys == ['ClearStrength', 'LiquidGlassStrength'], keys
+          assert all(x.get('default') == 55 for x in sliders)
+          assert not any(x.get('key') == 'GlassStrength' for x in root['items'])
+          print('Independent Clear/Liquid strength sliders verified:', keys)
+          PY
 
           grep -Fq '%group GFIconHooks' Tweak.xm
           grep -Fq '%init(GFIconHooks);' Tweak.xm
@@ -128,14 +145,14 @@ jobs:
           grep -Fq '%init(GFOpenedPanelHooks);' Tweak.xm
           grep -Fq '%hook SBFolderBackgroundView' Tweak.xm
 
-          # Beta2.4 may resolve the exact App Library category background class
+          # Beta2.5 may resolve the exact App Library category background class
           # dynamically as a passive view, but must not hook App Library controllers,
           # actively trigger its visual-style method, or link SpringBoardHome.
           grep -Fq 'SBHLibraryCategoryPodBackgroundView' Tweak.xm
           grep -Fq 'GFCreateNativeAppLibraryPodVisual' Tweak.xm
 
           # Regression guard: this one-shot activation was the source of the
-          # darker closed-folder material that Beta2.4 intentionally keeps removed.
+          # darker closed-folder material that Beta2.5 intentionally keeps removed.
           if grep -Eq 'GFActivateNativeAppLibraryPodVisual|_updateVisualStyle' Tweak.xm; then
             echo "ERROR: active App Library pod visual-style path reintroduced."
             exit 1
@@ -151,13 +168,13 @@ jobs:
           grep -Fq 'Clear reference target: a THIN wallpaper-owned material.' Tweak.xm
           grep -Fq 'self.gfBackdropSampleView.hidden = NO;' Tweak.xm
 
-          # Beta2.4 slider contract: in Clear, Glass Strength primarily changes
+          # Beta2.5 slider contract: ClearStrength primarily changes
           # local blur. Neutral optics settle early instead of growing across
           # the full slider range.
           grep -Fq 'GFClearBlurResponse' Tweak.xm
           grep -Fq 'GFClearActivationResponse' Tweak.xm
-          grep -Fq '? (4.20 * clearBlurResponse)' Tweak.xm
-          grep -Fq ': (3.80 * clearBlurResponse);' Tweak.xm
+          grep -Fq 'GFClearOpenedBlurResponse' Tweak.xm
+          grep -Fq 'blurRadius = 8.0 * clearBlurResponse;' Tweak.xm
           grep -Fq '? (0.36 * clearActivation)' Tweak.xm
           grep -Fq 'self.gfOpticalLayer.opacity = clearActivation *' Tweak.xm
           grep -Fq 'blurRadius = 8.40 * clearBlurResponse;' Tweak.xm
@@ -202,11 +219,11 @@ jobs:
           print("Rounded-alpha source icons verified.")
           PY
 
-          echo "Checking Beta2.4 locked Liquid baselines + Clear blur-dominant control..."
+          echo "Checking Beta2.5 locked Liquid baselines + independent Clear/Liquid controls..."
           # These names are unique to GFCreateOpenedPanelLightingImage in the
-          # Beta2.4 locked continuous-tangent model, so the gate cannot accidentally
+          # Beta2.5 locked continuous-tangent model, so the gate cannot accidentally
           # pass by finding similarly named closed-folder lighting variables.
-          grep -Fq 'Beta 2.4 — locked symmetric continuous tangent rails.' Tweak.xm
+          grep -Fq 'Beta 2.5 — locked symmetric continuous tangent rails.' Tweak.xm
           grep -Fq 'primaryQuadrantEnergy' Tweak.xm
           grep -Fq 'secondaryQuadrantEnergy' Tweak.xm
           grep -Fq 'tangentOverlap' Tweak.xm
@@ -298,7 +315,7 @@ jobs:
           set -euo pipefail
 
           DEB="${{ steps.package.outputs.deb }}"
-          TMP="/tmp/gf074b24"
+          TMP="/tmp/gf074b25"
           rm -rf "$TMP"
           mkdir -p "$TMP"
           cd "$TMP"
@@ -334,7 +351,7 @@ jobs:
           grep -Fq 'SBFolderIconImageView' tweak.strings
           grep -Fq 'SBFolderBackgroundView' tweak.strings
 
-          # Exact native category-pod class is expected as a passive view in Beta2.4.
+          # Exact native category-pod class is expected as a passive view in Beta2.5.
           # Other App Library/controller experiments and direct framework references are not.
           grep -Fq 'SBHLibraryCategoryPodBackgroundView' tweak.strings
 
@@ -450,7 +467,7 @@ jobs:
       - name: Upload deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.4-Beta2.4-DEB
+          name: GlassFolders-0.7.4-Beta2.5-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
