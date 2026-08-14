@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 1.8 FIX7 — Clear Opened Panel + Native App Library Style
+ * GlassFolders 0.7.4 Beta 1.8 FIX8 — Adaptive Clear/Liquid Opened Materials + Native App Library Style
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -1903,21 +1903,35 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         CGFloat saturation;
 
         if (self.gfStyle == 0) {
+            /*
+             * Clear must remain visibly clearer than Liquid Glass.  The
+             * full-screen folder presentation already softens the Home
+             * Screen, so a second 4-5 pt blur here made Clear read as a
+             * milky purple/blue sheet on dark wallpapers.  Keep only a
+             * thin local blur and almost-neutral saturation; hue still comes
+             * exclusively from the backdrop.
+             */
             blurRadius = darkAppearance
-                ? (2.8 + 3.8 * materialResponse)
-                : (2.4 + 3.5 * materialResponse);
+                ? (1.45 + 2.45 * materialResponse)
+                : (1.25 + 2.20 * materialResponse);
 
             saturation = darkAppearance
-                ? (1.02 + 0.06 * materialResponse)
-                : (1.02 + 0.05 * materialResponse);
+                ? (1.005 + 0.030 * materialResponse)
+                : (1.003 + 0.022 * materialResponse);
         } else {
+            /*
+             * Liquid Glass is the thicker material: stronger blur and a
+             * modest saturation recovery so wallpaper colour survives the
+             * larger kernel.  This is still colorless processing -- no
+             * purple/blue/pink tint is introduced.
+             */
             blurRadius = darkAppearance
-                ? (6.4 + 5.6 * materialResponse)
-                : (5.8 + 5.0 * materialResponse);
+                ? (6.6 + 5.8 * materialResponse)
+                : (5.9 + 5.1 * materialResponse);
 
             saturation = darkAppearance
-                ? (1.04 + 0.10 * materialResponse)
-                : (1.03 + 0.08 * materialResponse);
+                ? (1.055 + 0.115 * materialResponse)
+                : (1.040 + 0.095 * materialResponse);
         }
 
         self.gfBackdropOverscan =
@@ -1977,10 +1991,13 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         self.gfBackdropSampleView.hidden = YES;
 
         if (!self.gfFallbackBlurView) {
+            UIBlurEffectStyle fallbackStyle =
+                (self.gfStyle == 0)
+                    ? UIBlurEffectStyleSystemUltraThinMaterial
+                    : UIBlurEffectStyleSystemThinMaterial;
+
             UIBlurEffect *effect =
-                [UIBlurEffect
-                    effectWithStyle:
-                        UIBlurEffectStyleSystemUltraThinMaterial];
+                [UIBlurEffect effectWithStyle:fallbackStyle];
 
             self.gfFallbackBlurView =
                 [[UIVisualEffectView alloc]
@@ -2017,25 +2034,55 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
      */
     self.gfTintView.backgroundColor = UIColor.whiteColor;
 
-    if (self.gfStyle == 0 && self.gfStrength > 0.001) {
-        CGFloat clearLift =
-            (0.038 + 0.042 * tintResponse) * self.gfStrength;
+    if (self.gfStrength > 0.001) {
+        CGFloat neutralLift = 0.0;
 
-        self.gfTintView.alpha =
-            MIN(0.075, clearLift);
+        if (self.gfStyle == 0) {
+            /*
+             * Clear: almost no body whitening.  The previous ~3% lift at
+             * 55% strength was the main reason Clear looked milkier and more
+             * opaque than Liquid Glass.  Keep just enough neutral transmission
+             * to separate the panel on a dark wallpaper.
+             */
+            neutralLift = darkAppearance
+                ? (0.006 + 0.020 * tintResponse) * self.gfStrength
+                : (0.004 + 0.014 * tintResponse) * self.gfStrength;
+
+            self.gfTintView.alpha =
+                MIN(darkAppearance ? 0.022 : 0.015, neutralLift);
+        } else {
+            /*
+             * Liquid Glass: a tiny neutral transmission lift belongs to the
+             * glass body, while the clearly visible highlights remain in the
+             * white specular rail.  Dark appearance needs slightly more lift
+             * so the material does not collapse into a black transparent hole.
+             */
+            neutralLift = darkAppearance
+                ? (0.018 + 0.035 * tintResponse) * self.gfStrength
+                : (0.008 + 0.018 * tintResponse) * self.gfStrength;
+
+            self.gfTintView.alpha =
+                MIN(darkAppearance ? 0.040 : 0.020, neutralLift);
+        }
     } else {
         self.gfTintView.alpha = 0.0;
     }
 
     /*
-     * Clear uses the same FIX5 continuous rail geometry, only optically
-     * lighter. This preserves the now-correct UL<->top/left and LR<->bottom/
-     * right joins instead of introducing a second Clear-only edge renderer.
+     * Both styles share the already-fixed continuous rail geometry.
+     * Appearance only changes optical energy: dark backgrounds need a little
+     * more white specular definition; light backgrounds rely more on the
+     * renderer's dark shoulder so the edge does not become a white outline.
      */
-    self.gfOpticalLayer.opacity =
-        (self.gfStyle == 0)
-            ? (0.62 + 0.16 * materialResponse)
-            : 1.0;
+    if (self.gfStyle == 0) {
+        self.gfOpticalLayer.opacity = darkAppearance
+            ? (0.68 + 0.12 * materialResponse)
+            : (0.58 + 0.10 * materialResponse);
+    } else {
+        self.gfOpticalLayer.opacity = darkAppearance
+            ? 1.0
+            : 0.92;
+    }
 
     /*
      * Force the optical texture to be regenerated when light/dark mode
