@@ -1,43 +1,42 @@
-# GlassFolders 0.7.4 Beta 1.8 — Native App Library Pod Layer
+# GlassFolders 0.7.4 Beta 1.9
 
-This build targets the visual difference between the previous desktop folder glass and Apple's App Library category cards.
+Beta 1.9 is a cleanup release focused on making the two selectable opened-folder styles genuinely different and on keeping package/version metadata synchronized with the code.
 
-## Targeted system path
+## Opened folder: Clear
 
-The App Library category background class is `SBHLibraryCategoryPodBackgroundView`. On modern iOS it inherits from `SBHVisualStylingView`, which is responsible for applying Apple's private visual-style set.
+Clear no longer replaces the whole panel with a fully weighted second blur. The folder presentation is already blurred by SpringBoard, so Clear now uses a very small local Gaussian kernel and blends that filtered backdrop back over the underlying presentation at partial alpha. This keeps the panel transparent and prevents a dark wallpaper from turning into a large purple/blue milky sheet.
 
-Beta 1.8 does **not** hook or modify the real App Library. Instead, each closed desktop folder creates an independent `SBHLibraryCategoryPodBackgroundView` and uses it as a visual layer inside the custom folder background. This lets SpringBoard configure the layer with the same system visual-styling machinery used by App Library category cards.
+- wallpaper/backdrop remains the only chromatic source;
+- no purple, blue, pink, or other hue tint is added;
+- only a very small neutral-white transmission lift is used;
+- white specular rails remain;
+- dark and light interface appearances use separate optical strengths.
 
-If that private class cannot be created on a particular build, GlassFolders simply keeps using the stronger CABackdrop fallback.
+## Opened folder: Liquid Glass
 
-## Stronger body
+Liquid Glass remains the thicker material, but the dark-mode blur kernel has been reduced from the previous overly dark response. A small neutral brightness compensation and neutral-white transmission lift keep bright wallpaper information alive through the thicker blur without introducing a color tint.
 
-The Liquid Glass fallback was also increased so the folder is stronger even without the native pod layer:
+- thicker blur than Clear;
+- restrained saturation recovery;
+- neutral brightness compensation, stronger in dark appearance;
+- stronger white specular rails than Clear;
+- separate dark/light appearance tuning.
 
-- Gaussian blur: substantially higher than Beta 1.7;
-- wallpaper saturation: increased;
-- neutral white lift: increased without turning the card fully milky;
-- UIVisualEffect fallback upgraded from Ultra Thin to Thin Material for Liquid Glass.
+## Continuous edge optics
 
-## Stronger edge optics
+The established continuous-rail geometry is retained: the upper-left corner joins both the top and left continuation, and the lower-right joins both the bottom and right continuation. The 1.5x cached CPU lighting map is retained for stability; Beta 1.9 does not bring back the heavier 2x render experiment.
 
-The closed-folder SDF lighting map keeps the same Beta 1.7 topology but increases luminance:
+## App Library category material
 
-- upper-left -> full top remains the primary continuous rail;
-- full bottom -> lower-right remains the secondary continuous rail;
-- upper-right and lower-left remain attenuated;
-- the maximum optical peak and both rail gains are higher.
-
-The opened-folder panel is intentionally left on the previous conservative `SBFolderBackgroundView` path to avoid expanding the stability surface.
+Closed Liquid Glass folders continue to create an independent `SBHLibraryCategoryPodBackgroundView`, attach it to the folder background, and trigger its own `_updateVisualStyle` only after frame/radius/hierarchy are valid. Beta 1.9 increases the native pod visual's participation so it contributes more of the App Library card material. The real App Library is not hooked or modified.
 
 ## Safety / compatibility
 
 - RootHide arm64e target retained;
 - SpringBoard-only injection;
-- private App Library class resolved with `NSClassFromString`;
-- no direct private-framework link required;
+- private classes resolved dynamically;
 - no App Library controller hooks;
 - no daemon, timer, DisplayLink, gyro, or Metal render loop;
-- existing cached CPU SDF optical maps retained.
+- opened-panel lighting map remains cached at a maximum of 1.5x.
 
 Author: `kulinich`

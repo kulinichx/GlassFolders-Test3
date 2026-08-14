@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.4 Beta 1.8</string>
+			<string>GlassFolders 0.7.4 Beta 1.9</string>
 			<key>footerText</key>
-			<string>关闭文件夹新增原生 App 资源库分类框视觉层：直接复用 SBHLibraryCategoryPodBackgroundView 的系统 visual styling，并叠加强化后的壁纸模糊与高光；不会修改真实 App 资源库。打开文件夹继续沿用稳定路径。</string>
+			<string>Beta 1.9：打开文件夹的 Clear 与 Liquid Glass 已彻底分开。Clear 只轻度混合壁纸 backdrop，Liquid Glass 使用更厚但不发黑的中性玻璃；两者都不加入紫/蓝等彩色 tint，白色只用于透光与高光。关闭文件夹继续复用原生 App 资源库分类背景视觉层，并提高其参与度。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -32,7 +32,7 @@
 			<key>label</key>
 			<string>风格</string>
 			<key>footerText</key>
-			<string>Liquid Glass：桌面关闭文件夹会创建一个独立的 App 资源库分类背景视觉层，再叠加更强的 CABackdrop、提亮和镜面边缘。若系统类不可用则自动回退。打开面板仍只接管 SBFolderBackgroundView，不修改创建和转场流程。</string>
+			<string>Clear：更透明、局部模糊更轻，主要保留壁纸本身的颜色与明暗；Liquid Glass：更厚的 blur / saturation，并在深色模式加入少量中性亮度补偿，避免玻璃发黑。两种风格都会随深色/浅色模式调整白色高光强度。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -62,7 +62,7 @@
 			<key>label</key>
 			<string>玻璃强度</string>
 			<key>footerText</key>
-			<string>每 5% 一个档位。关闭文件夹的 55% 现在已经明显，75% 强烈，100% 高强度；百分比同时控制 App 资源库视觉层的参与度、白色提亮和镜面边缘。打开文件夹仍沿用原有强度曲线。</string>
+			<string>每 5% 一个档位。百分比同时控制打开与关闭文件夹的玻璃响应和白色镜面高光；Clear 与 Liquid Glass 使用不同曲线。建议先以 55% 作为基准，再按壁纸明暗微调。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -88,7 +88,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>关闭文件夹现在不是只调普通 blur：会直接实例化 SBHLibraryCategoryPodBackgroundView 作为只读视觉层，并保留更强的顶部/底部与左上/右下连续镜面高光。</string>
+			<string>关闭文件夹的 Liquid Glass 会创建独立的 SBHLibraryCategoryPodBackgroundView，并在进入层级后触发其 _updateVisualStyle；Beta 1.9 提高了该原生视觉层的参与度。真实 App 资源库本身不会被 hook 或修改。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

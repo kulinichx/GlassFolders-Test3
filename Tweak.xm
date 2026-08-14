@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 1.8 FIX8 — Adaptive Clear/Liquid Opened Materials + Native App Library Style
+ * GlassFolders 0.7.4 Beta 1.9 — Distinct Clear/Liquid Opened Materials + Native App Library Style
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -759,7 +759,14 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
      * opaque card.  Strength still has visible authority.
      */
     CGFloat materialResponse = GFMaterialResponse(strength);
-    podView.alpha = MIN(0.78, 0.42 + 0.36 * materialResponse);
+
+    /*
+     * Beta 1.9: let the native category-pod visual contribute more of its
+     * own material. The earlier ~0.61 alpha at 55% was visibly weaker than
+     * the real App Library card. This changes only the native view's
+     * participation -- no chromatic overlay is introduced.
+     */
+    podView.alpha = MIN(0.90, 0.58 + 0.34 * materialResponse);
 
     return podView;
 }
@@ -1090,6 +1097,7 @@ static BOOL GFUsesDarkAppearance(UIView *view) {
 static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                                                  CGFloat cornerRadius,
                                                  CGFloat strength,
+                                                 NSInteger style,
                                                  BOOL darkAppearance) {
     if (size.width < 2.0 ||
         size.height < 2.0 ||
@@ -1113,7 +1121,8 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
 
     NSString *cacheKey = [NSString stringWithFormat:
-        @"P7-%@-%zux%zu-r%.2f-s%ld",
+        @"P9-%@-%@-%zux%zu-r%.2f-s%ld",
+        (style == 1) ? @"LG" : @"CL",
         darkAppearance ? @"D" : @"L",
         pixelWidth,
         pixelHeight,
@@ -1886,59 +1895,74 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         isBackdropLayer) {
 
         /*
-         * Colorless material body: blur + a restrained saturation response.
-         * There is deliberately no brightness/tint filter here; the wallpaper
-         * remains the sole chromatic source and the optical layer supplies the
-         * edge luminance.
-         */
-        /*
-         * FIX6: style-specific opened material.
-         *
-         * Clear is NOT a color fill. It is the same wallpaper backdrop with
-         * a thinner blur response so large wallpaper color fields remain
-         * visible through the panel. Liquid Glass keeps the thicker FIX5
-         * material response.
+         * Beta 1.9 style-specific opened material. Chroma always comes from
+         * the wallpaper/backdrop. A neutral brightness adjustment is allowed
+         * for Liquid Glass in dark appearance so a large blur kernel does not
+         * collapse the panel into black; no purple/blue/pink tint is added.
          */
         CGFloat blurRadius;
         CGFloat saturation;
+        CGFloat brightness;
+        CGFloat sampleAlpha;
 
         if (self.gfStyle == 0) {
             /*
-             * Clear must remain visibly clearer than Liquid Glass.  The
-             * full-screen folder presentation already softens the Home
-             * Screen, so a second 4-5 pt blur here made Clear read as a
-             * milky purple/blue sheet on dark wallpapers.  Keep only a
-             * thin local blur and almost-neutral saturation; hue still comes
-             * exclusively from the backdrop.
+             * Beta 1.9 Clear: do not fully replace the pixels behind the
+             * folder with another blurred image. The full-screen folder
+             * presentation is already blurred, so Clear uses a very small
+             * local kernel and blends that filtered sample back over the
+             * underlying presentation. This removes the purple/blue "sheet"
+             * look while keeping wallpaper colour as the only chroma source.
              */
             blurRadius = darkAppearance
-                ? (1.45 + 2.45 * materialResponse)
-                : (1.25 + 2.20 * materialResponse);
+                ? (0.65 + 1.65 * materialResponse)
+                : (0.55 + 1.45 * materialResponse);
 
             saturation = darkAppearance
-                ? (1.005 + 0.030 * materialResponse)
-                : (1.003 + 0.022 * materialResponse);
+                ? (1.000 + 0.016 * materialResponse)
+                : (1.000 + 0.010 * materialResponse);
+
+            brightness = 0.0;
+
+            sampleAlpha = darkAppearance
+                ? (0.42 + 0.16 * materialResponse)
+                : (0.38 + 0.14 * materialResponse);
         } else {
             /*
-             * Liquid Glass is the thicker material: stronger blur and a
-             * modest saturation recovery so wallpaper colour survives the
-             * larger kernel.  This is still colorless processing -- no
-             * purple/blue/pink tint is introduced.
+             * Beta 1.9 Liquid Glass: a thicker but not blackened backdrop.
+             * The old ~9-10 pt dark-mode kernel smeared bright wallpaper
+             * islands into a mostly black body. A slightly smaller kernel,
+             * modest saturation recovery and a neutral brightness lift keep
+             * the material visibly glassy without adding a hue tint.
              */
             blurRadius = darkAppearance
-                ? (6.6 + 5.8 * materialResponse)
-                : (5.9 + 5.1 * materialResponse);
+                ? (4.6 + 4.8 * materialResponse)
+                : (4.2 + 4.2 * materialResponse);
 
             saturation = darkAppearance
-                ? (1.055 + 0.115 * materialResponse)
-                : (1.040 + 0.095 * materialResponse);
+                ? (1.070 + 0.120 * materialResponse)
+                : (1.050 + 0.100 * materialResponse);
+
+            brightness = darkAppearance
+                ? (0.015 + 0.025 * materialResponse)
+                : (0.006 + 0.016 * materialResponse);
+
+            sampleAlpha = darkAppearance
+                ? (0.90 + 0.08 * materialResponse)
+                : (0.88 + 0.07 * materialResponse);
         }
+
+        self.gfBackdropSampleView.alpha =
+            GFClamp01(sampleAlpha);
 
         self.gfBackdropOverscan =
             MAX(30.0, blurRadius * 2.75 + 4.0);
 
         id saturate =
             GFCreateCAFilter(@"colorSaturate");
+
+        id brighten =
+            GFCreateCAFilter(@"colorBrightness");
 
         id blur =
             GFCreateCAFilter(@"gaussianBlur");
@@ -1952,6 +1976,14 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                   forKey:@"inputAmount"];
 
             [filters addObject:saturate];
+        }
+
+        if (brighten && fabs(brightness) > 0.0001) {
+            [brighten
+                setValue:@(brightness)
+                  forKey:@"inputAmount"];
+
+            [filters addObject:brighten];
         }
 
         if (blur) {
@@ -2013,13 +2045,13 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         if (self.gfStyle == 0) {
             self.gfFallbackBlurView.alpha =
                 darkAppearance
-                    ? MIN(0.30, 0.08 + 0.20 * materialResponse)
-                    : MIN(0.26, 0.07 + 0.17 * materialResponse);
+                    ? MIN(0.20, 0.10 + 0.12 * materialResponse)
+                    : MIN(0.17, 0.08 + 0.10 * materialResponse);
         } else {
             self.gfFallbackBlurView.alpha =
                 darkAppearance
-                    ? MIN(0.42, 0.14 + 0.25 * materialResponse)
-                    : MIN(0.34, 0.10 + 0.20 * materialResponse);
+                    ? MIN(0.48, 0.20 + 0.30 * materialResponse)
+                    : MIN(0.40, 0.16 + 0.25 * materialResponse);
         }
     }
 
@@ -2039,30 +2071,28 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
         if (self.gfStyle == 0) {
             /*
-             * Clear: almost no body whitening.  The previous ~3% lift at
-             * 55% strength was the main reason Clear looked milkier and more
-             * opaque than Liquid Glass.  Keep just enough neutral transmission
-             * to separate the panel on a dark wallpaper.
+             * Clear gets only a very small neutral transmission lift. The
+             * filtered backdrop itself is partially blended (sampleAlpha),
+             * which is the main difference from Liquid Glass.
              */
             neutralLift = darkAppearance
-                ? (0.006 + 0.020 * tintResponse) * self.gfStrength
-                : (0.004 + 0.014 * tintResponse) * self.gfStrength;
+                ? (0.010 + 0.018 * tintResponse) * self.gfStrength
+                : (0.006 + 0.012 * tintResponse) * self.gfStrength;
 
             self.gfTintView.alpha =
-                MIN(darkAppearance ? 0.022 : 0.015, neutralLift);
+                MIN(darkAppearance ? 0.020 : 0.013, neutralLift);
         } else {
             /*
-             * Liquid Glass: a tiny neutral transmission lift belongs to the
-             * glass body, while the clearly visible highlights remain in the
-             * white specular rail.  Dark appearance needs slightly more lift
-             * so the material does not collapse into a black transparent hole.
+             * Liquid Glass needs a little more neutral transmission in dark
+             * mode so the thicker blur stays luminous. This is white light,
+             * not a chromatic tint; wallpaper hue remains untouched.
              */
             neutralLift = darkAppearance
-                ? (0.018 + 0.035 * tintResponse) * self.gfStrength
-                : (0.008 + 0.018 * tintResponse) * self.gfStrength;
+                ? (0.030 + 0.050 * tintResponse) * self.gfStrength
+                : (0.012 + 0.025 * tintResponse) * self.gfStrength;
 
             self.gfTintView.alpha =
-                MIN(darkAppearance ? 0.040 : 0.020, neutralLift);
+                MIN(darkAppearance ? 0.055 : 0.028, neutralLift);
         }
     } else {
         self.gfTintView.alpha = 0.0;
@@ -2076,12 +2106,12 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
      */
     if (self.gfStyle == 0) {
         self.gfOpticalLayer.opacity = darkAppearance
-            ? (0.68 + 0.12 * materialResponse)
-            : (0.58 + 0.10 * materialResponse);
+            ? (0.62 + 0.10 * materialResponse)
+            : (0.50 + 0.08 * materialResponse);
     } else {
         self.gfOpticalLayer.opacity = darkAppearance
             ? 1.0
-            : 0.92;
+            : 0.88;
     }
 
     /*
@@ -2198,6 +2228,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 currentSize,
                 radius,
                 self.gfStrength,
+                self.gfStyle,
                 darkAppearance
             );
 
