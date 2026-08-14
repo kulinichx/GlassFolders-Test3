@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7 Optical Beta 5</string>
+			<string>GlassFolders 0.7.1 Safe Optical Beta 1</string>
 			<key>footerText</key>
-			<string>关闭：参考 Alook 的光学边缘，左上为清晰亮芯＋柔和肩部，右边/底边保留低亮度次级反射边。打开：从第一帧直接进入浅色轻磨砂玻璃，避免先黑后浅。</string>
+			<string>稳定基线：本版只修改桌面关闭状态。左上为多层镜面高光，右边/底边为独立细亮玻璃边；打开文件夹暂时保持系统原生。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -32,7 +32,7 @@
 			<key>label</key>
 			<string>风格</string>
 			<key>footerText</key>
-			<string>Liquid Glass：关闭偏清透并保留右/下玻璃厚度；打开按 iOS 27 参考从创建阶段直接接管浅色磨砂面板。</string>
+			<string>Liquid Glass：桌面文件夹使用真实壁纸透色 + 光学边缘。打开文件夹本版保持系统原生，以隔离稳定性风险。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -88,7 +88,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>材质由壁纸提供颜色；左上为主镜面高光，右/下为低亮度次级反射，不绘制硬白框。</string>
+			<string>材质由壁纸提供颜色；高光使用中性白。右/下边缘与左上主高光独立计算，不使用硬描边。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
