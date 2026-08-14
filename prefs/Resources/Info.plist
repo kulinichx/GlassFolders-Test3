@@ -15,7 +15,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>0.7.3</string>
 	<key>CFBundleVersion</key>
-	<string>0.7.3-beta1.3.1</string>
+	<string>0.7.3-beta1.4</string>
 	<key>NSPrincipalClass</key>
 	<string>GFRootListController</string>
 	<key>CFBundleIconFiles</key>

@@ -14,6 +14,8 @@
 		<true/>
 		<key>label</key>
 		<string>GlassFolders</string>
+		<key>icon</key>
+		<string>GlassFoldersIcon.png</string>
 	</dict>
 </dict>
 </plist>

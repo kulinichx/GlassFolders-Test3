@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.3~beta1.3.1
+Version: 0.7.3~beta1.4
 Architecture: iphoneos-arm64e
-Description: Runtime App Library fix: explicitly loads SpringBoardHome and dynamically resolves/hooks only the actual App Library category background visual class, preserving the existing folder glass and integrated settings icon.
+Description: Exact App Library category-background Logos hook after explicit SpringBoardHome loading, plus corrected PreferenceLoader icon placement inside the entry dictionary.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks

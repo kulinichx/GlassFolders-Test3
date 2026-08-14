@@ -1,70 +1,59 @@
-# GlassFolders 0.7.3 Beta 1.3.1 — Runtime App Library Fix
+# GlassFolders 0.7.3 Beta 1.4 — Exact App Library Hook
 
-This build addresses the repeated "App Library option enabled but visually
-nothing changes" result.
+Two focused corrections.
 
-## Structural issue in Beta 1 / 1.1 / 1.2
+## 1. App Library large category cards
 
-Those builds initialized the App Library Logos hook only when:
+The small nested folder-like element inside an App Library category was already
+receiving the normal `SBFolderIconImageView` glass. That did not prove the
+App-Library-specific hook was working.
 
-`objc_getClass("SBHLibraryCategoryPodBackgroundView")`
+Beta 1.4 removes the runtime class scan and targets the dedicated category
+background class directly:
 
-already returned a class during the tweak constructor.
+`SBHLibraryCategoryPodBackgroundView`
 
-If SpringBoardHome had not registered the App Library category-background class
-at that moment, the hook group was skipped permanently. Entering App Library
-later could not activate it.
+Startup sequence:
 
-## Beta 1.3 architecture
+1. explicitly load SpringBoardHome;
+2. resolve `SBHLibraryCategoryPodBackgroundView`;
+3. allow one leading-underscore alias only;
+4. initialize the Logos group against that exact class.
 
-At SpringBoard startup, once:
+No `SBHLibraryPodFolderView`, App Library controller, icon-list, search
+controller, or navigation hook is added.
 
-1. explicitly `dlopen` SpringBoardHome;
-2. try known category-background class names;
-3. if needed, inspect registered classes for a very narrow candidate:
-   - UIView subclass;
-   - class name contains Library;
-   - class name contains Background;
-   - class name contains Category or Pod;
-   - implements `_updateVisualStyle`;
-4. select one best candidate only;
-5. install Substrate method hooks on that one visual class.
+The category-background object is visual-only, so its stock material children
+can be suppressed without touching category icons.
 
-No periodic scan or timer is used.
+## 2. Settings icon
 
-## Hooked behavior
+The PreferenceLoader plist previously stored `icon` at the plist root.
 
-Only visual lifecycle/style methods on the resolved background view:
+PreferenceLoader builds the Settings row from the `entry` dictionary, therefore
+the root-level key was ignored.
 
-- `_updateVisualStyle`
-- `didMoveToWindow`
-- `layoutSubviews`
-- `traitCollectionDidChange:`
-- `setBackgroundColor:`
+Beta 1.4 moves:
 
-No App Library controller, folder controller, search controller, icon-list, or
-icon view is hooked.
+`icon = GlassFoldersIcon.png`
 
-## Existing functionality
+inside `entry`.
+
+The image is also present in `GlassFoldersPrefs.bundle` with 1x/2x/3x variants,
+so no hard-coded RootHide jbroot filesystem path is needed.
+
+## Existing behavior
 
 Unchanged:
 
 - closed Home Screen folder glass;
 - opened folder glass;
-- percentage-driven edge intensity;
+- edge percentage calibration;
+- App Library switch;
 - dark/light adaptation;
-- integrated user-supplied settings icon;
+- static icon artwork;
 - RootHide arm64e;
 - SpringBoard-only injection.
 
-No daemon, timer, DisplayLink, gyroscope, or continuous Metal renderer.
-
-
-## Beta 1.3.1 build-gate correction
-
-The runtime tweak source is unchanged from Beta 1.3.
-
-The GitHub Actions source gate no longer relies on silent `grep` + `set -e`
-checks for Logos implementation details. It now prints the exact missing item,
-checks only essential imports/runtime entry points, and leaves the stronger
-post-build dylib safety gate in place.
+No daemon, timer, polling loop, DisplayLink, gyroscope, or continuous Metal
+renderer.

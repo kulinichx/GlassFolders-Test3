@@ -7,7 +7,7 @@
 #import <dlfcn.h>
 
 /*
- * GlassFolders 0.7.3 Beta 1.3 — Runtime App Library Fix
+ * GlassFolders 0.7.3 Beta 1.4 — Exact App Library Hook
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -1957,472 +1957,83 @@ static void GFUpdateAppLibraryCategoryBackground(
 
 
 
-#pragma mark - App Library runtime resolver
 
-/*
- * Root cause of the previous no-op builds:
- *
- * The fixed Logos group was initialized only if
- * objc_getClass("SBHLibraryCategoryPodBackgroundView") succeeded during
- * tweak construction. If SpringBoardHome had not registered that App Library
- * class yet, the group was silently skipped forever.
- *
- * Beta 1.3 explicitly loads SpringBoardHome, then resolves ONE visual
- * background class. It prefers known exact class names, with a constrained
- * runtime fallback for iOS 16.x naming differences.
- *
- * This scan runs once at SpringBoard startup. There is no polling/timer.
- */
+#pragma mark - App Library category-card background
 
-extern "C" void MSHookMessageEx(
-    Class _class,
-    SEL message,
-    IMP hook,
-    IMP *old
-);
-
-static Class GFAppLibraryBackgroundClass = Nil;
-
-static void (*GFOrigLibraryUpdateVisualStyle)(id, SEL) = NULL;
-static void (*GFOrigLibraryDidMoveToWindow)(id, SEL) = NULL;
-static void (*GFOrigLibraryLayoutSubviews)(id, SEL) = NULL;
-static void (*GFOrigLibraryTraitChanged)(id, SEL, UITraitCollection *) = NULL;
-static void (*GFOrigLibrarySetBackgroundColor)(id, SEL, UIColor *) = NULL;
+@interface SBHLibraryCategoryPodBackgroundView : UIView
+- (void)_updateVisualStyle;
+@end
 
 
-static BOOL GFClassIsSubclassOfUIView(Class cls) {
-    if (!cls) {
-        return NO;
-    }
+%group GFAppLibraryHooks
 
-    Class current = cls;
+%hook SBHLibraryCategoryPodBackgroundView
 
-    while (current) {
-        if (current == [UIView class]) {
-            return YES;
-        }
-
-        current = class_getSuperclass(current);
-    }
-
-    return NO;
-}
-
-
-static BOOL GFIsSafeLibraryBackgroundCandidate(Class cls) {
-    if (!cls ||
-        !GFClassIsSubclassOfUIView(cls)) {
-        return NO;
-    }
-
-    NSString *name =
-        NSStringFromClass(cls);
-
-    if (name.length == 0) {
-        return NO;
-    }
-
-    BOOL hasLibrary =
-        [name rangeOfString:@"Library"
-                    options:NSCaseInsensitiveSearch].location != NSNotFound;
-
-    BOOL hasBackground =
-        [name rangeOfString:@"Background"
-                    options:NSCaseInsensitiveSearch].location != NSNotFound;
-
-    BOOL hasCategoryOrPod =
-        [name rangeOfString:@"Category"
-                    options:NSCaseInsensitiveSearch].location != NSNotFound ||
-        [name rangeOfString:@"Pod"
-                    options:NSCaseInsensitiveSearch].location != NSNotFound;
-
-    if (!hasLibrary ||
-        !hasBackground ||
-        !hasCategoryOrPod) {
-        return NO;
-    }
-
-    /*
-     * _updateVisualStyle is the key discriminator. We do not select generic
-     * App Library containers or controllers.
-     */
-    if (!class_getInstanceMethod(
-            cls,
-            NSSelectorFromString(@"_updateVisualStyle"))) {
-        return NO;
-    }
-
-    return YES;
-}
-
-
-static Class GFResolveAppLibraryBackgroundClass(void) {
-    /*
-     * SpringBoard normally has this image already, but explicit dlopen makes
-     * class registration deterministic before our lookup.
-     */
-    dlopen(
-        "/System/Library/PrivateFrameworks/SpringBoardHome.framework/SpringBoardHome",
-        RTLD_LAZY | RTLD_LOCAL
-    );
-
-    const char *knownNames[] = {
-        "SBHLibraryCategoryPodBackgroundView",
-        "_SBHLibraryCategoryPodBackgroundView",
-        "SBHLibraryPodBackgroundView",
-        "_SBHLibraryPodBackgroundView"
-    };
-
-    const size_t knownCount =
-        sizeof(knownNames) /
-        sizeof(knownNames[0]);
-
-    for (size_t i = 0;
-         i < knownCount;
-         i++) {
-
-        Class cls =
-            objc_getClass(
-                knownNames[i]
-            );
-
-        if (GFIsSafeLibraryBackgroundCandidate(cls)) {
-            return cls;
-        }
-    }
-
-    /*
-     * Narrow runtime fallback:
-     * scan registered Objective-C classes once and choose the best visual
-     * background candidate. Prefer a name containing both Category and Pod.
-     */
-    int classCount =
-        objc_getClassList(
-            NULL,
-            0
-        );
-
-    if (classCount <= 0) {
-        return Nil;
-    }
-
-    Class *classes =
-        (Class *)calloc(
-            (size_t)classCount,
-            sizeof(Class)
-        );
-
-    if (!classes) {
-        return Nil;
-    }
-
-    classCount =
-        objc_getClassList(
-            classes,
-            classCount
-        );
-
-    Class best = Nil;
-    NSInteger bestScore = -1;
-
-    for (int i = 0;
-         i < classCount;
-         i++) {
-
-        Class cls =
-            classes[i];
-
-        if (!GFIsSafeLibraryBackgroundCandidate(cls)) {
-            continue;
-        }
-
-        NSString *name =
-            NSStringFromClass(cls);
-
-        NSInteger score = 0;
-
-        if ([name rangeOfString:@"Category"
-                        options:NSCaseInsensitiveSearch].location != NSNotFound) {
-            score += 4;
-        }
-
-        if ([name rangeOfString:@"Pod"
-                        options:NSCaseInsensitiveSearch].location != NSNotFound) {
-            score += 4;
-        }
-
-        if ([name hasSuffix:@"BackgroundView"]) {
-            score += 3;
-        }
-
-        if ([name hasPrefix:@"SBH"]) {
-            score += 2;
-        }
-
-        /*
-         * Avoid accidentally selecting search/backdrop surfaces.
-         */
-        if ([name rangeOfString:@"Search"
-                        options:NSCaseInsensitiveSearch].location != NSNotFound) {
-            score -= 10;
-        }
-
-        if ([name rangeOfString:@"Controller"
-                        options:NSCaseInsensitiveSearch].location != NSNotFound) {
-            score -= 20;
-        }
-
-        if (score > bestScore) {
-            best = cls;
-            bestScore = score;
-        }
-    }
-
-    free(classes);
-
-    return
-        bestScore >= 5
-            ? best
-            : Nil;
-}
-
-
-static void GFLibraryHookUpdateVisualStyle(
-    id self,
-    SEL _cmd
-) {
-    UIView *view =
-        [self isKindOfClass:[UIView class]]
-            ? (UIView *)self
-            : nil;
-
-    if (!view) {
-        if (GFOrigLibraryUpdateVisualStyle) {
-            GFOrigLibraryUpdateVisualStyle(
-                self,
-                _cmd
-            );
-        }
-
-        return;
-    }
-
+- (void)_updateVisualStyle {
     if (GFShouldUseAppLibraryPods()) {
         /*
-         * Do not let the stock material writer repaint the host while custom
-         * glass is active.
+         * This method is the category-background style writer.
+         * While custom glass is enabled, do not let it repaint the stock
+         * opaque/material background over our glass.
          */
         GFUpdateAppLibraryCategoryBackground(
-            view
+            self
         );
 
         return;
     }
 
-    if (GFOrigLibraryUpdateVisualStyle) {
-        GFOrigLibraryUpdateVisualStyle(
-            self,
-            _cmd
-        );
-    }
+    %orig;
 
     GFUpdateAppLibraryCategoryBackground(
-        view
+        self
     );
 }
 
+- (void)didMoveToWindow {
+    %orig;
 
-static void GFLibraryHookDidMoveToWindow(
-    id self,
-    SEL _cmd
-) {
-    if (GFOrigLibraryDidMoveToWindow) {
-        GFOrigLibraryDidMoveToWindow(
-            self,
-            _cmd
-        );
-    }
+    GFUpdateAppLibraryCategoryBackground(
+        self
+    );
+}
 
-    if ([self isKindOfClass:[UIView class]]) {
-        GFUpdateAppLibraryCategoryBackground(
-            (UIView *)self
-        );
+- (void)layoutSubviews {
+    %orig;
+
+    GFUpdateAppLibraryCategoryBackground(
+        self
+    );
+}
+
+- (void)setBackgroundColor:(UIColor *)color {
+    if (GFShouldUseAppLibraryPods()) {
+        %orig(UIColor.clearColor);
+    } else {
+        %orig(color);
     }
 }
 
+- (void)traitCollectionDidChange:
+    (UITraitCollection *)previousTraitCollection {
 
-static void GFLibraryHookLayoutSubviews(
-    id self,
-    SEL _cmd
-) {
-    if (GFOrigLibraryLayoutSubviews) {
-        GFOrigLibraryLayoutSubviews(
-            self,
-            _cmd
-        );
-    }
-
-    if ([self isKindOfClass:[UIView class]]) {
-        GFUpdateAppLibraryCategoryBackground(
-            (UIView *)self
-        );
-    }
-}
-
-
-static void GFLibraryHookTraitChanged(
-    id self,
-    SEL _cmd,
-    UITraitCollection *previousTraitCollection
-) {
-    if (GFOrigLibraryTraitChanged) {
-        GFOrigLibraryTraitChanged(
-            self,
-            _cmd,
-            previousTraitCollection
-        );
-    }
-
-    if (![self isKindOfClass:[UIView class]]) {
-        return;
-    }
-
-    UIView *view =
-        (UIView *)self;
+    %orig(previousTraitCollection);
 
     GFPanelGlassView *glass =
-        GFPanelGlassForBackground(
-            view
-        );
+        GFPanelGlassForBackground(self);
 
     if (glass) {
         [glass gfRefreshMaterial];
     }
 
     GFUpdateAppLibraryCategoryBackground(
-        view
+        self
     );
 }
 
+%end
 
-static void GFLibraryHookSetBackgroundColor(
-    id self,
-    SEL _cmd,
-    UIColor *color
-) {
-    if (!GFOrigLibrarySetBackgroundColor) {
-        return;
-    }
-
-    if (GFShouldUseAppLibraryPods()) {
-        GFOrigLibrarySetBackgroundColor(
-            self,
-            _cmd,
-            UIColor.clearColor
-        );
-    } else {
-        GFOrigLibrarySetBackgroundColor(
-            self,
-            _cmd,
-            color
-        );
-    }
-}
-
-
-static void GFInstallAppLibraryRuntimeHook(void) {
-    if (GFAppLibraryBackgroundClass) {
-        return;
-    }
-
-    Class cls =
-        GFResolveAppLibraryBackgroundClass();
-
-    if (!cls) {
-        return;
-    }
-
-    GFAppLibraryBackgroundClass =
-        cls;
-
-    SEL updateSelector =
-        NSSelectorFromString(
-            @"_updateVisualStyle"
-        );
-
-    if (class_getInstanceMethod(
-            cls,
-            updateSelector)) {
-
-        MSHookMessageEx(
-            cls,
-            updateSelector,
-            (IMP)GFLibraryHookUpdateVisualStyle,
-            (IMP *)&GFOrigLibraryUpdateVisualStyle
-        );
-    }
-
-    SEL didMoveSelector =
-        @selector(didMoveToWindow);
-
-    if (class_getInstanceMethod(
-            cls,
-            didMoveSelector)) {
-
-        MSHookMessageEx(
-            cls,
-            didMoveSelector,
-            (IMP)GFLibraryHookDidMoveToWindow,
-            (IMP *)&GFOrigLibraryDidMoveToWindow
-        );
-    }
-
-    SEL layoutSelector =
-        @selector(layoutSubviews);
-
-    if (class_getInstanceMethod(
-            cls,
-            layoutSelector)) {
-
-        MSHookMessageEx(
-            cls,
-            layoutSelector,
-            (IMP)GFLibraryHookLayoutSubviews,
-            (IMP *)&GFOrigLibraryLayoutSubviews
-        );
-    }
-
-    SEL traitSelector =
-        @selector(traitCollectionDidChange:);
-
-    if (class_getInstanceMethod(
-            cls,
-            traitSelector)) {
-
-        MSHookMessageEx(
-            cls,
-            traitSelector,
-            (IMP)GFLibraryHookTraitChanged,
-            (IMP *)&GFOrigLibraryTraitChanged
-        );
-    }
-
-    SEL colorSelector =
-        @selector(setBackgroundColor:);
-
-    if (class_getInstanceMethod(
-            cls,
-            colorSelector)) {
-
-        MSHookMessageEx(
-            cls,
-            colorSelector,
-            (IMP)GFLibraryHookSetBackgroundColor,
-            (IMP *)&GFOrigLibrarySetBackgroundColor
-        );
-    }
-}
-
+%end
 
 
 @interface SBFolderIconImageView : UIView
@@ -2485,10 +2096,35 @@ static void GFInstallAppLibraryRuntimeHook(void) {
         }
 
         /*
-         * App Library uses a one-time runtime resolver because the concrete
-         * visual class may not be registered when the tweak constructor first
-         * executes on iOS 16.x.
+         * Deterministic App Library setup.
+         *
+         * The previous builds checked/guessed the class too early. Explicitly
+         * load SpringBoardHome first, then initialize Logos against the exact
+         * category background class used by the App Library.
          */
-        GFInstallAppLibraryRuntimeHook();
+        dlopen(
+            "/System/Library/PrivateFrameworks/SpringBoardHome.framework/SpringBoardHome",
+            RTLD_LAZY | RTLD_LOCAL
+        );
+
+        Class appLibraryBackgroundClass =
+            objc_getClass(
+                "SBHLibraryCategoryPodBackgroundView"
+            );
+
+        if (!appLibraryBackgroundClass) {
+            appLibraryBackgroundClass =
+                objc_getClass(
+                    "_SBHLibraryCategoryPodBackgroundView"
+                );
+        }
+
+        if (appLibraryBackgroundClass) {
+            %init(
+                GFAppLibraryHooks,
+                SBHLibraryCategoryPodBackgroundView =
+                    appLibraryBackgroundClass
+            );
+        }
     }
 }
