@@ -1,4 +1,4 @@
-name: GlassFolders 0.7.4 Beta2.8 BRIGHTER-LIGHT-CLEAR
+name: GlassFolders 0.7.4 Beta3.0 FIXED-BRIGHT-CLEAR
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 0.7.4 BETA2.8 BRIGHTER-LIGHT-CLEAR ==="
+          echo "=== GLASSFOLDERS 0.7.4 BETA3.0 FIXED-BRIGHT-CLEAR ==="
           echo "THEOS=$THEOS"
 
       - name: Set up Python for PNG verification
@@ -117,10 +117,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          grep -Fq 'GLASSFOLDERS 0.7.4 BETA2.8 BRIGHTER-LIGHT-CLEAR' \
+          grep -Fq 'GLASSFOLDERS 0.7.4 BETA3.0 FIXED-BRIGHT-CLEAR' \
             .github/workflows/build.yml
 
-          # Beta2.8 retains the two split controls plus a read-only
+          # Beta3.0 retains the two split controls plus a read-only
           # legacy GlassStrength migration path for existing installations.
           grep -Fq 'CFSTR("ClearStrength")' Tweak.xm
           grep -Fq 'CFSTR("LiquidGlassStrength")' Tweak.xm
@@ -145,14 +145,14 @@ jobs:
           grep -Fq '%init(GFOpenedPanelHooks);' Tweak.xm
           grep -Fq '%hook SBFolderBackgroundView' Tweak.xm
 
-          # Beta2.8 may resolve the exact App Library category background class
+          # Beta3.0 may resolve the exact App Library category background class
           # dynamically as a passive view, but must not hook App Library controllers,
           # actively trigger its visual-style method, or link SpringBoardHome.
           grep -Fq 'SBHLibraryCategoryPodBackgroundView' Tweak.xm
           grep -Fq 'GFCreateNativeAppLibraryPodVisual' Tweak.xm
 
           # Regression guard: this one-shot activation was the source of the
-          # darker closed-folder material that Beta2.8 intentionally keeps removed.
+          # darker closed-folder material that Beta3.0 intentionally keeps removed.
           if grep -Eq 'GFActivateNativeAppLibraryPodVisual|_updateVisualStyle' Tweak.xm; then
             echo "ERROR: active App Library pod visual-style path reintroduced."
             exit 1
@@ -168,27 +168,37 @@ jobs:
           grep -Fq 'Clear reference target: a THIN wallpaper-owned material.' Tweak.xm
           grep -Fq 'self.gfBackdropSampleView.hidden = NO;' Tweak.xm
 
-          # Beta2.8 slider contract: ClearStrength primarily changes
-          # local blur. Neutral optics settle early instead of growing across
-          # the full slider range.
+          # Beta3.0 opened-Clear contract: any non-zero Clear value starts
+          # from a bright neutral optical floor. ClearStrength primarily changes
+          # local blur and secondarily saturation/specular detail, not whiteness.
           grep -Fq 'GFClearBlurResponse' Tweak.xm
           grep -Fq 'GFClearActivationResponse' Tweak.xm
           grep -Fq 'GFClearOpenedBlurResponse' Tweak.xm
+          grep -Fq 'GFClearOpenedPresenceResponse' Tweak.xm
+          grep -Fq 'GFClearDetailResponse' Tweak.xm
           grep -Fq 'return pow(GFClamp01(strength), 1.15);' Tweak.xm
+          grep -Fq 'return (GFClamp01(strength) > 0.001) ? 1.0 : 0.0;' Tweak.xm
+          grep -Fq 'return pow(GFClamp01(strength), 0.95);' Tweak.xm
           grep -Fq 'blurRadius = 40.0 * clearBlurResponse;' Tweak.xm
-          grep -Fq '(darkAppearance ? 0.995 : 0.990)' Tweak.xm
-          grep -Fq ': (1.045 + 0.030 * clearActivation);' Tweak.xm
-          grep -Fq '? (0.033 + 0.008 * clearActivation)' Tweak.xm
-          grep -Fq ': (0.040 + 0.030 * clearActivation);' Tweak.xm
-          grep -Fq '(darkAppearance ? 0.051 : 0.058);' Tweak.xm
-          grep -Fq 'MIN(darkAppearance ? 0.054 : 0.062, neutralLift);' Tweak.xm
-          grep -Fq '(darkAppearance ? 0.82 : 0.77);' Tweak.xm
-          grep -Fq '(darkAppearance ? 0.048 : 0.040);' Tweak.xm
-          grep -Fq '? (0.36 * clearActivation)' Tweak.xm
-          grep -Fq 'self.gfOpticalLayer.opacity = clearActivation *' Tweak.xm
+          grep -Fq '? (1.075 + 0.025 * clearDetail)' Tweak.xm
+          grep -Fq ': (1.080 + 0.035 * clearDetail);' Tweak.xm
+          grep -Fq '? (0.060 + 0.005 * clearDetail)' Tweak.xm
+          grep -Fq ': (0.100 + 0.005 * clearDetail);' Tweak.xm
+          grep -Fq 'sampleAlpha = clearPresence;' Tweak.xm
+          grep -Fq '(darkAppearance ? 0.065 : 0.080);' Tweak.xm
+          grep -Fq '? (0.84 + 0.04 * clearDetail)' Tweak.xm
+          grep -Fq ': (0.80 + 0.08 * clearDetail));' Tweak.xm
+          grep -Fq '? (0.052 + 0.010 * clearDetail)' Tweak.xm
+          grep -Fq ': (0.048 + 0.014 * clearDetail));' Tweak.xm
+          grep -Fq '? (clearPresence * (0.38 + 0.30 * clearDetail))' Tweak.xm
           grep -Fq 'blurRadius = 8.40 * clearBlurResponse;' Tweak.xm
           grep -Fq 'saturation = 1.120 + (0.055 * clearActivation);' Tweak.xm
           grep -Fq ': 0.010 * clearActivation;' Tweak.xm
+
+          if grep -Eq 'GFClearHighOpticalResponse|clearHighOptical' Tweak.xm; then
+            echo "ERROR: old strength-driven Clear body-luminance response remains."
+            exit 1
+          fi
 
           if grep -Fq '0.55 + 1.70 * materialResponse' Tweak.xm || \
              grep -Fq '0.45 + 1.50 * materialResponse' Tweak.xm || \
@@ -228,11 +238,11 @@ jobs:
           print("Rounded-alpha source icons verified.")
           PY
 
-          echo "Checking Beta2.8 locked blur/Liquid baselines + brighter light Clear..."
+          echo "Checking Beta3.0 fixed bright-Clear floor + locked blur/Liquid baselines..."
           # These names are unique to GFCreateOpenedPanelLightingImage in the
           # Locked continuous-tangent model, so the gate cannot accidentally
           # pass by finding similarly named closed-folder lighting variables.
-          grep -Fq 'Beta 2.8 — locked symmetric continuous tangent rails.' Tweak.xm
+          grep -Fq 'Beta 3.0 — locked symmetric continuous tangent rails.' Tweak.xm
           grep -Fq 'primaryQuadrantEnergy' Tweak.xm
           grep -Fq 'secondaryQuadrantEnergy' Tweak.xm
           grep -Fq 'tangentOverlap' Tweak.xm
@@ -360,7 +370,7 @@ jobs:
           grep -Fq 'SBFolderIconImageView' tweak.strings
           grep -Fq 'SBFolderBackgroundView' tweak.strings
 
-          # Exact native category-pod class is expected as a passive view in Beta2.8.
+          # Exact native category-pod class is expected as a passive view in Beta3.0.
           # Other App Library/controller experiments and direct framework references are not.
           grep -Fq 'SBHLibraryCategoryPodBackgroundView' tweak.strings
 
@@ -476,7 +486,7 @@ jobs:
       - name: Upload deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.4-Beta2.8-DEB
+          name: GlassFolders-0.7.4-Beta3.0-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
