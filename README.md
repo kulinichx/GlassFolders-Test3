@@ -1,71 +1,76 @@
-# GlassFolders 0.7.0 Beta 4 — iOS 27 Open Panel Correction
+# GlassFolders 0.7.0 Beta 5 — Alook Rim + First-Frame Open Glass
 
-Beta 4 addresses two specific device observations.
+Beta 5 is based directly on the working Beta 4 RootHide project and makes two
+targeted architectural changes. It deliberately does **not** change the
+settings UI, 5% detents, haptics, package scheme, or SpringBoard-only injection.
 
-## 1. Closed folder: missing right/bottom edge
+## 1. Closed folder: Alook-style optical edge balance
 
-Beta 3's lower-right shadow was stronger than the neutral edge definition,
-therefore the right/bottom glass edge visually disappeared.
+Beta 4 still lost the right and bottom edge on-device because those regions were
+derived from the light-opposite term and then partially cancelled by the darker
+inner shoulder.
 
-Beta 4 separates two physical-looking components:
+Beta 5 separates the optical roles:
 
-### Back transmitted rim
-- very narrow
-- strongest on lower-right-facing normals
-- low intensity
-- neutral white
+### Upper-left / top
+- crisp neutral-white filament
+- supporting core
+- wide soft shoulder
+- fixed upper-left light direction
 
-### Inner dark shoulder
-- wider than the bright rim
-- much lower dark-core strength
-- provides thickness behind the rim
+### Right / bottom
+- independent narrow secondary rim
+- neutral white, much weaker than the upper-left specular
+- gentle inner dark shoulder starts *after* the rim
+- lower-right corner remains continuous without becoming a painted frame
 
-The intended lower-right profile is now:
+The intended profile is:
 
-`thin bright edge -> faint darker inner shoulder -> normal glass`
+`upper-left strong reflection -> transparent body -> thin right/bottom rim -> faint inner dark shoulder`
 
-This preserves the user's preferred earlier right/bottom effect while keeping
-the stronger three-zone upper-left specular.
+The secondary rim is not a full white border and is not derived solely from
+N·L, so it remains visible on the unlit sides.
 
-## 2. Opened folder: match the supplied iOS 27 reference
+## 2. Opened folder: remove the black-to-light first-frame flash
 
-The desired opened state is NOT a dark gray card.
+Beta 4 waited until `layoutSubviews` / `setBackgroundAlpha:` to locate and
+overlay a panel. That allowed SpringBoard's stock dark folder material to be
+visible for the initial part of the transition.
 
-Beta 4 opened material is:
-- lower blur
-- more wallpaper saturation/color retention
-- noticeably brighter
-- slightly stronger neutral white frost
-- still transparent
+Beta 5 hooks:
 
-The goal is a colored, lightly frosted glass panel.
+`-[SBFloatyFolderView _newPageBackgroundView]`
 
-## Four-corner artifact fix
+SpringBoard's own page-background object is still returned unchanged. Before it
+is returned to the caller, Beta 5:
 
-Beta 3 intentionally inset the custom rounded mask by 0.42pt.
+- registers the real page-background object
+- installs `GFOpenedFolderGlassView` inside it
+- resolves the historical `backgroundView` dynamically when present
+- suppresses only the stock full-size blur/tint/material content
+- applies the real folder corner radius
+- leaves Apple's page/container transition in control
 
-That could expose the stock SpringBoard folder material behind the custom panel
-at the four corners.
+`setBackgroundAlpha:` now calls `%orig(alpha)` instead of `%orig(0.0)`.
+Because our glass is a child of the true page background, Apple's native
+transition animates it automatically.
 
-Beta 4:
+After SpringBoard updates alpha/effect/layout, Beta 5 re-suppresses the stock
+material synchronously so it cannot reappear.
 
-- removes the mask inset
-- uses exactly `host.bounds`
-- uses exactly the resolved host corner radius
-- makes the real host clip its children to that same radius
-- clears the host background
-- suppresses only large background/material/backdrop/effect subviews inside the
-  resolved panel host
+## Opened visual target
 
-Icons/content are not targeted by the stock-material suppression helper.
+The visual calibration remains the existing light, color-retaining frosted
+panel:
 
-## Safety
+- independent rounded panel
+- wallpaper color remains visible
+- light frosting rather than dark gray material
+- app icons/content remain separate from the background
+- surrounding SpringBoard blur/dim remains native
 
-The RC3 panel-host policy is retained:
-
-- custom glass is only attached to a resolved rounded folder panel
-- unresolved host => keep stock SpringBoard panel
-- no full-screen custom fallback
+This beta primarily fixes *timing and ownership* of the panel instead of
+randomly changing blur/tint parameters again.
 
 ## Performance
 
@@ -74,7 +79,8 @@ No:
 - Timer
 - DisplayLink
 - gyroscope
-- per-frame Metal rendering
-- animated gradient
+- per-frame Metal renderer
+- custom animation loop
 
-SDF optical maps remain generated on demand and cached.
+The closed-folder optical map is still generated only for a new
+size/radius/5%-strength combination and cached.

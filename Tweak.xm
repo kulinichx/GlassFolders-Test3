@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.0 Beta 1 — Optical Glass
+ * GlassFolders 0.7.0 Beta 5 — Alook Optical Rim + First-Frame Open Glass
  *
  * Rendering model:
  * - CABackdropLayer supplies real wallpaper color + blur/saturation.
@@ -284,42 +284,71 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
         : (0.205 + 0.045 * e);
 
     /*
-     * Faint neutral edge definition independent of light direction.
+     * Alook-style optical perimeter model.
      *
-     * Closed folders use this to preserve the subtle right/bottom edge seen
-     * in the supplied RootHide/Alook references.
+     * Important distinction:
      *
-     * Opened folders keep it much weaker so the large panel never develops
-     * bright corner dots or a painted frame.
+     *   upper-left = reflected specular
+     *   right/bottom = transmitted / secondary rim
+     *
+     * The latter must remain visible even though those normals face away from
+     * the fixed upper-left light. Beta4 derived the lower-right rim only from
+     * `opposite`, then immediately subtracted a broad dark shoulder; on-device
+     * the result was effectively negative and the right/bottom edge vanished.
+     *
+     * Beta5 therefore gives the right/bottom edge its own narrow profile.
      */
     CGFloat baseEdgeGain = opened
-        ? (0.0035 + 0.0015 * e)
-        : (0.012 + 0.004 * e);
+        ? (0.0025 + 0.0010 * e)
+        : (0.010 + 0.003 * e);
 
     /*
-     * Back-side transmitted rim.
-     *
-     * On the closed folder this creates the subtle RIGHT/BOTTOM bright edge
-     * visible in the user's preferred earlier build and the Alook reference.
-     *
-     * It uses the narrow filament profile, so it remains thin.
-     * The darker shoulder below it supplies thickness without erasing it.
+     * Legacy opposite-light contribution is retained at low strength because
+     * it helps the rounded lower-right corner feel continuous.
      */
     CGFloat backFilamentGain = opened
-        ? (0.004 + 0.002 * e)
-        : (0.052 + 0.014 * e);
-
-    CGFloat shadowShoulderGain = opened
-        ? (0.009 + 0.004 * e)
-        : (0.020 + 0.006 * e);
+        ? (0.0025 + 0.0010 * e)
+        : (0.015 + 0.005 * e);
 
     /*
-     * Keep the dark CORE weak. A strong dark core was the reason Beta3 lost
-     * the right/bottom highlight completely.
+     * Explicit secondary rim width/gain.
+     *
+     * Closed folders intentionally expose this at roughly one third of the
+     * upper-left highlight intensity: visible, but never a painted frame.
      */
+    CGFloat secondaryRimPoints = opened
+        ? (0.62 + 0.10 * e)
+        : (0.72 + 0.18 * e);
+
+    CGFloat secondaryRimWidth =
+        secondaryRimPoints * renderScale;
+
+    CGFloat secondaryRimGain = opened
+        ? (0.0045 + 0.0015 * e)
+        : (0.070 + 0.022 * e);
+
+    /*
+     * The lower-right dark shoulder starts *inside* the secondary bright rim.
+     * This separation is what produces the reference profile:
+     *
+     *   thin clear rim -> gentle darker shoulder -> glass body
+     *
+     * instead of cancelling the rim at the actual edge.
+     */
+    CGFloat shadowStartPoints = opened
+        ? (2.10 + 0.30 * e)
+        : (1.20 + 0.25 * e);
+
+    CGFloat shadowStartWidth =
+        shadowStartPoints * renderScale;
+
+    CGFloat shadowShoulderGain = opened
+        ? (0.008 + 0.003 * e)
+        : (0.013 + 0.004 * e);
+
     CGFloat shadowCoreGain = opened
-        ? (0.006 + 0.003 * e)
-        : (0.007 + 0.003 * e);
+        ? (0.004 + 0.002 * e)
+        : (0.004 + 0.002 * e);
 
     /*
      * Upper-left fixed light.
@@ -457,18 +486,14 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                         pow(opposite, opened ? 1.22 : 1.34);
 
                     /*
-                     * baseEdge is deliberately tied to the narrow filament
-                     * profile. It gives the unlit right/bottom sides a thin,
-                     * low-contrast glass edge while the directional light adds
-                     * the stronger upper-left reflection.
+                     * Very faint neutral perimeter definition.
                      */
                     CGFloat baseEdge =
                         filament * baseEdgeGain;
 
                     /*
-                     * `opposite` is strongest on lower-right-facing normals.
-                     * The exponent keeps this transmitted rim mostly on the
-                     * actual right/bottom edge rather than the whole perimeter.
+                     * Legacy back-facing term keeps the rounded lower-right
+                     * corner connected to the straight right/bottom segments.
                      */
                     CGFloat backFacing =
                         pow(opposite, opened ? 1.55 : 1.20);
@@ -476,27 +501,67 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                     CGFloat backRim =
                         filament * backFilamentGain * backFacing;
 
+                    /*
+                     * Explicit Alook-style right/bottom secondary rim.
+                     *
+                     * UIKit normals:
+                     *   +X = right edge
+                     *   +Y = bottom edge
+                     *
+                     * `sideFacing` is independent of N·L, therefore those two
+                     * edges do not disappear merely because the main light is
+                     * upper-left. The profile is narrow and neutral white.
+                     */
+                    CGFloat rightFacing = MAX(0.0, nx);
+                    CGFloat bottomFacing = MAX(0.0, ny);
+
+                    CGFloat sideFacing =
+                        GFClamp01(
+                            hypot(rightFacing, bottomFacing)
+                        );
+
+                    CGFloat secondaryRatio =
+                        insideDepth /
+                        MAX(0.001, secondaryRimWidth);
+
+                    CGFloat secondaryProfile =
+                        exp(-pow(secondaryRatio, 2.10));
+
+                    CGFloat secondaryRim =
+                        secondaryProfile *
+                        secondaryRimGain *
+                        pow(sideFacing, opened ? 1.55 : 1.18);
+
                     CGFloat white =
                         baseEdge +
                         backRim +
+                        secondaryRim +
                         shoulder * highlightShoulderGain * shoulderFacing +
                         core * highlightCoreGain * coreFacing +
                         filament * highlightFilamentGain * filamentFacing;
 
                     /*
-                     * The shadow is deliberately wider than `backRim`.
-                     * Visual profile on the lower-right becomes:
-                     *
-                     *   thin bright rim -> subtle dark inner shoulder -> glass
-                     *
-                     * instead of Beta3's:
-                     *   dark edge -> no visible rim.
+                     * Protect the actual bright edge from the darker interior
+                     * shoulder. Darkness ramps in only after the narrow rim,
+                     * so it adds optical thickness without cancelling it.
                      */
+                    CGFloat shadowRamp =
+                        1.0 -
+                        exp(
+                            -pow(
+                                insideDepth /
+                                MAX(0.001, shadowStartWidth),
+                                2.0
+                            )
+                        );
+
                     CGFloat dark =
                         (
                             shoulder * shadowShoulderGain +
                             core * shadowCoreGain
-                        ) * shadowFacing;
+                        ) *
+                        shadowFacing *
+                        shadowRamp;
 
                     signedLight += white - dark;
                 }
@@ -1028,151 +1093,118 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
 @end
 
 
-static BOOL GFViewIsDescendantOfGlass(UIView *view) {
-    UIView *cursor = view;
 
-    while (cursor) {
-        if ([cursor isKindOfClass:[GFOpenedFolderGlassView class]]) {
-            return YES;
-        }
-        cursor = cursor.superview;
-    }
+/*
+ * Opened-folder architecture — Beta5
+ *
+ * The iOS 15.x SpringBoardHome header exposes:
+ *
+ *   -[SBFloatyFolderView _newPageBackgroundView]
+ *   -[SBFloatyFolderView setBackgroundAlpha:]
+ *   -[SBFloatyFolderView cornerRadius]
+ *
+ * The old Beta4 path waited for layout, recursively guessed a host view, then
+ * overlaid our material. On-device that produced a visible sequence:
+ *
+ *   stock dark folder -> custom light glass
+ *
+ * Beta5 instead configures each *real page background* immediately when
+ * SpringBoard creates it. We keep Apple's returned object (and therefore all
+ * private contracts), suppress only its stock material content, and add our
+ * glass inside it before the page is displayed.
+ */
 
-    return NO;
+static char kGFOpenedPageGlassAssociationKey;
+static char kGFOpenedPageSetAssociationKey;
+
+static inline GFOpenedFolderGlassView *GFGetPageGlass(UIView *pageView) {
+    if (!pageView) return nil;
+
+    return (GFOpenedFolderGlassView *)objc_getAssociatedObject(
+        pageView,
+        &kGFOpenedPageGlassAssociationKey
+    );
 }
 
-static CGFloat GFOpenedHostScore(UIView *view,
-                                 UIView *root,
-                                 NSInteger depth) {
-    if (!view || view == root || GFViewIsDescendantOfGlass(view)) {
-        return -CGFLOAT_MAX;
-    }
+static inline void GFSetPageGlass(UIView *pageView,
+                                  GFOpenedFolderGlassView *glass) {
+    if (!pageView) return;
 
-    CGRect bounds = view.bounds;
-    CGFloat width = CGRectGetWidth(bounds);
-    CGFloat height = CGRectGetHeight(bounds);
-
-    if (width < 100.0 || height < 100.0) {
-        return -CGFLOAT_MAX;
-    }
-
-    CGFloat rootArea =
-        MAX(1.0, CGRectGetWidth(root.bounds) * CGRectGetHeight(root.bounds));
-    CGFloat area = width * height;
-    CGFloat ratio = area / rootArea;
-
-    /*
-     * Reject almost-fullscreen containers. That exact fallback caused the
-     * 0.5.11–0.6 RC2 "whole screen is blurred" bug.
-     */
-    if (ratio >= 0.90 || ratio <= 0.035) {
-        return -CGFLOAT_MAX;
-    }
-
-    CGFloat aspect = width / MAX(1.0, height);
-
-    /*
-     * Folder panels are broad rounded surfaces, not tall/narrow controls.
-     */
-    if (aspect < 0.48 || aspect > 1.85) {
-        return -CGFLOAT_MAX;
-    }
-
-    NSString *name = NSStringFromClass(view.class);
-    CGFloat score = 0.0;
-
-    /*
-     * Strongest signals first.
-     * These names are resolved dynamically; no private header/link required.
-     */
-    if ([name containsString:@"FloatyFolderBackgroundClip"]) score += 1400.0;
-    if ([name containsString:@"FolderBackground"]) score += 1200.0;
-    if ([name containsString:@"BackgroundClip"]) score += 1000.0;
-    if ([name containsString:@"Background"]) score += 600.0;
-    if ([name containsString:@"Material"]) score += 420.0;
-    if ([name containsString:@"Backdrop"]) score += 420.0;
-
-    /*
-     * Rounded geometry is a useful secondary signal on iOS 16 where class
-     * names can differ between builds.
-     */
-    CGFloat radius = view.layer.cornerRadius;
-    if (radius >= 12.0) score += 300.0;
-    if (radius >= 24.0) score += 180.0;
-
-    /*
-     * Prefer a panel-sized surface around 18–60% of the full container.
-     */
-    if (ratio >= 0.18 && ratio <= 0.60) {
-        score += 260.0;
-    } else if (ratio >= 0.08 && ratio < 0.75) {
-        score += 120.0;
-    }
-
-    /*
-     * Prefer shallower descendants if scores are otherwise similar.
-     */
-    score -= (CGFloat)depth * 8.0;
-
-    return score;
+    objc_setAssociatedObject(
+        pageView,
+        &kGFOpenedPageGlassAssociationKey,
+        glass,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
 }
 
-static void GFSearchOpenedFolderHostRecursive(UIView *view,
-                                              UIView *root,
-                                              NSInteger depth,
-                                              UIView **bestView,
-                                              CGFloat *bestScore) {
-    if (!view || depth > 7 || GFViewIsDescendantOfGlass(view)) {
-        return;
-    }
+static NSHashTable *GFOpenedPageSet(id floatyView, BOOL create) {
+    if (!floatyView) return nil;
 
-    for (UIView *subview in view.subviews) {
-        if ([subview isKindOfClass:[GFOpenedFolderGlassView class]]) {
-            continue;
-        }
+    NSHashTable *table =
+        (NSHashTable *)objc_getAssociatedObject(
+            floatyView,
+            &kGFOpenedPageSetAssociationKey
+        );
 
-        CGFloat score = GFOpenedHostScore(subview, root, depth);
+    if (!table && create) {
+        table = [NSHashTable weakObjectsHashTable];
 
-        if (score > *bestScore) {
-            *bestScore = score;
-            *bestView = subview;
-        }
-
-        GFSearchOpenedFolderHostRecursive(
-            subview,
-            root,
-            depth + 1,
-            bestView,
-            bestScore
+        objc_setAssociatedObject(
+            floatyView,
+            &kGFOpenedPageSetAssociationKey,
+            table,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
         );
     }
+
+    return table;
 }
 
-static UIView *GFOpenedFolderPanelHost(UIView *root) {
-    UIView *best = nil;
-    CGFloat bestScore = -CGFLOAT_MAX;
-
-    GFSearchOpenedFolderHostRecursive(
-        root,
-        root,
-        0,
-        &best,
-        &bestScore
-    );
-
-    /*
-     * Require real evidence that this is a panel/background.
-     * Never return root/self as a fallback.
-     */
-    if (!best || bestScore < 430.0) {
+static UIView *GFInvokeUIViewGetter(id object, NSString *selectorName) {
+    if (!object || selectorName.length == 0) {
         return nil;
     }
 
-    return best;
+    SEL selector = NSSelectorFromString(selectorName);
+
+    if (![object respondsToSelector:selector]) {
+        return nil;
+    }
+
+    IMP imp = [object methodForSelector:selector];
+
+    if (!imp) {
+        return nil;
+    }
+
+    typedef id (*GFObjectGetterIMP)(id, SEL);
+    GFObjectGetterIMP getter = (GFObjectGetterIMP)imp;
+    id result = getter(object, selector);
+
+    return [result isKindOfClass:[UIView class]]
+        ? (UIView *)result
+        : nil;
 }
 
+/*
+ * SBFloatyFolderBackgroundClipView historically exposes `backgroundView`.
+ * Resolve it dynamically so this source does not link a private class/header.
+ */
+static UIView *GFStockBackgroundForPageView(UIView *pageView) {
+    if (!pageView) return nil;
 
-static BOOL GFLooksLikeStockOpenedMaterialView(UIView *view) {
+    UIView *stock =
+        GFInvokeUIViewGetter(pageView, @"backgroundView");
+
+    if (stock && stock != pageView) {
+        return stock;
+    }
+
+    return nil;
+}
+
+static BOOL GFLooksLikeOpenedMaterialSubview(UIView *view) {
     if (!view ||
         [view isKindOfClass:[GFOpenedFolderGlassView class]]) {
         return NO;
@@ -1184,25 +1216,37 @@ static BOOL GFLooksLikeStockOpenedMaterialView(UIView *view) {
         return YES;
     }
 
+    /*
+     * SBFolderBackgroundView historically stores a full-size UIImageView tint
+     * plus a UIVisualEffectView blur. A large UIImageView inside a page
+     * background is therefore material, not an app icon.
+     */
+    if ([view isKindOfClass:[UIImageView class]]) {
+        return YES;
+    }
+
     return
         [name containsString:@"Backdrop"] ||
         [name containsString:@"Material"] ||
+        [name containsString:@"Blur"] ||
+        [name containsString:@"Tint"] ||
         [name containsString:@"BackgroundEffect"] ||
-        [name containsString:@"BackgroundView"] ||
         [name containsString:@"FolderBackground"];
 }
 
-static void GFHideStockOpenedMaterialRecursive(UIView *container,
-                                               GFOpenedFolderGlassView *glass,
-                                               NSInteger depth) {
+static void GFSuppressOpenedMaterialRecursive(UIView *container,
+                                              GFOpenedFolderGlassView *glass,
+                                              NSInteger depth) {
     if (!container || depth > 4) {
         return;
     }
 
     CGFloat containerArea =
-        MAX(1.0,
+        MAX(
+            1.0,
             CGRectGetWidth(container.bounds) *
-            CGRectGetHeight(container.bounds));
+            CGRectGetHeight(container.bounds)
+        );
 
     for (UIView *subview in container.subviews) {
         if (subview == glass ||
@@ -1217,16 +1261,20 @@ static void GFHideStockOpenedMaterialRecursive(UIView *container,
         CGFloat ratio = area / containerArea;
 
         /*
-         * Only suppress material-like views that occupy a substantial part of
-         * the resolved PANEL host. Tiny content/background views are ignored.
+         * This helper only runs inside a dedicated page-background object.
+         * Suppress full-size material layers, never small decorative/content
+         * views. The 0.42 threshold covers iOS variants whose blur/tint view is
+         * inset slightly inside the page clip.
          */
-        if (ratio >= 0.55 &&
-            GFLooksLikeStockOpenedMaterialView(subview)) {
+        if (ratio >= 0.42 &&
+            GFLooksLikeOpenedMaterialSubview(subview)) {
             subview.alpha = 0.0;
+            subview.backgroundColor = UIColor.clearColor;
+            subview.layer.backgroundColor = UIColor.clearColor.CGColor;
             continue;
         }
 
-        GFHideStockOpenedMaterialRecursive(
+        GFSuppressOpenedMaterialRecursive(
             subview,
             glass,
             depth + 1
@@ -1234,34 +1282,168 @@ static void GFHideStockOpenedMaterialRecursive(UIView *container,
     }
 }
 
-static void GFPrepareOpenedPanelHost(UIView *host,
-                                     GFOpenedFolderGlassView *glass,
-                                     CGFloat radius) {
-    if (!host) {
+static CGFloat GFFloatyFolderCornerRadius(id floatyView) {
+    if (!floatyView) {
+        return 0.0;
+    }
+
+    SEL selector = NSSelectorFromString(@"cornerRadius");
+
+    if (![floatyView respondsToSelector:selector]) {
+        return 0.0;
+    }
+
+    IMP imp = [floatyView methodForSelector:selector];
+
+    if (!imp) {
+        return 0.0;
+    }
+
+    typedef double (*GFCornerRadiusIMP)(id, SEL);
+    GFCornerRadiusIMP getter = (GFCornerRadiusIMP)imp;
+
+    double value = getter(floatyView, selector);
+
+    return MAX(0.0, (CGFloat)value);
+}
+
+static void GFRestoreStockPageBackground(UIView *pageView) {
+    if (!pageView) {
         return;
     }
 
-    /*
-     * The host itself becomes the authoritative clip geometry.
-     * This prevents any child material from protruding at the corners.
-     */
-    host.clipsToBounds = YES;
-    host.layer.masksToBounds = YES;
+    GFOpenedFolderGlassView *glass = GFGetPageGlass(pageView);
 
-    if (radius > 0.0) {
-        host.layer.cornerRadius = radius;
-        host.layer.cornerCurve = kCACornerCurveContinuous;
+    if (glass) {
+        [glass removeFromSuperview];
+        GFSetPageGlass(pageView, nil);
     }
 
-    host.backgroundColor = UIColor.clearColor;
+    UIView *stock = GFStockBackgroundForPageView(pageView);
 
-    GFHideStockOpenedMaterialRecursive(
-        host,
+    if (stock) {
+        stock.alpha = 1.0;
+    }
+}
+
+/*
+ * Configure one true SpringBoard page-background object.
+ *
+ * This function is intentionally idempotent; it is safe to call from
+ * _newPageBackgroundView, layout, setBackgroundAlpha and setBackgroundEffect.
+ */
+static void GFConfigureOpenedPageBackground(id floatyView,
+                                            UIView *pageView) {
+    if (!pageView) {
+        return;
+    }
+
+    if (!GFEnabled || GFStyle != 1) {
+        GFRestoreStockPageBackground(pageView);
+        return;
+    }
+
+    GFOpenedFolderGlassView *glass = GFGetPageGlass(pageView);
+
+    if (!glass) {
+        glass =
+            [[GFOpenedFolderGlassView alloc]
+                initWithStrength:GFGlassStrength];
+
+        GFSetPageGlass(pageView, glass);
+
+        /*
+         * Keep the real page-background object and all of Apple's private
+         * behavior. Our material is merely a visual child of that object.
+         */
+        [pageView addSubview:glass];
+    }
+
+    if (glass.superview != pageView) {
+        [glass removeFromSuperview];
+        [pageView addSubview:glass];
+    }
+
+    pageView.backgroundColor = UIColor.clearColor;
+    pageView.layer.backgroundColor = UIColor.clearColor.CGColor;
+    pageView.clipsToBounds = YES;
+    pageView.layer.masksToBounds = YES;
+
+    CGFloat radius = pageView.layer.cornerRadius;
+
+    if (radius <= 0.0) {
+        radius = GFFloatyFolderCornerRadius(floatyView);
+    }
+
+    if (radius <= 0.0) {
+        radius =
+            MIN(
+                CGRectGetWidth(pageView.bounds),
+                CGRectGetHeight(pageView.bounds)
+            ) * 0.085;
+    }
+
+    if (radius > 0.0) {
+        pageView.layer.cornerRadius = radius;
+        pageView.layer.cornerCurve = kCACornerCurveContinuous;
+    }
+
+    glass.frame = pageView.bounds;
+    glass.autoresizingMask =
+        UIViewAutoresizingFlexibleWidth |
+        UIViewAutoresizingFlexibleHeight;
+
+    [glass setPreferredRadius:radius];
+
+    /*
+     * If the returned page is a clip view, its dedicated backgroundView is the
+     * stock dark/blur material. Hide it immediately — before the caller can
+     * present the page — which removes the old "black first, light second"
+     * transition.
+     */
+    UIView *stock = GFStockBackgroundForPageView(pageView);
+
+    if (stock && stock != pageView) {
+        stock.alpha = 0.0;
+        stock.backgroundColor = UIColor.clearColor;
+        stock.layer.backgroundColor = UIColor.clearColor.CGColor;
+    }
+
+    /*
+     * If the returned page itself is SBFolderBackgroundView, suppress its
+     * full-size blur/tint children instead. This covers both historical
+     * SpringBoard layouts without replacing Apple's object.
+     */
+    GFSuppressOpenedMaterialRecursive(
+        pageView,
         glass,
         0
     );
+
+    /*
+     * Ensure the custom glass remains above the suppressed stock material.
+     * Page-background objects do not contain app icons; icon lists are separate
+     * siblings managed by SBFloatyFolderView.
+     */
+    [pageView bringSubviewToFront:glass];
+
+    glass.alpha = 1.0;
 }
 
+static void GFConfigureRegisteredOpenedPages(id floatyView) {
+    NSHashTable *table = GFOpenedPageSet(floatyView, NO);
+
+    if (!table) {
+        return;
+    }
+
+    for (UIView *pageView in table.allObjects) {
+        GFConfigureOpenedPageBackground(
+            floatyView,
+            pageView
+        );
+    }
+}
 
 
 @interface SBFolderIconImageView : UIView
@@ -1269,7 +1451,10 @@ static void GFPrepareOpenedPanelHost(UIView *host,
 @end
 
 @interface SBFloatyFolderView : UIView
+- (id)_newPageBackgroundView;
 - (void)setBackgroundAlpha:(double)alpha;
+- (void)setBackgroundEffect:(unsigned long long)effect;
+- (double)cornerRadius;
 - (void)layoutSubviews;
 @end
 
@@ -1312,166 +1497,64 @@ static void GFPrepareOpenedPanelHost(UIView *host,
 
 
 /*
- * Opened-folder glass storage:
- * use Objective-C associated objects instead of adding a property to the
- * private SpringBoard class. This keeps Clang/Logos type checking simple.
+ * Opened-folder hooks.
+ *
+ * The first-frame fix is `_newPageBackgroundView`: configure the real page
+ * background immediately after SpringBoard constructs it and before it is
+ * returned to the caller.
+ *
+ * `setBackgroundAlpha:` is left under Apple's control. Because our glass is a
+ * child of the actual page background, the native transition automatically
+ * animates it. After `%orig`, stock material is re-suppressed in case
+ * SpringBoard updated its internal blur/tint alpha.
  */
-static char kGFOpenedFolderGlassAssociationKey;
-
-static inline GFOpenedFolderGlassView *GFGetOpenedGlassView(id object) {
-    return (GFOpenedFolderGlassView *)objc_getAssociatedObject(
-        object,
-        &kGFOpenedFolderGlassAssociationKey
-    );
-}
-
-static inline void GFSetOpenedGlassView(id object,
-                                       GFOpenedFolderGlassView *glass) {
-    objc_setAssociatedObject(
-        object,
-        &kGFOpenedFolderGlassAssociationKey,
-        glass,
-        OBJC_ASSOCIATION_RETAIN_NONATOMIC
-    );
-}
-
-
 %group GFOpenedFolderHooks
 
 %hook SBFloatyFolderView
 
+- (id)_newPageBackgroundView {
+    id pageObject = %orig;
+
+    if ([pageObject isKindOfClass:[UIView class]]) {
+        UIView *pageView = (UIView *)pageObject;
+
+        NSHashTable *table = GFOpenedPageSet(self, YES);
+        [table addObject:pageView];
+
+        GFConfigureOpenedPageBackground(
+            self,
+            pageView
+        );
+    }
+
+    return pageObject;
+}
+
 - (void)layoutSubviews {
     %orig;
 
-    GFOpenedFolderGlassView *glass = GFGetOpenedGlassView(self);
-
-    if (!GFEnabled || GFStyle != 1) {
-        if (glass) {
-            [glass removeFromSuperview];
-            GFSetOpenedGlassView(self, nil);
-        }
-        return;
-    }
-
-    UIView *host = GFOpenedFolderPanelHost(self);
-
-    /*
-     * Professional fallback policy:
-     * if we cannot identify the real rounded folder panel, do NOT put a
-     * custom backdrop on SBFloatyFolderView itself. Keep stock appearance.
-     */
-    if (!host) {
-        if (glass) {
-            [glass removeFromSuperview];
-            GFSetOpenedGlassView(self, nil);
-        }
-        return;
-    }
-
-    if (!glass) {
-        glass =
-            [[GFOpenedFolderGlassView alloc] initWithStrength:GFGlassStrength];
-        GFSetOpenedGlassView(self, glass);
-    }
-
-    if (glass.superview != host) {
-        [glass removeFromSuperview];
-        [host insertSubview:glass atIndex:0];
-    }
-
-    glass.frame = host.bounds;
-
-    CGFloat targetRadius = host.layer.cornerRadius;
-
-    /*
-     * If the clip host itself carries no radius, use a restrained geometric
-     * fallback based on the PANEL, not the full screen.
-     */
-    if (targetRadius <= 0.0) {
-        targetRadius =
-            MIN(CGRectGetWidth(host.bounds),
-                CGRectGetHeight(host.bounds)) * 0.085;
-    }
-
-    [glass setPreferredRadius:targetRadius];
-
-    /*
-     * Clip the real host and remove any stock material still peeking behind
-     * the custom glass. This specifically targets the four-corner "ears".
-     */
-    GFPrepareOpenedPanelHost(
-        host,
-        glass,
-        targetRadius
-    );
-
-    [host sendSubviewToBack:glass];
+    GFConfigureRegisteredOpenedPages(self);
 }
 
 - (void)setBackgroundAlpha:(double)alpha {
-    if (!GFEnabled || GFStyle != 1) {
-        %orig(alpha);
-        return;
-    }
+    /*
+     * Preserve Apple's transition timing and page-container opacity.
+     * This is the critical difference from Beta4's `%orig(0.0)`.
+     */
+    %orig(alpha);
 
-    GFOpenedFolderGlassView *glass = GFGetOpenedGlassView(self);
-    UIView *host = GFOpenedFolderPanelHost(self);
+    GFConfigureRegisteredOpenedPages(self);
+}
+
+- (void)setBackgroundEffect:(unsigned long long)effect {
+    %orig(effect);
 
     /*
-     * If the panel host is unresolved, preserve Apple's stock folder
-     * background. This prevents the old "entire screen blurred" failure.
+     * SpringBoard can rebuild or retune its stock blur/tint when the effect
+     * changes. Re-apply suppression synchronously, still before the next
+     * CoreAnimation commit.
      */
-    if (!host) {
-        if (glass) {
-            [glass removeFromSuperview];
-            GFSetOpenedGlassView(self, nil);
-        }
-
-        %orig(alpha);
-        return;
-    }
-
-    if (!glass) {
-        glass =
-            [[GFOpenedFolderGlassView alloc] initWithStrength:GFGlassStrength];
-        GFSetOpenedGlassView(self, glass);
-    }
-
-    if (glass.superview != host) {
-        [glass removeFromSuperview];
-        [host insertSubview:glass atIndex:0];
-    }
-
-    glass.frame = host.bounds;
-
-    CGFloat targetRadius = host.layer.cornerRadius;
-
-    if (targetRadius <= 0.0) {
-        targetRadius =
-            MIN(CGRectGetWidth(host.bounds),
-                CGRectGetHeight(host.bounds)) * 0.085;
-    }
-
-    [glass setPreferredRadius:targetRadius];
-
-    GFPrepareOpenedPanelHost(
-        host,
-        glass,
-        targetRadius
-    );
-
-    [host sendSubviewToBack:glass];
-
-    /*
-     * Apple's original folder transition still drives panel opacity.
-     */
-    glass.alpha = MIN(1.0, MAX(0.0, alpha));
-
-    /*
-     * Only now—after a valid panel host exists—hide Apple's original panel
-     * material. The surrounding full-screen wallpaper blur/dim stays stock.
-     */
-    %orig(0.0);
+    GFConfigureRegisteredOpenedPages(self);
 }
 
 %end
@@ -1487,7 +1570,23 @@ static inline void GFSetOpenedGlassView(id object,
             %init(GFIconHooks);
         }
 
-        if (objc_getClass("SBFloatyFolderView")) {
+        Class floatyClass = objc_getClass("SBFloatyFolderView");
+
+        /*
+         * The opened-panel path depends on SpringBoard's real page-background
+         * factory. If an unexpected system build removes that selector, keep
+         * the closed-folder tweak active and simply skip opened customization
+         * instead of trying to hook an unknown method.
+         */
+        if (floatyClass &&
+            class_getInstanceMethod(
+                floatyClass,
+                NSSelectorFromString(@"_newPageBackgroundView")
+            ) &&
+            class_getInstanceMethod(
+                floatyClass,
+                NSSelectorFromString(@"setBackgroundAlpha:")
+            )) {
             %init(GFOpenedFolderHooks);
         }
     }

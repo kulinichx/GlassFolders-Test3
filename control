@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.0~beta4
+Version: 0.7.0~beta5
 Architecture: iphoneos-arm64e
-Description: Lightweight RootHide Optical Glass with preserved lower-right transmitted rim, three-zone upper-left specular, bright color-retaining frosted opened panel, exact corner clipping, 5 percent detents, crisp haptics, and built-in logout.
+Description: Lightweight RootHide Optical Glass with Alook-style upper-left specular, explicit right/bottom secondary rim, first-frame opened-folder glass takeover, color-retaining frosted panel, 5 percent detents, crisp haptics, and built-in logout.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks
