@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7 Optical</string>
+			<string>GlassFolders 0.7 Optical Beta 2</string>
 			<key>footerText</key>
-			<string>Optical Glass：圆角 SDF 光照。左上双层柔光、右下轻暗边；无硬描边、无白色斜条。</string>
+			<string>三层光学边缘：清晰高光亮芯 + 中层反射 + 宽柔渐隐。轮廓保持清楚，不再整块发糊。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -32,7 +32,7 @@
 			<key>label</key>
 			<string>风格</string>
 			<key>footerText</key>
-			<string>Liquid Glass：关闭偏清透；打开为独立圆角轻磨砂面板。</string>
+			<string>Liquid Glass：关闭状态偏清透并保留清晰高光；打开状态为独立圆角轻磨砂面板。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -62,7 +62,7 @@
 			<key>label</key>
 			<string>玻璃强度</string>
 			<key>footerText</key>
-			<string>每 5% 一个档位，建议先看 50–60%。</string>
+			<string>每 5% 一个档位。建议先看 50%、55%、60%。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

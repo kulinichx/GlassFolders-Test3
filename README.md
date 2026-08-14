@@ -1,91 +1,84 @@
-# GlassFolders 0.7.0 Beta 1 — Optical Glass
+# GlassFolders 0.7.0 Beta 2 — Crisp Specular
 
-This is a rendering-model change.
+Beta 2 keeps the SDF optical-lighting architecture from Beta 1, but corrects
+the "everything looks blurry" problem observed on-device.
 
-## Why
+## Reference interpretation
 
-Earlier versions tried to create glass lighting with:
+The supplied glass-style UI and third-party icon references share the same
+edge structure:
 
-- drawn rims
-- blurred strokes
-- linear/radial CAGradientLayer overlays
-- wide diagonal gradients
+1. a thin, readable white specular filament
+2. a slightly wider supporting reflection/core
+3. a broad, low-contrast soft shoulder
+4. a weak lower-right dark falloff
 
-That repeatedly caused two failures:
+The important point is that the crisp highlight and the soft transition coexist.
+A single blurred stroke cannot reproduce this reliably.
 
-1. highlight too sharp -> hard/artificial line
-2. blur strong enough -> highlight disappears
+## Beta 2 changes
 
-## Optical model
+### Backdrop silhouette
 
-### Backdrop material
+`gaussianBlur.inputHardEdges` is restored to `YES`.
 
-`CABackdropLayer` remains responsible for:
+The folder shape itself should stay crisp. Softness now comes from the optical
+lighting profile INSIDE the edge rather than from letting backdrop blur bleed
+across the clipping boundary.
 
-- real wallpaper color
-- blur
-- saturation
-- tiny neutral tint
+### Closed-folder blur
 
-### SDF lighting map
+Closed Liquid Glass blur is reduced.
 
-A small CPU-generated texture is derived from:
+Wallpaper/detail should remain more visible, avoiding the flat "purple fuzzy
+card" appearance.
 
-- rounded-rectangle signed distance
-- numerical surface normal
-- fixed upper-left light vector
-- wide soft highlight shoulder
-- narrower bright highlight core
-- weak opposite lower-right dark falloff
+### Higher-resolution closed lighting
 
-No border is drawn.
+Closed-folder SDF maps now render up to the device's 3x scale.
 
-No diagonal white stripe is drawn.
+This is important for a sub-point specular filament on Retina displays.
 
-The diagonal glass feeling emerges because upper-left-facing normals receive
-more white light while lower-right-facing normals receive a tiny dark falloff.
+### Three-zone optical edge
 
-## Closed folder
+Beta 1:
+- core
+- shoulder
 
-- clearer backdrop material
-- stronger optical highlight than opened panel
-- wide shoulder + visible core
-- no stroke / rim mask
+Beta 2:
+- filament
+- core
+- shoulder
 
-## Opened folder
+The filament is narrow and directional.
+The shoulder remains wide and low-contrast.
 
-- RC3 real panel-host detection is retained
-- independent rounded panel only
-- lighter frosted-transparent backdrop
-- wider, lower-contrast optical shoulder
-- no full-screen custom blur
+### No full white border
 
-If the real panel host cannot be identified, GlassFolders keeps the stock
-SpringBoard panel instead of falling back to full-screen glass.
+The filament intensity is multiplied by a stronger light-facing term, so it
+appears primarily on upper-left-facing edges and corners.
+
+It is not a uniform white rounded-rectangle outline.
+
+## Opened panel
+
+The RC3 panel-host fix remains.
+
+Opened glass still:
+- attaches only to the real rounded folder panel
+- never falls back to full-screen custom glass
+- keeps a more frosted material than closed folders
+- uses the same three-zone optical law at lower contrast
 
 ## Performance
 
-The optical texture is generated only for a new combination of:
-
-- size
-- corner radius
-- 5% strength step
-- closed/opened mode
-
-Textures are cached in `NSCache`.
-
-There is no:
-
-- DisplayLink
-- per-frame Metal rendering
-- Timer
-- gyroscope
-- animated gradient
+Still no:
 - daemon
+- Timer
+- DisplayLink
+- gyroscope
+- per-frame Metal render loop
+- animated gradient
 
-## UX retained
-
-- Clear / Liquid Glass
-- 5% magnetic detents
-- rigid haptic tick
-- 应用并注销
+Lighting maps are generated only when size/radius/5% strength/open-state changes
+and are cached in NSCache.

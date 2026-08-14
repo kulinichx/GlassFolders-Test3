@@ -143,7 +143,7 @@ static NSCache *GFOpticalLightingCache(void) {
     dispatch_once(&onceToken, ^{
         cache = [[NSCache alloc] init];
         cache.countLimit = 24;
-        cache.totalCostLimit = 12 * 1024 * 1024;
+        cache.totalCostLimit = 20 * 1024 * 1024;
     });
 
     return cache;
@@ -171,9 +171,14 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
 
     CGFloat screenScale = UIScreen.mainScreen.scale;
 
+    /*
+     * Closed folders need full Retina precision for the narrow specular
+     * filament. Opened panels remain lower-resolution because their optical
+     * field is intentionally broader and softer.
+     */
     CGFloat renderScale = opened
-        ? MIN(screenScale, 1.35)
-        : MIN(screenScale, 2.0);
+        ? MIN(screenScale, 1.60)
+        : MIN(screenScale, 3.0);
 
     size_t pixelWidth =
         (size_t)MAX(2.0, floor(size.width * renderScale + 0.5));
@@ -233,39 +238,58 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
     CGFloat e = sqrt(GFClamp01(strength));
 
     /*
-     * Two-zone edge lighting:
+     * Three-zone optical edge profile.
      *
-     * SHOULDER = wide, low-contrast transition.
-     * CORE     = narrower, brighter reflection.
+     * FILAMENT:
+     *   Sub-point, relatively crisp neutral-white reflection.
+     *   This is the readable highlight edge visible in the supplied UI/icon
+     *   references. It must NOT be blurred away.
      *
-     * This is what prevents the old "hard line OR invisible blur" problem.
+     * CORE:
+     *   Slightly wider reflection supporting the filament.
+     *
+     * SHOULDER:
+     *   Wide, low-contrast falloff that makes the bright core blend naturally
+     *   into the glass material.
+     *
+     * This avoids both previous failure modes:
+     *   hard white stroke  <->  completely invisible blur.
      */
     CGFloat shoulderPoints = opened
-        ? (11.5 + 4.5 * e)
-        : (6.0 + 3.2 * e);
+        ? (9.5 + 3.4 * e)
+        : (4.4 + 2.0 * e);
 
     CGFloat corePoints = opened
-        ? (2.4 + 0.9 * e)
-        : (1.45 + 0.65 * e);
+        ? (1.65 + 0.55 * e)
+        : (0.95 + 0.28 * e);
+
+    CGFloat filamentPoints = opened
+        ? (0.72 + 0.16 * e)
+        : (0.38 + 0.12 * e);
 
     CGFloat shoulderWidth = shoulderPoints * renderScale;
     CGFloat coreWidth = corePoints * renderScale;
+    CGFloat filamentWidth = filamentPoints * renderScale;
 
     CGFloat highlightShoulderGain = opened
-        ? (0.050 + 0.018 * e)
-        : (0.082 + 0.030 * e);
+        ? (0.040 + 0.012 * e)
+        : (0.054 + 0.016 * e);
 
     CGFloat highlightCoreGain = opened
-        ? (0.070 + 0.020 * e)
-        : (0.115 + 0.035 * e);
+        ? (0.085 + 0.020 * e)
+        : (0.125 + 0.028 * e);
+
+    CGFloat highlightFilamentGain = opened
+        ? (0.120 + 0.025 * e)
+        : (0.205 + 0.045 * e);
 
     CGFloat shadowShoulderGain = opened
-        ? (0.018 + 0.008 * e)
-        : (0.024 + 0.010 * e);
+        ? (0.014 + 0.006 * e)
+        : (0.018 + 0.007 * e);
 
     CGFloat shadowCoreGain = opened
-        ? (0.024 + 0.009 * e)
-        : (0.034 + 0.012 * e);
+        ? (0.022 + 0.007 * e)
+        : (0.028 + 0.009 * e);
 
     /*
      * Upper-left fixed light.
@@ -306,11 +330,11 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
 
             CGFloat ambientWhite =
                 pow(diagonal, 2.45) *
-                (opened ? 0.0085 : 0.0120);
+                (opened ? 0.0065 : 0.0075);
 
             CGFloat ambientDark =
                 pow(1.0 - diagonal, 2.60) *
-                (opened ? 0.0045 : 0.0065);
+                (opened ? 0.0038 : 0.0048);
 
             CGFloat signedLight =
                 ambientWhite - ambientDark;
@@ -357,23 +381,46 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                         insideDepth /
                         MAX(0.001, coreWidth);
 
+                    CGFloat filamentRatio =
+                        insideDepth /
+                        MAX(0.001, filamentWidth);
+
+                    /*
+                     * Gaussian-like falloff for shoulder/core.
+                     * Filament uses a steeper exponent so it stays visually
+                     * defined instead of becoming another fuzzy band.
+                     */
                     CGFloat shoulder =
                         exp(-(shoulderRatio * shoulderRatio));
 
                     CGFloat core =
-                        exp(-(coreRatio * coreRatio));
+                        exp(-(coreRatio * coreRatio * 1.25));
 
-                    CGFloat lightFacing =
-                        pow(facing, opened ? 1.25 : 1.38);
+                    CGFloat filament =
+                        exp(-pow(filamentRatio, 2.65));
+
+                    /*
+                     * The crisp filament is more directional than the broad
+                     * shoulder. This concentrates it on upper-left-facing
+                     * edges/corners and prevents a white outline around the
+                     * entire folder.
+                     */
+                    CGFloat shoulderFacing =
+                        pow(facing, opened ? 1.22 : 1.32);
+
+                    CGFloat coreFacing =
+                        pow(facing, opened ? 1.38 : 1.52);
+
+                    CGFloat filamentFacing =
+                        pow(facing, opened ? 1.58 : 1.78);
 
                     CGFloat shadowFacing =
-                        pow(opposite, opened ? 1.18 : 1.28);
+                        pow(opposite, opened ? 1.22 : 1.34);
 
                     CGFloat white =
-                        (
-                            shoulder * highlightShoulderGain +
-                            core * highlightCoreGain
-                        ) * lightFacing;
+                        shoulder * highlightShoulderGain * shoulderFacing +
+                        core * highlightCoreGain * coreFacing +
+                        filament * highlightFilamentGain * filamentFacing;
 
                     CGFloat dark =
                         (
@@ -388,11 +435,15 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
             /*
              * Prevent the lighting map from ever becoming a painted frame.
              */
+            /*
+             * Closed folders are allowed a clearer specular peak because the
+             * new filament is sub-point and highly directional.
+             */
             CGFloat positiveCap =
-                opened ? 0.145 : 0.225;
+                opened ? 0.175 : 0.285;
 
             CGFloat negativeCap =
-                opened ? 0.070 : 0.085;
+                opened ? 0.060 : 0.075;
 
             signedLight =
                 MIN(
@@ -518,8 +569,8 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
             CGFloat brightness;
 
             if (_gfStyle == 1) {
-                blurRadius = 3.0 + (8.0 * e);
-                saturation = 1.06 + (0.28 * e);
+                blurRadius = 1.8 + (5.0 * e);
+                saturation = 1.04 + (0.20 * e);
                 brightness = 0.001 + (0.004 * e);
             } else {
                 blurRadius = 2.0 + (7.0 * e);
@@ -546,7 +597,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
             if (blur) {
                 [blur setValue:@(blurRadius) forKey:@"inputRadius"];
                 [blur setValue:@YES forKey:@"inputNormalizeEdges"];
-                [blur setValue:@NO forKey:@"inputHardEdges"];
+                [blur setValue:@YES forKey:@"inputHardEdges"];
                 [filters addObject:blur];
             }
 
@@ -756,7 +807,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
             if (blur) {
                 [blur setValue:@(blurRadius) forKey:@"inputRadius"];
                 [blur setValue:@YES forKey:@"inputNormalizeEdges"];
-                [blur setValue:@NO forKey:@"inputHardEdges"];
+                [blur setValue:@YES forKey:@"inputHardEdges"];
                 [filters addObject:blur];
             }
 
