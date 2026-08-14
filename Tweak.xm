@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 1.8 FIX5 — Continuous Corner/Tangent Rails
+ * GlassFolders 0.7.4 Beta 1.8 FIX7 — Clear Opened Panel + Native App Library Style
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -15,10 +15,12 @@
  * - no App Library controller / transition / page-factory hooks
  *
  * Optical model:
- * - wallpaper-only chroma: no Liquid Glass body tint/brightness
+ * - wallpaper-only chroma: no purple/blue chromatic body tint
+ * - Clear opened panel uses a thin neutral-white optical lift, never a hue tint
  * - oversized opened-folder backdrop sampling before final rounded clipping
  * - stronger CABackdropLayer for wallpaper color / blur / saturation
  * - native App Library category-pod visual style layered into closed folders
+ * - explicitly activates the pod's own _updateVisualStyle after attachment
  * - cached rounded-rect SDF lighting
  * - one continuous equal-brightness upper-left -> top specular rail
  * - one continuous equal-brightness bottom -> lower-right specular rail
@@ -763,10 +765,50 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
 }
 
 
+/*
+ * A freshly allocated pod background is not guaranteed to have run the same
+ * visual-style pass that SpringBoard performs after inserting a real App
+ * Library category card into the hierarchy.  AppLibraryController's public
+ * source confirms that _updateVisualStyle is the class' material refresh
+ * point.  Trigger it only on OUR detached/reused instance, never by hooking
+ * the real App Library.
+ *
+ * This is deliberately one-shot per host view and wrapped in @try.  We do not
+ * poke MaterialKit recipes, KVC private ivars, or global controllers here.
+ */
+static BOOL GFActivateNativeAppLibraryPodVisual(UIView *podView) {
+    if (!podView || CGRectIsEmpty(podView.bounds)) {
+        return NO;
+    }
+
+    SEL updateSelector =
+        NSSelectorFromString(@"_updateVisualStyle");
+
+    @try {
+        if ([podView respondsToSelector:updateSelector]) {
+            IMP imp =
+                [podView methodForSelector:updateSelector];
+
+            if (imp) {
+                typedef void (*GFVoidMessageIMP)(id, SEL);
+                ((GFVoidMessageIMP)imp)(podView, updateSelector);
+            }
+        }
+
+        [podView setNeedsLayout];
+        [podView layoutIfNeeded];
+        return YES;
+    } @catch (__unused NSException *exception) {
+        return NO;
+    }
+}
+
+
 @interface GFBackdropGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
 @property (nonatomic, strong) UIView *gfAppLibraryPodVisual;
+@property (nonatomic, assign) BOOL gfAppLibraryVisualActivated;
 @property (nonatomic, strong) CALayer *gfOpticalLightingLayer;
 @property (nonatomic, assign) CGSize gfLightingSize;
 @property (nonatomic, assign) CGFloat gfLightingRadius;
@@ -898,6 +940,8 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
             _gfAppLibraryPodVisual =
                 GFCreateNativeAppLibraryPodVisual(_gfStrength);
 
+            _gfAppLibraryVisualActivated = NO;
+
             if (_gfAppLibraryPodVisual) {
                 if (_gfTintView) {
                     [self insertSubview:_gfAppLibraryPodVisual
@@ -944,6 +988,22 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
             self.gfAppLibraryPodVisual.layer.cornerRadius = radius;
             self.gfAppLibraryPodVisual.layer.cornerCurve = kCACornerCurveContinuous;
             self.gfAppLibraryPodVisual.layer.masksToBounds = YES;
+
+            /*
+             * Activate only after frame/radius and hierarchy attachment are
+             * valid, which is much closer to the lifecycle of a real App
+             * Library category pod than calling the method immediately after
+             * alloc/init.
+             */
+            if (!self.gfAppLibraryVisualActivated &&
+                self.gfAppLibraryPodVisual.superview &&
+                !CGRectIsEmpty(self.gfAppLibraryPodVisual.bounds)) {
+
+                self.gfAppLibraryVisualActivated =
+                    GFActivateNativeAppLibraryPodVisual(
+                        self.gfAppLibraryPodVisual
+                    );
+            }
         }
     }
 
@@ -1053,7 +1113,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
 
     NSString *cacheKey = [NSString stringWithFormat:
-        @"P5-%@-%zux%zu-r%.2f-s%ld",
+        @"P7-%@-%zux%zu-r%.2f-s%ld",
         darkAppearance ? @"D" : @"L",
         pixelWidth,
         pixelHeight,
@@ -1710,13 +1770,15 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
 @property (nonatomic, strong) CALayer *gfOpticalLayer;
 @property (nonatomic, assign) CGFloat gfStrength;
+@property (nonatomic, assign) NSInteger gfStyle;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
 @property (nonatomic, assign) CGSize gfLightingSize;
 @property (nonatomic, assign) CGFloat gfLightingRadius;
 @property (nonatomic, assign) BOOL gfLastDarkAppearance;
 @property (nonatomic, assign) BOOL gfHasAppearance;
 @property (nonatomic, assign) CGFloat gfBackdropOverscan;
-- (instancetype)initWithStrength:(CGFloat)strength;
+- (instancetype)initWithStyle:(NSInteger)style
+                     strength:(CGFloat)strength;
 - (void)setPreferredRadius:(CGFloat)radius;
 - (void)gfRefreshMaterial;
 @end
@@ -1724,10 +1786,12 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
 @implementation GFPanelGlassView
 
-- (instancetype)initWithStrength:(CGFloat)strength {
+- (instancetype)initWithStyle:(NSInteger)style
+                     strength:(CGFloat)strength {
     self = [super initWithFrame:CGRectZero];
 
     if (self) {
+        _gfStyle = (style == 1) ? 1 : 0;
         _gfStrength =
             MIN(1.0, MAX(0.0, strength));
 
@@ -1828,13 +1892,34 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
          * remains the sole chromatic source and the optical layer supplies the
          * edge luminance.
          */
-        CGFloat blurRadius = darkAppearance
-            ? (6.4 + 5.6 * materialResponse)
-            : (5.8 + 5.0 * materialResponse);
+        /*
+         * FIX6: style-specific opened material.
+         *
+         * Clear is NOT a color fill. It is the same wallpaper backdrop with
+         * a thinner blur response so large wallpaper color fields remain
+         * visible through the panel. Liquid Glass keeps the thicker FIX5
+         * material response.
+         */
+        CGFloat blurRadius;
+        CGFloat saturation;
 
-        CGFloat saturation = darkAppearance
-            ? (1.04 + 0.10 * materialResponse)
-            : (1.03 + 0.08 * materialResponse);
+        if (self.gfStyle == 0) {
+            blurRadius = darkAppearance
+                ? (2.8 + 3.8 * materialResponse)
+                : (2.4 + 3.5 * materialResponse);
+
+            saturation = darkAppearance
+                ? (1.02 + 0.06 * materialResponse)
+                : (1.02 + 0.05 * materialResponse);
+        } else {
+            blurRadius = darkAppearance
+                ? (6.4 + 5.6 * materialResponse)
+                : (5.8 + 5.0 * materialResponse);
+
+            saturation = darkAppearance
+                ? (1.04 + 0.10 * materialResponse)
+                : (1.03 + 0.08 * materialResponse);
+        }
 
         self.gfBackdropOverscan =
             MAX(30.0, blurRadius * 2.75 + 4.0);
@@ -1909,17 +1994,49 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                    aboveSubview:self.gfBackdropSampleView];
         }
 
-        self.gfFallbackBlurView.alpha =
-            darkAppearance
-                ? MIN(0.42, 0.14 + 0.25 * materialResponse)
-                : MIN(0.34, 0.10 + 0.20 * materialResponse);
+        if (self.gfStyle == 0) {
+            self.gfFallbackBlurView.alpha =
+                darkAppearance
+                    ? MIN(0.30, 0.08 + 0.20 * materialResponse)
+                    : MIN(0.26, 0.07 + 0.17 * materialResponse);
+        } else {
+            self.gfFallbackBlurView.alpha =
+                darkAppearance
+                    ? MIN(0.42, 0.14 + 0.25 * materialResponse)
+                    : MIN(0.34, 0.10 + 0.20 * materialResponse);
+        }
     }
 
     /*
-     * No body tint. Wallpaper/backdrop is the only color source.
+     * No chromatic body tint: purple/blue/pink always comes from wallpaper.
+     *
+     * Apple's "Clear" appearance still has a very small neutral-white
+     * transmission/specular lift.  That is optical luminance, not a hue.
+     * Keep it deliberately weak so a green/orange wallpaper stays green/orange.
+     * Liquid Glass keeps the body colorless; its stronger white energy lives
+     * in the specular rail image instead.
      */
-    (void)tintResponse;
-    self.gfTintView.alpha = 0.0;
+    self.gfTintView.backgroundColor = UIColor.whiteColor;
+
+    if (self.gfStyle == 0 && self.gfStrength > 0.001) {
+        CGFloat clearLift =
+            (0.038 + 0.042 * tintResponse) * self.gfStrength;
+
+        self.gfTintView.alpha =
+            MIN(0.075, clearLift);
+    } else {
+        self.gfTintView.alpha = 0.0;
+    }
+
+    /*
+     * Clear uses the same FIX5 continuous rail geometry, only optically
+     * lighter. This preserves the now-correct UL<->top/left and LR<->bottom/
+     * right joins instead of introducing a second Clear-only edge renderer.
+     */
+    self.gfOpticalLayer.opacity =
+        (self.gfStyle == 0)
+            ? (0.62 + 0.16 * materialResponse)
+            : 1.0;
 
     /*
      * Force the optical texture to be regenerated when light/dark mode
@@ -2068,7 +2185,12 @@ static char kGFStockSubviewOriginalHiddenKey;
 
 
 static inline BOOL GFShouldUseOpenedPanel(void) {
-    return GFEnabled && GFStyle == 1;
+    /*
+     * FIX6: both selectable styles own the opened panel.
+     * Clear at 0% intentionally becomes a fully transparent panel, matching
+     * the existing closed-folder Clear 0% semantics.
+     */
+    return GFEnabled && (GFStyle == 0 || GFStyle == 1);
 }
 
 
@@ -2220,8 +2342,8 @@ static void GFUpdateOpenedFolderBackground(
     if (!glass) {
         glass =
             [[GFPanelGlassView alloc]
-                initWithStrength:
-                    GFGlassStrength];
+                initWithStyle:GFStyle
+                     strength:GFGlassStrength];
 
         /*
          * Associate BEFORE insertion. If UIKit calls didAddSubview: during
