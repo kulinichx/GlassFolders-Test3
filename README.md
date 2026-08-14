@@ -1,39 +1,60 @@
-# GlassFolders 0.7.3 Beta 1.1 — App Library Fix
+# GlassFolders 0.7.3 Beta 1.3 — Runtime App Library Fix
 
-This is a focused correction of the App Library category-card path.
+This build addresses the repeated "App Library option enabled but visually
+nothing changes" result.
 
-## Root cause addressed
+## Structural issue in Beta 1 / 1.1 / 1.2
 
-Beta 1 called the original
-`SBHLibraryCategoryPodBackgroundView -_updateVisualStyle` first, then tried to
-hide stock UIView children and add custom glass.
+Those builds initialized the App Library Logos hook only when:
 
-That is insufficient if SpringBoard's category material is configured directly
-on the host/background layer.
+`objc_getClass("SBHLibraryCategoryPodBackgroundView")`
 
-When App Library glass is enabled, Beta 1.1 does not call the stock visual-style
-writer. It clears the host background and installs the custom glass directly.
+already returned a class during the tweak constructor.
 
-When the option is disabled, the original method runs normally.
+If SpringBoardHome had not registered the App Library category-background class
+at that moment, the hook group was skipped permanently. Entering App Library
+later could not activate it.
 
-## Independent preference
+## Beta 1.3 architecture
 
-`资源库大文件夹` now depends only on:
+At SpringBoard startup, once:
 
-- master `启用`;
-- `资源库大文件夹`.
+1. explicitly `dlopen` SpringBoardHome;
+2. try known category-background class names;
+3. if needed, inspect registered classes for a very narrow candidate:
+   - UIView subclass;
+   - class name contains Library;
+   - class name contains Background;
+   - class name contains Category or Pod;
+   - implements `_updateVisualStyle`;
+4. select one best candidate only;
+5. install Substrate method hooks on that one visual class.
 
-It no longer requires the desktop Style selector to be `Liquid Glass`.
+No periodic scan or timer is used.
 
-The current Glass Strength and dark/light adaptive calibration are still reused.
+## Hooked behavior
 
-## Safety boundary
+Only visual lifecycle/style methods on the resolved background view:
 
-Still hooks only the category-card background class:
+- `_updateVisualStyle`
+- `didMoveToWindow`
+- `layoutSubviews`
+- `traitCollectionDidChange:`
+- `setBackgroundColor:`
 
-`SBHLibraryCategoryPodBackgroundView`
+No App Library controller, folder controller, search controller, icon-list, or
+icon view is hooked.
 
-No App Library controller, category folder controller, icon-list, icon view,
-search controller, or navigation hook is added.
+## Existing functionality
 
-Existing Home Screen closed/open folder code is unchanged.
+Unchanged:
+
+- closed Home Screen folder glass;
+- opened folder glass;
+- percentage-driven edge intensity;
+- dark/light adaptation;
+- integrated user-supplied settings icon;
+- RootHide arm64e;
+- SpringBoard-only injection.
+
+No daemon, timer, DisplayLink, gyroscope, or continuous Metal renderer.

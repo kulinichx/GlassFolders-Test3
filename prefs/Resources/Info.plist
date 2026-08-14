@@ -15,8 +15,14 @@
 	<key>CFBundleShortVersionString</key>
 	<string>0.7.3</string>
 	<key>CFBundleVersion</key>
-	<string>0.7.3-beta1.1</string>
+	<string>0.7.3-beta1.3</string>
 	<key>NSPrincipalClass</key>
 	<string>GFRootListController</string>
+	<key>CFBundleIconFiles</key>
+	<array>
+		<string>GlassFoldersIcon</string>
+	</array>
+	<key>CFBundleIconFile</key>
+	<string>GlassFoldersIcon</string>
 </dict>
 </plist>

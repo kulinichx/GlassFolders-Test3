@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.3~beta1.1
+Version: 0.7.3~beta1.3
 Architecture: iphoneos-arm64e
-Description: Fixes App Library category-card glass by bypassing the stock _updateVisualStyle material while enabled and making the App Library switch independent of the desktop Style selector.
+Description: Runtime App Library fix: explicitly loads SpringBoardHome and dynamically resolves/hooks only the actual App Library category background visual class, preserving the existing folder glass and integrated settings icon.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks
