@@ -1,4 +1,4 @@
-name: GlassFolders 0.7.4 Beta1.2 CLEAN
+name: GlassFolders 0.7.4 Beta1.3 CLEAN
 
 on:
   workflow_dispatch:
@@ -21,8 +21,8 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 0.7.4 BETA1.2 FORCED-THEOS WORKFLOW ==="
-          echo "THEOS will be forced to: $THEOS"
+          echo "=== GLASSFOLDERS 0.7.4 BETA1.3 DEDUP-ROUNDED-ICON ==="
+          echo "THEOS=$THEOS"
 
       - name: Install dependencies
         run: |
@@ -35,7 +35,6 @@ jobs:
           rm -rf "$THEOS"
           git clone --recursive https://github.com/roothide/theos.git "$THEOS"
           test -f "$THEOS/makefiles/common.mk"
-          echo "Using THEOS=$THEOS"
 
       - name: Install and normalize patched iOS 16.5 SDK
         shell: bash
@@ -48,71 +47,56 @@ jobs:
           SDK_URL="https://github.com/theos/sdks/releases/latest/download/iPhoneOS16.5.sdk.tar.xz"
 
           mkdir -p "$SDK_ROOT"
-          rm -rf "$SDK_EXACT"
-          rm -f "$SDK_ARCHIVE"
+          rm -rf "$SDK_EXACT" "$SDK_ARCHIVE"
 
-          echo "Downloading official patched 16.5 SDK..."
           curl -fL --retry 3 --retry-delay 2 \
             "$SDK_URL" \
             -o "$SDK_ARCHIVE"
 
-          echo "Archive:"
-          ls -lh "$SDK_ARCHIVE"
-
-          echo "Extracting into $SDK_ROOT ..."
           tar -xJf "$SDK_ARCHIVE" -C "$SDK_ROOT"
 
-          echo "SDK directories after extraction:"
-          find "$SDK_ROOT" -maxdepth 3 -type d -name 'iPhoneOS*.sdk' -print
-
           FOUND="$(find "$SDK_ROOT" -maxdepth 3 -type d -name 'iPhoneOS16.5.sdk' -print -quit)"
-
-          if [ -z "$FOUND" ]; then
-            echo "ERROR: archive extracted but iPhoneOS16.5.sdk was not found."
-            find "$SDK_ROOT" -maxdepth 3 -print
-            exit 1
-          fi
+          test -n "$FOUND"
 
           if [ "$FOUND" != "$SDK_EXACT" ]; then
-            echo "Normalizing SDK path:"
-            echo "  from: $FOUND"
-            echo "  to:   $SDK_EXACT"
             rm -rf "$SDK_EXACT"
             ditto "$FOUND" "$SDK_EXACT"
           fi
 
           test -d "$SDK_EXACT"
-          test -d "$SDK_EXACT/System/Library/Frameworks/UIKit.framework"
+          test -d "$SDK_EXACT/System/Library/PrivateFrameworks/Preferences.framework"
 
-          PREF="$SDK_EXACT/System/Library/PrivateFrameworks/Preferences.framework"
-          test -d "$PREF"
+          echo "SDK verified at $SDK_EXACT"
 
-          if ! find "$PREF" -type f \( -name '*.tbd' -o -name 'Preferences' \) | grep -q .; then
-            echo "ERROR: patched Preferences framework link stub is missing."
-            find "$PREF" -maxdepth 2 -print
-            exit 1
-          fi
+      - name: Normalize old repository leftovers
+        shell: bash
+        run: |
+          set -euo pipefail
 
-          echo "Exact SDK path verified:"
-          ls -ld "$SDK_EXACT"
-          echo "THEOS tree:"
-          ls -ld "$THEOS" "$THEOS/sdks"
+          echo "Deleting all obsolete PreferenceLoader entry/icon files..."
+          rm -f \
+            layout/Library/PreferenceLoader/Preferences/GlassFolders.plist \
+            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png \
+            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png \
+            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png \
+            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon.png \
+            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon@2x.png \
+            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon@3x.png
+
+          echo "Only this PreferenceLoader plist may remain:"
+          find layout/Library/PreferenceLoader/Preferences -type f -name '*.plist' -print
+
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist
+          test ! -e layout/Library/PreferenceLoader/Preferences/GlassFolders.plist
 
       - name: Source sanity gate
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "Checking this exact workflow is active..."
-          grep -Fq 'GLASSFOLDERS 0.7.4 BETA1.2 FORCED-THEOS WORKFLOW' \
+          grep -Fq 'GLASSFOLDERS 0.7.4 BETA1.3 DEDUP-ROUNDED-ICON' \
             .github/workflows/build.yml
 
-          echo "Checking Makefile target..."
-          grep -Fq 'TARGET = iphone:clang:16.5:16.0' Makefile
-          grep -Fq 'ARCHS = arm64e' Makefile
-          grep -Fq 'THEOS_PACKAGE_SCHEME = roothide' Makefile
-
-          echo "Checking stable folder hooks..."
           grep -Fq '%group GFIconHooks' Tweak.xm
           grep -Fq '%init(GFIconHooks);' Tweak.xm
           grep -Fq 'SBFolderIconImageView' Tweak.xm
@@ -121,44 +105,36 @@ jobs:
           grep -Fq '%init(GFOpenedPanelHooks);' Tweak.xm
           grep -Fq '%hook SBFolderBackgroundView' Tweak.xm
 
-          echo "Rejecting all removed App Library paths..."
           if grep -Eq 'SBHLibrary|AppLibraryPods|GFAppLibrary|GFShouldUseAppLibraryPods|SpringBoardHome\.framework|MSHookMessageEx|SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView' Tweak.xm; then
-            echo "ERROR: removed/unsafe symbol exists in Tweak.xm"
+            echo "ERROR: removed experimental code remains."
             exit 1
           fi
 
-          echo "Checking icon entry/resources..."
           python3 - <<'PY'
           import plistlib
+          from PIL import Image
 
-          with open("layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist", "rb") as f:
+          plist = "layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist"
+          with open(plist, "rb") as f:
               p = plistlib.load(f)
 
-          e = p["entry"]
-          assert e["bundle"] == "GlassFoldersPrefs"
-          assert e["icon"] == "GlassFolders.png"
+          assert p["entry"]["bundle"] == "GlassFoldersPrefs"
+          assert p["entry"]["icon"] == "GlassFolders.png"
 
-          with open("prefs/Resources/Root.plist", "rb") as f:
-              root = plistlib.load(f)
+          for path in (
+              "layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png",
+              "layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png",
+              "layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png",
+          ):
+              im = Image.open(path).convert("RGBA")
+              # Transparent external corners are intentional.
+              assert im.getpixel((0, 0))[3] < 16
+              assert im.getpixel((im.width - 1, 0))[3] < 16
+              assert im.getpixel((0, im.height - 1))[3] < 16
+              assert im.getpixel((im.width - 1, im.height - 1))[3] < 16
 
-          blob = repr(root)
-          for token in ("AppLibraryPodsEnabled", "App 资源库", "资源库大文件夹"):
-              assert token not in blob
+          print("Rounded-alpha source icons verified.")
           PY
-
-          for f in \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png \
-            prefs/Resources/GlassFolders.png \
-            prefs/Resources/GlassFolders@2x.png \
-            prefs/Resources/GlassFolders@3x.png \
-            prefs/Resources/GlassFoldersLarge.png
-          do
-            test -f "$f"
-          done
-
-          grep -Fq 'GlassFoldersPrefs_RESOURCE_FILES' prefs/Makefile
 
           echo "Source sanity gate passed."
 
@@ -168,16 +144,12 @@ jobs:
           set -euo pipefail
 
           SDK="$THEOS/sdks/iPhoneOS16.5.sdk"
-
-          echo "Pre-build path verification:"
-          echo "PWD=$(pwd)"
-          echo "THEOS=$THEOS"
-          ls -ld "$THEOS"
-          ls -ld "$SDK"
-          test -f "$THEOS/makefiles/common.mk"
           test -d "$SDK"
 
-          echo "Forcing THEOS on every make invocation..."
+          echo "PWD=$(pwd)"
+          echo "THEOS=$THEOS"
+          ls -ld "$THEOS" "$SDK"
+
           make THEOS="$THEOS" clean
           make THEOS="$THEOS" package FINALPACKAGE=1
 
@@ -197,8 +169,7 @@ jobs:
           set -euo pipefail
 
           DEB="${{ steps.package.outputs.deb }}"
-          TMP="/tmp/gf074b12"
-
+          TMP="/tmp/gf074b13"
           rm -rf "$TMP"
           mkdir -p "$TMP"
           cd "$TMP"
@@ -216,25 +187,17 @@ jobs:
           DYLIB="$(find root -type f -name 'GlassFolders.dylib' | head -n 1)"
           PREFBIN="$(find root -type f -path '*GlassFoldersPrefs.bundle/GlassFoldersPrefs' | head -n 1)"
           FILTER="$(find root -type f -path '*MobileSubstrate/DynamicLibraries/GlassFolders.plist' | head -n 1)"
-          PL="$(find root -type d -path '*/Library/PreferenceLoader/Preferences/GlassFolders' | head -n 1)"
-          PB="$(find root -type d -path '*/Library/PreferenceBundles/GlassFoldersPrefs.bundle' | head -n 1)"
 
           test -n "$DYLIB"
           test -n "$PREFBIN"
           test -n "$FILTER"
-          test -n "$PL"
-          test -n "$PB"
 
-          echo "Mach-O verification:"
-          file "$DYLIB"
-          file "$PREFBIN"
           file "$DYLIB" | grep -qi 'arm64e'
           file "$PREFBIN" | grep -qi 'arm64e'
 
-          echo "Injection filter:"
           grep -q 'com.apple.springboard' "$FILTER"
           if grep -qi 'launchd' "$FILTER"; then
-            echo "ERROR: launchd injection present"
+            echo "ERROR: launchd injection detected"
             exit 1
           fi
 
@@ -247,30 +210,72 @@ jobs:
             exit 1
           fi
 
-          echo "PreferenceLoader icon set:"
+          PREFROOT="$(find root -type d -path '*/Library/PreferenceLoader/Preferences' | head -n 1)"
+          test -n "$PREFROOT"
+
+          echo "Packaged PreferenceLoader files:"
+          find "$PREFROOT" -type f -print | sort
+
+          # Hard reject the exact duplicate entry seen in Beta1.2.
+          if [ -f "$PREFROOT/GlassFolders.plist" ]; then
+            echo "ERROR: duplicate legacy top-level GlassFolders.plist is packaged."
+            exit 1
+          fi
+
+          PL="$PREFROOT/GlassFolders"
           test -f "$PL/GlassFolders.plist"
           test -f "$PL/GlassFolders.png"
           test -f "$PL/GlassFolders@2x.png"
           test -f "$PL/GlassFolders@3x.png"
 
-          echo "PreferenceBundle icon set:"
+          if find "$PREFROOT" -type f -name 'GlassFoldersIcon*.png' | grep -q .; then
+            echo "ERROR: obsolete GlassFoldersIcon*.png remains."
+            find "$PREFROOT" -type f -name 'GlassFoldersIcon*.png' -print
+            exit 1
+          fi
+
+          PLIST_COUNT="$(find "$PREFROOT" -type f -name 'GlassFolders.plist' | wc -l | tr -d ' ')"
+          if [ "$PLIST_COUNT" != "1" ]; then
+            echo "ERROR: expected exactly one GlassFolders.plist, got $PLIST_COUNT"
+            exit 1
+          fi
+
+          PB="$(find root -type d -path '*/Library/PreferenceBundles/GlassFoldersPrefs.bundle' | head -n 1)"
+          test -n "$PB"
           test -f "$PB/GlassFolders.png"
           test -f "$PB/GlassFolders@2x.png"
           test -f "$PB/GlassFolders@3x.png"
           test -f "$PB/GlassFoldersLarge.png"
 
-          python3 - "$PL/GlassFolders.plist" "$PB/Info.plist" <<'PY'
+          python3 - "$PL/GlassFolders.plist" \
+            "$PL/GlassFolders.png" \
+            "$PL/GlassFolders@2x.png" \
+            "$PL/GlassFolders@3x.png" \
+            "$PB/Info.plist" <<'PY'
           import plistlib, sys
+          from PIL import Image
 
           with open(sys.argv[1], "rb") as f:
               entry = plistlib.load(f)
           assert entry["entry"]["icon"] == "GlassFolders.png"
 
-          with open(sys.argv[2], "rb") as f:
+          expected_sizes = [(29, 29), (58, 58), (87, 87)]
+          for path, size in zip(sys.argv[2:5], expected_sizes):
+              im = Image.open(path).convert("RGBA")
+              assert im.size == size
+              corners = [
+                  im.getpixel((0, 0))[3],
+                  im.getpixel((im.width - 1, 0))[3],
+                  im.getpixel((0, im.height - 1))[3],
+                  im.getpixel((im.width - 1, im.height - 1))[3],
+              ]
+              assert max(corners) < 16, (path, corners)
+
+          with open(sys.argv[5], "rb") as f:
               info = plistlib.load(f)
           assert info["CFBundleIconFile"] == "GlassFolders"
 
-          print("Final icon metadata verified.")
+          print("Exactly one Settings entry + rounded-alpha icons verified.")
           PY
 
           if find ctrl -maxdepth 1 -type f \( -name preinst -o -name postinst -o -name prerm -o -name postrm \) | grep -q .; then
@@ -287,7 +292,7 @@ jobs:
       - name: Upload deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.4-Beta1.2-DEB
+          name: GlassFolders-0.7.4-Beta1.3-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
