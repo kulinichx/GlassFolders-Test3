@@ -1,4 +1,4 @@
-name: GlassFolders 0.7.4 Beta1.8 APP-LIBRARY-POD
+name: GlassFolders 0.7.4 Beta1.9 APP-LIBRARY-POD
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 0.7.4 BETA1.8 APP-LIBRARY-POD ==="
+          echo "=== GLASSFOLDERS 0.7.4 BETA1.9 APP-LIBRARY-POD ==="
           echo "THEOS=$THEOS"
 
       - name: Set up Python for PNG verification
@@ -117,7 +117,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          grep -Fq 'GLASSFOLDERS 0.7.4 BETA1.8 APP-LIBRARY-POD' \
+          grep -Fq 'GLASSFOLDERS 0.7.4 BETA1.9 APP-LIBRARY-POD' \
             .github/workflows/build.yml
 
           grep -Fq '%group GFIconHooks' Tweak.xm
@@ -128,7 +128,7 @@ jobs:
           grep -Fq '%init(GFOpenedPanelHooks);' Tweak.xm
           grep -Fq '%hook SBFolderBackgroundView' Tweak.xm
 
-          # Beta1.8 intentionally resolves the exact App Library category background
+          # Beta1.9 intentionally resolves the exact App Library category background
           # class dynamically, but must not hook App Library controllers or link
           # SpringBoardHome directly.
           grep -Fq 'SBHLibraryCategoryPodBackgroundView' Tweak.xm
@@ -165,7 +165,7 @@ jobs:
           print("Rounded-alpha source icons verified.")
           PY
 
-          echo "Checking Beta1.8 native App Library pod + end-gated rails..."
+          echo "Checking Beta1.9 native App Library pod + end-gated rails..."
           grep -Fq 'primaryRailRaw' Tweak.xm
           grep -Fq 'secondaryRailRaw' Tweak.xm
           grep -Fq 'primaryEndpointGate' Tweak.xm
@@ -247,7 +247,7 @@ jobs:
           set -euo pipefail
 
           DEB="${{ steps.package.outputs.deb }}"
-          TMP="/tmp/gf074b18"
+          TMP="/tmp/gf074b19"
           rm -rf "$TMP"
           mkdir -p "$TMP"
           cd "$TMP"
@@ -283,7 +283,7 @@ jobs:
           grep -Fq 'SBFolderIconImageView' tweak.strings
           grep -Fq 'SBFolderBackgroundView' tweak.strings
 
-          # Exact native category-pod class is expected in Beta1.8. Other old
+          # Exact native category-pod class is expected in Beta1.9. Other old
           # App Library/controller experiments and direct framework references are not.
           grep -Fq 'SBHLibraryCategoryPodBackgroundView' tweak.strings
 
@@ -399,7 +399,7 @@ jobs:
       - name: Upload deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.4-Beta1.8-DEB
+          name: GlassFolders-0.7.4-Beta1.9-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
