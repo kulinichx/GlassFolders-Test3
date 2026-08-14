@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 1.8 — Native App Library Pod Layer
+ * GlassFolders 0.7.4 Beta 1.8 FIX2 — Neutral Wallpaper + Opened Overscan
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -15,6 +15,8 @@
  * - no App Library controller / transition / page-factory hooks
  *
  * Optical model:
+ * - wallpaper-only chroma: no Liquid Glass body tint/brightness
+ * - oversized opened-folder backdrop sampling before final rounded clipping
  * - stronger CABackdropLayer for wallpaper color / blur / saturation
  * - native App Library category-pod visual style layered into closed folders
  * - cached rounded-rect SDF lighting
@@ -802,7 +804,6 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
             [NSStringFromClass(self.layer.class) containsString:@"Backdrop"];
 
         CGFloat materialResponse = GFMaterialResponse(_gfStrength);
-        CGFloat tintResponse = GFTintResponse(_gfStrength);
 
         if (_gfStrength > 0.001 && isBackdropLayer) {
             /*
@@ -816,7 +817,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
             if (_gfStyle == 1) {
                 blurRadius = 4.8 + (7.5 * materialResponse);
                 saturation = 1.08 + (0.20 * materialResponse);
-                brightness = 0.006 + (0.014 * materialResponse);
+                brightness = 0.0;
             } else {
                 blurRadius = 1.8 + (6.0 * materialResponse);
                 saturation = 1.05 + (0.24 * materialResponse);
@@ -875,14 +876,14 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
         }
 
         /*
-         * Tiny neutral tint only. The wallpaper is meant to provide the color.
+         * No chromatic or milky body tint in Liquid Glass.  The wallpaper is
+         * the color source; the body only performs backdrop blur/saturation.
+         * Clear keeps the legacy tiny neutral lift.
          */
         CGFloat tintAlpha = 0.0;
 
-        if (_gfStrength > 0.001) {
-            tintAlpha = (_gfStyle == 1)
-                ? 0.030 + (0.060 * tintResponse)
-                : 0.018 * _gfStrength;
+        if (_gfStrength > 0.001 && _gfStyle != 1) {
+            tintAlpha = 0.018 * _gfStrength;
         }
 
         if (tintAlpha > 0.001) {
@@ -1371,6 +1372,92 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 secondaryRailRaw *
                 secondaryEndpointGate;
 
+            /*
+             * Geometric ownership fixes the visible seam at the two intended
+             * continuous joins.  A normal-based selector alone approaches zero
+             * at the side tangent of a rounded corner, which made the TL arc
+             * look detached from the top and the BR arc detached from bottom.
+             *
+             * Treat the complete top-left quarter arc as part of the primary
+             * rail and the complete bottom-right quarter arc as part of the
+             * secondary rail.  Then feather a short distance down/up the side
+             * so the energy leaves the corner continuously rather than ending
+             * on one pixel row.
+             */
+            CGFloat topLeftArcOwnership =
+                (x <= endpointRadius &&
+                 y <= endpointRadius)
+                    ? 1.0
+                    : 0.0;
+
+            CGFloat bottomRightArcOwnership =
+                (x >= width - endpointRadius &&
+                 y >= height - endpointRadius)
+                    ? 1.0
+                    : 0.0;
+
+            CGFloat sideTailLength =
+                MAX(3.0 * renderScale,
+                    endpointRadius * 0.22);
+
+            CGFloat topLeftTailProgress =
+                GFClamp01(
+                    (y - endpointRadius) /
+                    MAX(1.0, sideTailLength)
+                );
+
+            CGFloat bottomRightTailProgress =
+                GFClamp01(
+                    ((height - endpointRadius) - y) /
+                    MAX(1.0, sideTailLength)
+                );
+
+            CGFloat topLeftTailSmooth =
+                topLeftTailProgress *
+                topLeftTailProgress *
+                (3.0 - 2.0 * topLeftTailProgress);
+
+            CGFloat bottomRightTailSmooth =
+                bottomRightTailProgress *
+                bottomRightTailProgress *
+                (3.0 - 2.0 * bottomRightTailProgress);
+
+            CGFloat topLeftSideTail =
+                (y >= endpointRadius &&
+                 y <= endpointRadius + sideTailLength)
+                    ? pow(leftFacing, 1.35) *
+                      (1.0 - topLeftTailSmooth)
+                    : 0.0;
+
+            CGFloat bottomRightSideTail =
+                (y <= height - endpointRadius &&
+                 y >= height - endpointRadius - sideTailLength)
+                    ? pow(rightFacing, 1.35) *
+                      (1.0 - bottomRightTailSmooth)
+                    : 0.0;
+
+            primaryRailMask =
+                GFClamp01(
+                    MAX(
+                        primaryRailMask,
+                        MAX(
+                            topLeftArcOwnership,
+                            0.92 * topLeftSideTail
+                        )
+                    )
+                );
+
+            secondaryRailMask =
+                GFClamp01(
+                    MAX(
+                        secondaryRailMask,
+                        MAX(
+                            bottomRightArcOwnership,
+                            0.92 * bottomRightSideTail
+                        )
+                    )
+                );
+
             CGFloat coveredByRails =
                 MAX(
                     primaryRailMask,
@@ -1559,7 +1646,23 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 }
 
 
+@interface GFPanelBackdropSampleView : UIView
+@end
+
+@implementation GFPanelBackdropSampleView
+
++ (Class)layerClass {
+    Class backdropClass =
+        NSClassFromString(@"CABackdropLayer");
+
+    return backdropClass ?: [CALayer class];
+}
+
+@end
+
+
 @interface GFPanelGlassView : UIView
+@property (nonatomic, strong) GFPanelBackdropSampleView *gfBackdropSampleView;
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
 @property (nonatomic, strong) CALayer *gfOpticalLayer;
@@ -1569,6 +1672,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 @property (nonatomic, assign) CGFloat gfLightingRadius;
 @property (nonatomic, assign) BOOL gfLastDarkAppearance;
 @property (nonatomic, assign) BOOL gfHasAppearance;
+@property (nonatomic, assign) CGFloat gfBackdropOverscan;
 - (instancetype)initWithStrength:(CGFloat)strength;
 - (void)setPreferredRadius:(CGFloat)radius;
 - (void)gfRefreshMaterial;
@@ -1576,13 +1680,6 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
 
 @implementation GFPanelGlassView
-
-+ (Class)layerClass {
-    Class backdropClass =
-        NSClassFromString(@"CABackdropLayer");
-
-    return backdropClass ?: [CALayer class];
-}
 
 - (instancetype)initWithStrength:(CGFloat)strength {
     self = [super initWithFrame:CGRectZero];
@@ -1597,12 +1694,31 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         self.layer.masksToBounds = YES;
         self.layer.allowsEdgeAntialiasing = YES;
 
+        /*
+         * Sample beyond the final rounded mask.  Blurring a backdrop whose
+         * sample bounds end exactly at the rounded rect causes the blur kernel
+         * to clamp at the top-left / lower-right arc and creates the visible
+         * seam the screenshots showed.  The parent clips only after filtering.
+         */
+        _gfBackdropOverscan = 30.0;
+        _gfBackdropSampleView =
+            [[GFPanelBackdropSampleView alloc] initWithFrame:CGRectZero];
+        _gfBackdropSampleView.userInteractionEnabled = NO;
+        _gfBackdropSampleView.backgroundColor = UIColor.clearColor;
+        _gfBackdropSampleView.clipsToBounds = NO;
+        _gfBackdropSampleView.layer.masksToBounds = NO;
+        [self addSubview:_gfBackdropSampleView];
+
+        /*
+         * Intentionally colorless.  All hue comes from the wallpaper/backdrop.
+         * Keep the view only so older code paths can address it safely.
+         */
         _gfTintView =
             [[UIView alloc] initWithFrame:CGRectZero];
 
         _gfTintView.userInteractionEnabled = NO;
-        _gfTintView.backgroundColor =
-            UIColor.whiteColor;
+        _gfTintView.backgroundColor = UIColor.clearColor;
+        _gfTintView.alpha = 0.0;
 
         [self addSubview:_gfTintView];
 
@@ -1619,6 +1735,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             kCAFilterLinear;
 
         _gfOpticalLayer.opaque = NO;
+        _gfOpticalLayer.zPosition = 20.0;
 
         [self.layer addSublayer:_gfOpticalLayer];
 
@@ -1652,39 +1769,35 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     CGFloat tintResponse =
         GFTintResponse(self.gfStrength);
 
+    CALayer *materialLayer =
+        self.gfBackdropSampleView.layer;
+
     BOOL isBackdropLayer =
-        [NSStringFromClass(self.layer.class)
+        [NSStringFromClass(materialLayer.class)
             containsString:@"Backdrop"];
 
     if (self.gfStrength > 0.001 &&
         isBackdropLayer) {
 
         /*
-         * Dark mode:
-         *   a slightly stronger lift is required because SpringBoard's outer
-         *   folder environment is already dimmed.
-         *
-         * Light mode:
-         *   less white tint + less brightness so the panel does not become
-         *   an opaque milky card on a bright wallpaper.
+         * Colorless material body: blur + a restrained saturation response.
+         * There is deliberately no brightness/tint filter here; the wallpaper
+         * remains the sole chromatic source and the optical layer supplies the
+         * edge luminance.
          */
         CGFloat blurRadius = darkAppearance
-            ? (5.6 + 5.2 * materialResponse)
-            : (5.0 + 4.4 * materialResponse);
+            ? (6.4 + 5.6 * materialResponse)
+            : (5.8 + 5.0 * materialResponse);
 
         CGFloat saturation = darkAppearance
-            ? (1.04 + 0.11 * materialResponse)
-            : (1.03 + 0.07 * materialResponse);
+            ? (1.04 + 0.10 * materialResponse)
+            : (1.03 + 0.08 * materialResponse);
 
-        CGFloat brightness = darkAppearance
-            ? (0.010 + 0.018 * materialResponse)
-            : (0.000 + 0.004 * materialResponse);
+        self.gfBackdropOverscan =
+            MAX(30.0, blurRadius * 2.75 + 4.0);
 
         id saturate =
             GFCreateCAFilter(@"colorSaturate");
-
-        id brighten =
-            GFCreateCAFilter(@"colorBrightness");
 
         id blur =
             GFCreateCAFilter(@"gaussianBlur");
@@ -1700,14 +1813,6 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             [filters addObject:saturate];
         }
 
-        if (brighten) {
-            [brighten
-                setValue:@(brightness)
-                  forKey:@"inputAmount"];
-
-            [filters addObject:brighten];
-        }
-
         if (blur) {
             [blur
                 setValue:@(blurRadius)
@@ -1717,20 +1822,23 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 setValue:@YES
                   forKey:@"inputNormalizeEdges"];
 
-            [blur
-                setValue:@YES
-                  forKey:@"inputHardEdges"];
-
+            /*
+             * Do not request hard edges: overscan provides real neighbouring
+             * backdrop pixels, so clamping the Gaussian kernel would recreate
+             * the very corner seam we are eliminating.
+             */
             [filters addObject:blur];
         }
 
-        [self.layer
+        [materialLayer
             setValue:filters
               forKey:@"filters"];
 
-        [self.layer
+        [materialLayer
             setValue:@1.0
               forKey:@"scale"];
+
+        self.gfBackdropSampleView.hidden = NO;
 
         if (self.gfFallbackBlurView) {
             [self.gfFallbackBlurView
@@ -1739,6 +1847,8 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             self.gfFallbackBlurView = nil;
         }
     } else if (self.gfStrength > 0.001) {
+        self.gfBackdropSampleView.hidden = YES;
+
         if (!self.gfFallbackBlurView) {
             UIBlurEffect *effect =
                 [UIBlurEffect
@@ -1753,26 +1863,20 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 NO;
 
             [self insertSubview:self.gfFallbackBlurView
-                   belowSubview:self.gfTintView];
+                   aboveSubview:self.gfBackdropSampleView];
         }
 
         self.gfFallbackBlurView.alpha =
             darkAppearance
-                ? MIN(0.56, 0.20 + 0.34 * materialResponse)
-                : MIN(0.46, 0.15 + 0.28 * materialResponse);
+                ? MIN(0.42, 0.14 + 0.25 * materialResponse)
+                : MIN(0.34, 0.10 + 0.20 * materialResponse);
     }
 
     /*
-     * Neutral tint only. Wallpaper remains the chromatic source.
+     * No body tint. Wallpaper/backdrop is the only color source.
      */
-    self.gfTintView.alpha =
-        self.gfStrength > 0.001
-            ? (
-                darkAppearance
-                    ? (0.012 + 0.028 * tintResponse)
-                    : (0.004 + 0.012 * tintResponse)
-              )
-            : 0.0;
+    (void)tintResponse;
+    self.gfTintView.alpha = 0.0;
 
     /*
      * Force the optical texture to be regenerated when light/dark mode
@@ -1806,8 +1910,17 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 - (void)layoutSubviews {
     [super layoutSubviews];
 
+    CGFloat overscan =
+        MAX(24.0, self.gfBackdropOverscan);
+
+    CGRect sampleFrame =
+        CGRectInset(self.bounds, -overscan, -overscan);
+
+    self.gfBackdropSampleView.frame =
+        sampleFrame;
+
     self.gfFallbackBlurView.frame =
-        self.bounds;
+        sampleFrame;
 
     self.gfTintView.frame =
         self.bounds;
