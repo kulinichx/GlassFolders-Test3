@@ -1,4 +1,4 @@
-name: GlassFolders 0.7.4 Beta2.2 BASELINE-CLEAR-RAILS
+name: GlassFolders 0.7.4 Beta2.3 CONTROLLED-RESTORE
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 0.7.4 BETA2.2 BASELINE-CLEAR-RAILS ==="
+          echo "=== GLASSFOLDERS 0.7.4 BETA2.3 CONTROLLED-RESTORE ==="
           echo "THEOS=$THEOS"
 
       - name: Set up Python for PNG verification
@@ -117,7 +117,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          grep -Fq 'GLASSFOLDERS 0.7.4 BETA2.2 BASELINE-CLEAR-RAILS' \
+          grep -Fq 'GLASSFOLDERS 0.7.4 BETA2.3 CONTROLLED-RESTORE' \
             .github/workflows/build.yml
 
           grep -Fq '%group GFIconHooks' Tweak.xm
@@ -128,18 +128,24 @@ jobs:
           grep -Fq '%init(GFOpenedPanelHooks);' Tweak.xm
           grep -Fq '%hook SBFolderBackgroundView' Tweak.xm
 
-          # Beta2.2 may resolve the exact App Library category background class
+          # Beta2.3 may resolve the exact App Library category background class
           # dynamically as a passive view, but must not hook App Library controllers,
           # actively trigger its visual-style method, or link SpringBoardHome.
           grep -Fq 'SBHLibraryCategoryPodBackgroundView' Tweak.xm
           grep -Fq 'GFCreateNativeAppLibraryPodVisual' Tweak.xm
 
           # Regression guard: this one-shot activation was the source of the
-          # darker closed-folder material that Beta2.2 intentionally removes.
+          # darker closed-folder material that Beta2.3 intentionally keeps removed.
           if grep -Eq 'GFActivateNativeAppLibraryPodVisual|_updateVisualStyle' Tweak.xm; then
             echo "ERROR: active App Library pod visual-style path reintroduced."
             exit 1
           fi
+
+          # Exact closed Liquid Glass regression guard. These are the values
+          # from the earlier on-device reference that the user accepted.
+          grep -Fq 'brightness = 0.006 + (0.014 * materialResponse);' Tweak.xm
+          grep -Fq '? 0.030 + (0.060 * tintResponse)' Tweak.xm
+          grep -Fq 'podView.alpha = MIN(0.78, 0.42 + 0.36 * materialResponse);' Tweak.xm
 
           # Clear must remain a real shallow backdrop sample, not the old
           # hidden/zero-blur branch.
@@ -177,11 +183,11 @@ jobs:
           print("Rounded-alpha source icons verified.")
           PY
 
-          echo "Checking Beta2.2 passive pod + Clear split + symmetric opened rails..."
+          echo "Checking Beta2.3 exact closed baseline + Clear split + symmetric opened rails..."
           # These names are unique to GFCreateOpenedPanelLightingImage in the
-          # Beta2.2 continuous-tangent model, so the gate cannot accidentally
+          # Beta2.3 continuous-tangent model, so the gate cannot accidentally
           # pass by finding similarly named closed-folder lighting variables.
-          grep -Fq 'Beta 2.2 — symmetric continuous tangent rails.' Tweak.xm
+          grep -Fq 'Beta 2.3 — symmetric continuous tangent rails.' Tweak.xm
           grep -Fq 'primaryQuadrantEnergy' Tweak.xm
           grep -Fq 'secondaryQuadrantEnergy' Tweak.xm
           grep -Fq 'tangentOverlap' Tweak.xm
@@ -192,6 +198,10 @@ jobs:
           grep -Fq 'secondaryEnvelope' Tweak.xm
           grep -Fq 'topLeftTailSmooth' Tweak.xm
           grep -Fq 'bottomRightTailSmooth' Tweak.xm
+          grep -Fq 'primaryTurnGain' Tweak.xm
+          grep -Fq 'secondaryTurnGain' Tweak.xm
+          grep -Fq 'endpointRadius * 1.12' Tweak.xm
+          grep -Fq '@"P23-%@-%@-%zux%zu-r%.2f-s%ld"' Tweak.xm
 
           if grep -Eq 'topLeftArcOwnership|bottomRightArcOwnership|topStraightOwnership|bottomStraightOwnership' Tweak.xm; then
             echo "ERROR: old piecewise opened-rail splice model remains."
@@ -305,7 +315,7 @@ jobs:
           grep -Fq 'SBFolderIconImageView' tweak.strings
           grep -Fq 'SBFolderBackgroundView' tweak.strings
 
-          # Exact native category-pod class is expected as a passive view in Beta2.2.
+          # Exact native category-pod class is expected as a passive view in Beta2.3.
           # Other App Library/controller experiments and direct framework references are not.
           grep -Fq 'SBHLibraryCategoryPodBackgroundView' tweak.strings
 
@@ -421,7 +431,7 @@ jobs:
       - name: Upload deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.4-Beta2.2-DEB
+          name: GlassFolders-0.7.4-Beta2.3-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
