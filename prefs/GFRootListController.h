@@ -2,4 +2,5 @@
 
 @interface GFRootListController : PSListController
 - (void)respring;
+- (NSString *)authorValue:(PSSpecifier *)specifier;
 @end

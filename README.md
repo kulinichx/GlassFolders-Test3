@@ -1,43 +1,33 @@
-# GlassFolders 0.7.4 Beta 1.3 — Dedup + Rounded Icon
+# GlassFolders 0.7.4 Beta 1.4 — Author Credit
 
-This build fixes the two Settings issues observed on-device.
+This build adds the requested author attribution inside the GlassFolders
+PreferenceBundle.
 
-## Duplicate row
+## Layout
 
-Inspection of the actual Beta 1.2 deb showed both:
+At the very bottom of the settings page, after `应用并注销`:
 
-- `Library/PreferenceLoader/Preferences/GlassFolders.plist`
-- `Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist`
+- group title: `关于`
+- static title/value row:
+  - left: `作者`
+  - right: `kulinich`
 
-The top-level plist was an old repository leftover and produced the second,
-iconless GlassFolders row.
+The row uses the native `PSTitleValueCell` pattern with a getter method:
 
-Beta 1.3 deletes that old file before every build and the final-deb verifier
-hard-fails unless exactly one `GlassFolders.plist` exists.
+`authorValue:`
 
-Old `GlassFoldersIcon*.png` files are also deleted and rejected.
-
-## Rounded Settings icon
-
-Inspection of the actual Beta 1.2 PNG showed alpha=255 at all four external
-corners. PreferenceLoader displayed the image as a square.
-
-Beta 1.3 writes a real anti-aliased alpha mask into the PNG itself. The corner
-radius is approximately 22% of icon width, matching the visual proportion of
-standard iOS Settings list icons.
-
-The final-deb verifier checks that the four external corner alpha values are
-transparent for all three icon scales:
-
-- 29x29
-- 58x58
-- 87x87
+It is informational only: no link cell, no chevron, no action.
 
 ## Runtime
 
-Unchanged folder-only safety branch:
+SpringBoard tweak code is unchanged byte-for-byte from Beta 1.3.2.
 
-- `SBFolderIconImageView`
-- `SBFolderBackgroundView`
+Only the PreferenceBundle, version metadata and CI checks changed.
 
-No App Library code.
+The folder-only safety branch remains:
+
+- closed folder: `SBFolderIconImageView`
+- opened folder: `SBFolderBackgroundView`
+- no App Library code
+
+Rounded settings icon and duplicate PreferenceLoader-entry cleanup are retained.

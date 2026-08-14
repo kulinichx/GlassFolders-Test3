@@ -277,6 +277,12 @@ extern char **environ;
     return _specifiers;
 }
 
+
+- (NSString *)authorValue:(PSSpecifier *)specifier {
+    (void)specifier;
+    return @"kulinich";
+}
+
 - (void)respring {
     NSString *sbreloadPath = jbroot(@"/usr/bin/sbreload");
 
