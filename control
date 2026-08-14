@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.3~beta2
+Version: 0.7.3~beta2.1
 Architecture: iphoneos-arm64e
-Description: App Library Pod-container Liquid Glass: uses SBHLibraryPodFolderView as the lifecycle container and the exact category background descendant as geometry, hiding only the stock background. Also fixes the PreferenceLoader icon with a standard nested absolute path.
+Description: Beta2 runtime unchanged; fixes GitHub post-build diagnostics and explicitly packages settings icon PNG resources into GlassFoldersPrefs.bundle.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks

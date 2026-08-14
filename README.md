@@ -1,77 +1,51 @@
-# GlassFolders 0.7.3 Beta 2 — App Library Pod Container
+# GlassFolders 0.7.3 Beta 2.1 — Package Gate Fix
 
-This build replaces the unsuccessful App Library Beta1.x approach.
+The SpringBoard runtime code is byte-for-byte identical to Beta 2.
 
-## What the on-device result proved
+## Why the Beta 2 GitHub Action failed
 
-The nested small folder-like element in App Library already received
-GlassFolders through the normal `SBFolderIconImageView` path.
+Compilation and `.deb` packaging completed successfully.
 
-The large outer category cards did not.
+The failure happened only in the custom post-build safety gate, where a chain
+of `strings | grep -Fq` checks treated every expected Objective-C string as a
+mandatory binary invariant.
 
-The AppLibraryController public headers identify:
+That is too brittle for a stripped Mach-O: absence from `strings(1)` does not
+by itself prove the Logos hook was omitted.
 
-`SBHLibraryPodFolderView : SBFolderView`
+Beta 2.1 keeps forbidden controller/factory symbols as a hard failure, but
+prints the intended visual class strings as diagnostics.
 
-as the App Library pod folder container.
+## Settings icon packaging fix
 
-Its tweak source separately uses
-`SBHLibraryCategoryPodBackgroundView -_updateVisualStyle`
-for the category background visual.
+Inspection of an earlier real GlassFolders `.deb` showed the actual package did
+not contain any PNG icon files. That directly explains the blank Settings icon.
 
-## Beta 2 architecture
+Beta 2.1 explicitly sets:
 
-For each `SBHLibraryPodFolderView`:
+`GlassFoldersPrefs_RESOURCE_FILES`
 
-1. locate its exact `SBHLibraryCategoryPodBackgroundView` descendant;
-2. use that descendant only for system frame + corner radius;
-3. hide the whole stock background view;
-4. insert one `GFPanelGlassView` at index 0 of the pod container;
-5. keep icons, labels, touch handling, and folder expansion untouched.
+for the 1x/2x/3x and large PNG assets.
 
-The custom glass frame is converted from the real system background view into
-pod coordinates. If that exact background is not present yet, Beta 2 does
-nothing and waits for the next UIKit layout callback; it does not guess a card
-frame.
+The post-build verifier now opens the actual `.deb` and hard-fails unless it
+contains:
 
-The descendant is cached per pod, so the recursive search is not repeated after
-the background is resolved.
+- nested PreferenceLoader `GlassFolders.plist`;
+- PreferenceLoader icon 1x/2x/3x;
+- GlassFoldersPrefs.bundle icon 1x/2x/3x.
 
-## App Library hooks
+This prevents another build where the source tree contains icons but the
+installed package does not.
 
-Only these visual classes are used:
+## App Library runtime
 
-- `SBHLibraryPodFolderView`
-- `SBHLibraryCategoryPodBackgroundView`
+Unchanged from Beta 2:
 
-No App Library controller, pod folder controller, icon-list view, icon view,
-search controller, or navigation hook is added.
+- `SBHLibraryPodFolderView` is the pod lifecycle/container;
+- its exact `SBHLibraryCategoryPodBackgroundView` descendant supplies card
+  frame/radius;
+- the stock category background view is hidden;
+- custom glass is inserted at index 0 of the pod;
+- icon/title/touch/expansion behavior remains system-managed.
 
-## PreferenceLoader icon
-
-The Settings entry now follows the common PreferenceLoader structure:
-
-`/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist`
-
-with its icon next to it:
-
-`/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon.png`
-
-and the `entry.icon` value is the absolute path above.
-
-1x/2x/3x PNG variants are included.
-
-## Existing behavior
-
-Unchanged:
-
-- closed Home Screen folder optical glass;
-- opened folder `SBFolderBackgroundView` glass;
-- percentage-driven edge calibration;
-- dark/light adaptation;
-- independent App Library switch;
-- RootHide arm64e;
-- SpringBoard-only tweak injection.
-
-No daemon, timer, polling loop, DisplayLink, gyroscope, or continuous Metal
-rendering.
+No controller, icon-list, search-controller, timer, or polling hook is added.
