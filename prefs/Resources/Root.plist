@@ -10,7 +10,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.4 Beta 1.4</string>
+			<string>GlassFolders 0.7.4 Beta 1.6</string>
 			<key>footerText</key>
 			<string>仅保留桌面关闭文件夹与打开文件夹两条稳定玻璃路径。本版本不包含任何额外系统页面适配。</string>
 		</dict>

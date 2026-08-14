@@ -1,33 +1,72 @@
-# GlassFolders 0.7.4 Beta 1.4 — Author Credit
+# GlassFolders 0.7.4 Beta 1.6 — Continuous Specular Rails
 
-This build adds the requested author attribution inside the GlassFolders
-PreferenceBundle.
+This calibration implements the visual correction from the Apple reference:
 
-## Layout
+- upper-left rounded corner and the full top edge are ONE continuous
+  equal-brightness highlight;
+- the full bottom edge and lower-right rounded corner are ONE continuous
+  equal-brightness secondary highlight;
+- straight left/right side middles are substantially quieter.
 
-At the very bottom of the settings page, after `应用并注销`:
+## Why this is different from Beta 1.5
 
-- group title: `关于`
-- static title/value row:
-  - left: `作者`
-  - right: `kulinich`
+Beta 1.5 still treated corner energy and straight-edge energy as separate
+components. Even with similar coefficients, the rounded corner could read as a
+bright spot attached to a different top line.
 
-The row uses the native `PSTitleValueCell` pattern with a getter method:
+Beta 1.6 constructs a shared geometric mask for each rail.
 
-`authorValue:`
+### Primary rail
 
-It is informational only: no link cell, no chevron, no action.
+`primaryRailMask`
 
-## Runtime
+is the union of:
 
-SpringBoard tweak code is unchanged byte-for-byte from Beta 1.3.2.
+- the straight top-facing normal;
+- the saturated upper-left rounded-corner bridge.
 
-Only the PreferenceBundle, version metadata and CI checks changed.
+The same shoulder/core/filament gains are multiplied by the whole mask, so the
+highlight turns through the upper-left radius without changing luminance.
 
-The folder-only safety branch remains:
+### Secondary rail
 
-- closed folder: `SBFolderIconImageView`
-- opened folder: `SBFolderBackgroundView`
-- no App Library code
+`secondaryRailMask`
 
-Rounded settings icon and duplicate PreferenceLoader-entry cleanup are retained.
+does the same for:
+
+- the straight bottom edge;
+- the lower-right rounded corner.
+
+The secondary rail is intentionally slightly softer than the primary rail, but
+its bottom segment and lower-right corner are equal to each other.
+
+### Other edges
+
+Upper-right and lower-left retain only low transition structure.
+
+The straight left/right side middles use `sideMiddleMask` and a very small gain,
+so they do not read as a uniform white outline.
+
+## Closed and opened folders
+
+Both optical maps use the same topology.
+
+The opened folder remains broader/softer because its glass surface is larger,
+but the highlight organization is identical.
+
+## Safety / performance
+
+Unchanged:
+
+- RootHide arm64e;
+- SpringBoard-only main injection;
+- only `SBFolderIconImageView` and `SBFolderBackgroundView`;
+- cached CPU-generated SDF optical textures;
+- no timer;
+- no DisplayLink;
+- no gyro;
+- no daemon;
+- no App Library code;
+- rounded Settings icon retained;
+- duplicate PreferenceLoader cleanup retained;
+- `作者  kulinich` retained.

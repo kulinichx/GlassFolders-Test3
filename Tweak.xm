@@ -6,19 +6,20 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 1.3 — Dedup + Rounded Icon
+ * GlassFolders 0.7.4 Beta 1.6 — Continuous Specular Rails
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
- * - opened panel is attached only to SBFolderBackgroundView
- * - optional App Library category-card background glass
- * - no parent folder container / page-background factory / transition hook
+ * - opened panel attached only to SBFolderBackgroundView
+ * - no App Library / controller / transition / page-factory hooks
  *
  * Optical model:
  * - CABackdropLayer for wallpaper color / blur / saturation
  * - cached rounded-rect SDF lighting
- * - upper-left neutral-white filament + core + soft shoulder
- * - independent right/bottom secondary rim
+ * - one continuous equal-brightness top + upper-left specular rail
+ * - one continuous equal-brightness bottom + lower-right specular rail
+ * - deliberately quiet straight left/right side middles
+ * - subtle upper-right / lower-left transition structure
  *
  * No daemon / DisplayLink / Timer / gyroscope / Metal render loop.
  */
@@ -353,21 +354,29 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                     CGFloat secondaryFilament = exp(-pow(secondaryRatio, 2.35));
 
                     /*
-                     * Surface-axis redistribution.
+                     * Beta 1.6 continuous specular rails.
                      *
-                     * horizontalEdge = top/bottom
-                     * verticalEdge   = left/right
+                     * Apple-like topology:
                      *
-                     * The 100% screenshot showed that straight left/right
-                     * sides were already strong while TL/BR corners were not.
-                     * Therefore straight vertical sides now receive much less
-                     * luminance than top/bottom and the selected corners.
+                     *   PRIMARY RAIL
+                     *     upper-left rounded corner -> entire top edge
+                     *
+                     *   SECONDARY RAIL
+                     *     entire bottom edge -> lower-right rounded corner
+                     *
+                     * Each pair shares ONE mask and ONE luminance gain. This
+                     * removes the "bright corner + separate bright line"
+                     * appearance. The highlight now visually turns through the
+                     * radius as one continuous piece of glass.
+                     *
+                     * Straight left/right side middles remain deliberately
+                     * quiet and receive only a low structural floor.
                      */
                     CGFloat horizontalEdge =
-                        pow(fabs(ny), 2.00);
+                        pow(fabs(ny), 2.08);
 
                     CGFloat verticalEdge =
-                        pow(fabs(nx), 2.00);
+                        pow(fabs(nx), 2.30);
 
                     CGFloat topFacing =
                         MAX(0.0, -ny);
@@ -375,86 +384,182 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                     CGFloat bottomFacing =
                         MAX(0.0, ny);
 
-                    /*
-                     * Very low continuous floor: enough to preserve the shape
-                     * without producing a uniform white rounded rectangle.
-                     */
-                    CGFloat perimeterFloor =
-                        0.0035 + 0.0055 * edgeDrive;
+                    CGFloat leftFacing =
+                        MAX(0.0, -nx);
 
-                    CGFloat horizontalRailGain =
-                        0.010 + 0.125 * edgeDrive;
-
-                    CGFloat verticalRailGain =
-                        0.003 + 0.032 * edgeDrive;
-
-                    CGFloat topRail =
-                        horizontalEdge *
-                        topFacing *
-                        horizontalRailGain;
-
-                    CGFloat bottomRail =
-                        horizontalEdge *
-                        bottomFacing *
-                        (0.008 + 0.105 * edgeDrive);
-
-                    CGFloat sideRail =
-                        verticalEdge *
-                        verticalRailGain;
+                    CGFloat rightFacing =
+                        MAX(0.0, nx);
 
                     /*
-                     * Top-left + bottom-right rounded-corner bridge.
-                     * nx*ny > 0 selects precisely those two diagonal corners.
-                     * Broad exponent keeps the highlight connected through
-                     * the radius instead of forming an isolated hot pixel.
+                     * Saturate near the middle of the target corner so the
+                     * curved portion reaches the SAME peak as its adjoining
+                     * straight rail instead of becoming an isolated hotspot.
                      */
-                    CGFloat pairedCorner =
+                    CGFloat topLeftCornerSelector =
                         GFClamp01(
-                            2.20 * MAX(0.0, nx * ny)
+                            2.10 * leftFacing * topFacing
                         );
 
-                    CGFloat cornerBridge =
-                        pow(pairedCorner, 0.88);
+                    CGFloat bottomRightCornerSelector =
+                        GFClamp01(
+                            2.10 * rightFacing * bottomFacing
+                        );
 
-                    CGFloat cornerFilamentGain =
-                        0.020 + 0.340 * edgeDrive;
+                    CGFloat topRightCornerSelector =
+                        GFClamp01(
+                            2.05 * rightFacing * topFacing
+                        );
 
-                    CGFloat cornerCoreGain =
-                        0.008 + 0.100 * edgeDrive;
+                    CGFloat bottomLeftCornerSelector =
+                        GFClamp01(
+                            2.05 * leftFacing * bottomFacing
+                        );
+
+                    CGFloat topLeftCornerBridge =
+                        pow(topLeftCornerSelector, 0.58);
+
+                    CGFloat bottomRightCornerBridge =
+                        pow(bottomRightCornerSelector, 0.58);
+
+                    CGFloat topRightTransition =
+                        pow(topRightCornerSelector, 0.88);
+
+                    CGFloat bottomLeftTransition =
+                        pow(bottomLeftCornerSelector, 0.88);
 
                     /*
-                     * Directional key light is attenuated on pure vertical
-                     * sides, but remains strong on top and rounded corners.
+                     * ONE continuous equal-brightness mask:
+                     *
+                     * - topFacing is 1.0 on the straight top edge;
+                     * - topLeftCornerBridge rises to ~1.0 through the TL arc;
+                     * - MAX() makes the joint behave as one rail.
+                     *
+                     * Same construction for bottom -> lower-right.
                      */
-                    CGFloat keyAxisWeight =
-                        0.30 +
-                        0.48 * horizontalEdge +
-                        0.22 * cornerBridge;
+                    CGFloat primaryRailMask =
+                        GFClamp01(
+                            MAX(
+                                pow(topFacing, 1.08),
+                                topLeftCornerBridge
+                            )
+                        );
+
+                    CGFloat secondaryRailMask =
+                        GFClamp01(
+                            MAX(
+                                pow(bottomFacing, 1.08),
+                                bottomRightCornerBridge
+                            )
+                        );
 
                     /*
-                     * The secondary far-side rim keeps bottom/bottom-right
-                     * crisp while cutting the straight right edge.
+                     * Remove the rail-covered corner zones from the straight
+                     * vertical side mask. Only the middle walls retain this
+                     * tiny structural reflection.
                      */
-                    CGFloat secondaryAxisWeight =
-                        0.24 +
-                        0.60 * horizontalEdge +
-                        0.16 * cornerBridge;
+                    CGFloat coveredByRails =
+                        MAX(
+                            primaryRailMask,
+                            secondaryRailMask
+                        );
+
+                    CGFloat sideMiddleMask =
+                        verticalEdge *
+                        pow(
+                            MAX(0.0, 1.0 - coveredByRails),
+                            1.55
+                        );
+
+                    CGFloat perimeterFloor =
+                        0.0025 + 0.0038 * edgeDrive;
+
+                    /*
+                     * Primary rail = top + upper-left, same gain everywhere.
+                     * Secondary rail = bottom + lower-right, same gain
+                     * everywhere. Secondary remains slightly softer than
+                     * primary, but there is no discontinuity inside either
+                     * pair.
+                     */
+                    CGFloat primaryFilamentGain =
+                        0.020 + 0.285 * edgeDrive;
+
+                    CGFloat primaryCoreGain =
+                        0.008 + 0.090 * edgeDrive;
+
+                    CGFloat primaryShoulderGain =
+                        0.004 + 0.030 * edgeDrive;
+
+                    CGFloat secondaryFilamentGain =
+                        0.012 + 0.205 * edgeDrive;
+
+                    CGFloat secondaryCoreGain =
+                        0.005 + 0.058 * edgeDrive;
+
+                    CGFloat secondaryShoulderGain =
+                        0.0025 + 0.018 * edgeDrive;
+
+                    /*
+                     * Straight sides are now only a silhouette cue.
+                     */
+                    CGFloat sideMiddleGain =
+                        0.0010 + 0.0090 * edgeDrive;
+
+                    /*
+                     * Upper-right and lower-left are non-dominant transition
+                     * corners. They remain visible enough to keep the rounded
+                     * shape coherent, without becoming a third/fourth hotspot.
+                     */
+                    CGFloat transitionCornerGain =
+                        0.0025 + 0.018 * edgeDrive;
+
+                    /*
+                     * Keep directional physics only as a very small micro
+                     * modulation. The 4% range is intentionally too small to
+                     * make the upper-left brighter than the top rail, so the
+                     * joined rail still reads as one brightness.
+                     */
+                    CGFloat primaryDirectionalMicro =
+                        0.96 + 0.04 * pow(facing, 1.20);
+
+                    CGFloat secondaryDirectionalMicro =
+                        0.96 + 0.04 * pow(opposite, 1.20);
 
                     CGFloat white =
                         filament * perimeterFloor +
-                        filament * topRail +
-                        filament * bottomRail +
-                        filament * sideRail +
-                        filament * cornerBridge * cornerFilamentGain +
-                        core * cornerBridge * cornerCoreGain +
-                        shoulder * highlightShoulderGain *
-                            pow(facing, 1.35) * keyAxisWeight +
-                        core * highlightCoreGain *
-                            pow(facing, 1.50) * keyAxisWeight +
-                        filament * highlightFilamentGain *
-                            pow(facing, 1.70) * keyAxisWeight +
-                        secondaryFilament * secondaryRimGain *
-                            pow(opposite, 1.30) * secondaryAxisWeight;
+
+                        shoulder * primaryRailMask *
+                            primaryShoulderGain +
+                        core * primaryRailMask *
+                            primaryCoreGain +
+                        filament * primaryRailMask *
+                            primaryFilamentGain *
+                            primaryDirectionalMicro +
+
+                        shoulder * secondaryRailMask *
+                            secondaryShoulderGain +
+                        core * secondaryRailMask *
+                            secondaryCoreGain +
+                        filament * secondaryRailMask *
+                            secondaryFilamentGain *
+                            secondaryDirectionalMicro +
+
+                        filament * sideMiddleMask *
+                            sideMiddleGain +
+
+                        filament *
+                            (topRightTransition +
+                             bottomLeftTransition) *
+                            transitionCornerGain +
+
+                        /*
+                         * A thin far-side filament follows the SAME secondary
+                         * bottom/lower-right rail rather than lighting the
+                         * entire right wall.
+                         */
+                        secondaryFilament *
+                            secondaryRimGain *
+                            secondaryRailMask *
+                            0.36;
 
                     CGFloat shadowOffset =
                         (insideDepth - shadowCenter) /
@@ -463,11 +568,19 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                     CGFloat shadowBand =
                         exp(-(shadowOffset * shadowOffset * 1.20));
 
+                    CGFloat darkStructureMask =
+                        0.72 * secondaryRailMask +
+                        0.18 * sideMiddleMask +
+                        0.10 * (
+                            topRightTransition +
+                            bottomLeftTransition
+                        );
+
                     CGFloat dark =
                         shadowBand *
                         shadowGain *
-                        pow(opposite, 1.20) *
-                        secondaryAxisWeight;
+                        (0.92 + 0.08 * pow(opposite, 1.20)) *
+                        darkStructureMask;
 
                     signedLight += white - dark;
                 }
@@ -479,7 +592,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
              * response instead of capping 75% and 100% at the same ceiling.
              */
             CGFloat closedEdgePeak =
-                0.105 + 0.365 * edgeDrive;
+                0.120 + 0.400 * edgeDrive;
 
             signedLight =
                 MIN(
@@ -974,47 +1087,29 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 exp(-pow(secondaryRatio, 2.30));
 
             /*
-             * Connected edge rail model
+             * Beta 1.6 opened-panel continuous rails.
              *
-             * 1. perimeterGain:
-             *    a very fine continuous reflection so no side disappears.
+             * The larger opened surface uses exactly the same optical
+             * topology as the closed folder:
              *
-             * 2. horizontalRail:
-             *    top and bottom receive a stronger clean highlight, matching
-             *    the reference where the glass reads brighter along both
-             *    horizontal edges.
+             *   primary:
+             *     upper-left rounded corner -> full top rail
              *
-             * 3. cornerBridge:
-             *    specifically reinforces the top-left and bottom-right
-             *    rounded corners. The highlight therefore bends around the
-             *    radius and connects naturally into the top/bottom rails
-             *    instead of ending abruptly at the straight edge.
+             *   secondary:
+             *     full bottom rail -> lower-right rounded corner
              *
-             * Directional key light is still strongest at upper-left.
-             */
-            /*
-             * Beta4 separates "glass exists" from "glass is strongly lit".
-             * edgeDrive is the user-visible brightness control for the edge
-             * optics; unlike the old constant-heavy gains, 75% and 100% now
-             * look materially brighter than 55%.
+             * Corner and straight segment inside each pair use one shared
+             * mask/gain so their brightness is continuous through the radius.
+             * The large panel is broader/softer, not differently organized.
              */
             CGFloat edgeDrive =
                 GFEdgeResponse(strength);
 
-            /*
-             * Surface-axis weights:
-             * horizontalEdge -> top/bottom
-             * verticalEdge   -> left/right
-             *
-             * The Apple reference spends much more luminance budget on the
-             * horizontal rails and the diagonal rounded corners. Straight
-             * left/right sides remain present, but intentionally quieter.
-             */
             CGFloat horizontalEdge =
                 pow(fabs(ny), 2.10);
 
             CGFloat verticalEdge =
-                pow(fabs(nx), 2.10);
+                pow(fabs(nx), 2.32);
 
             CGFloat topFacing =
                 MAX(0.0, -ny);
@@ -1022,101 +1117,163 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             CGFloat bottomFacing =
                 MAX(0.0, ny);
 
-            /*
-             * Very weak always-on perimeter floor, then strength-dependent
-             * horizontal/vertical gains. Straight side gain is ~40% of the
-             * horizontal baseline, which fixes the Beta3 "left/right too
-             * bright" result.
-             */
-            CGFloat perimeterFloor = darkAppearance
-                ? 0.0060
-                : 0.0045;
+            CGFloat leftFacing =
+                MAX(0.0, -nx);
 
-            CGFloat horizontalPerimeterGain = darkAppearance
-                ? (0.018 + 0.034 * edgeDrive)
-                : (0.013 + 0.026 * edgeDrive);
+            CGFloat rightFacing =
+                MAX(0.0, nx);
 
-            CGFloat verticalPerimeterGain = darkAppearance
-                ? (0.007 + 0.014 * edgeDrive)
-                : (0.006 + 0.011 * edgeDrive);
-
-            CGFloat axisPerimeter =
-                horizontalEdge * horizontalPerimeterGain +
-                verticalEdge * verticalPerimeterGain;
-
-            /*
-             * Top/bottom rails scale aggressively with edgeDrive.
-             * At 75% the rails are already clearly bright; at 100% they
-             * approach the crisp system reference without turning the whole
-             * perimeter into a uniform white stroke.
-             */
-            CGFloat topRailGain = darkAppearance
-                ? (0.022 + 0.160 * edgeDrive)
-                : (0.016 + 0.108 * edgeDrive);
-
-            CGFloat bottomRailGain = darkAppearance
-                ? (0.018 + 0.125 * edgeDrive)
-                : (0.014 + 0.090 * edgeDrive);
-
-            CGFloat horizontalRail =
-                horizontalEdge *
-                (
-                    topFacing * topRailGain +
-                    bottomFacing * bottomRailGain
-                );
-
-            /*
-             * nx*ny > 0 selects the top-left and bottom-right rounded corners.
-             * The response is made slightly broader than Beta3 so the light
-             * visibly CONNECTS around the radius instead of appearing as an
-             * isolated hot pixel near 45 degrees.
-             */
-            CGFloat pairedCorner =
+            CGFloat topLeftCornerSelector =
                 GFClamp01(
-                    2.15 * MAX(0.0, nx * ny)
+                    2.10 * leftFacing * topFacing
                 );
 
-            CGFloat cornerBridge =
-                pow(pairedCorner, 0.92);
+            CGFloat bottomRightCornerSelector =
+                GFClamp01(
+                    2.10 * rightFacing * bottomFacing
+                );
+
+            CGFloat topRightCornerSelector =
+                GFClamp01(
+                    2.05 * rightFacing * topFacing
+                );
+
+            CGFloat bottomLeftCornerSelector =
+                GFClamp01(
+                    2.05 * leftFacing * bottomFacing
+                );
+
+            CGFloat topLeftCornerBridge =
+                pow(topLeftCornerSelector, 0.56);
+
+            CGFloat bottomRightCornerBridge =
+                pow(bottomRightCornerSelector, 0.56);
+
+            CGFloat topRightTransition =
+                pow(topRightCornerSelector, 0.90);
+
+            CGFloat bottomLeftTransition =
+                pow(bottomLeftCornerSelector, 0.90);
+
+            CGFloat primaryRailMask =
+                GFClamp01(
+                    MAX(
+                        pow(topFacing, 1.06),
+                        topLeftCornerBridge
+                    )
+                );
+
+            CGFloat secondaryRailMask =
+                GFClamp01(
+                    MAX(
+                        pow(bottomFacing, 1.06),
+                        bottomRightCornerBridge
+                    )
+                );
+
+            CGFloat coveredByRails =
+                MAX(
+                    primaryRailMask,
+                    secondaryRailMask
+                );
+
+            CGFloat sideMiddleMask =
+                verticalEdge *
+                pow(
+                    MAX(0.0, 1.0 - coveredByRails),
+                    1.60
+                );
+
+            CGFloat perimeterFloor = darkAppearance
+                ? 0.0048
+                : 0.0035;
 
             /*
-             * Corners receive the strongest percentage-dependent gain.
-             * This is the main answer to the 75% screenshot: TL/BR now scale
-             * much harder than the straight left/right sides.
+             * Opened surfaces are optically thicker, so both joined rails use
+             * broader shoulder/core energy than the desktop icon.
              */
-            CGFloat cornerBridgeGain = darkAppearance
-                ? (0.025 + 0.245 * edgeDrive)
-                : (0.018 + 0.165 * edgeDrive);
+            CGFloat primaryFilamentGain = darkAppearance
+                ? (0.036 + 0.300 * edgeDrive)
+                : (0.027 + 0.215 * edgeDrive);
 
-            CGFloat horizontalCoreGain = darkAppearance
-                ? (0.008 + 0.032 * edgeDrive)
-                : (0.006 + 0.023 * edgeDrive);
+            CGFloat primaryCoreGain = darkAppearance
+                ? (0.014 + 0.090 * edgeDrive)
+                : (0.010 + 0.064 * edgeDrive);
 
-            CGFloat cornerCoreGain = darkAppearance
-                ? (0.010 + 0.060 * edgeDrive)
-                : (0.007 + 0.040 * edgeDrive);
+            CGFloat primaryShoulderGain = darkAppearance
+                ? (0.008 + 0.035 * edgeDrive)
+                : (0.006 + 0.025 * edgeDrive);
+
+            CGFloat secondaryFilamentGain = darkAppearance
+                ? (0.024 + 0.220 * edgeDrive)
+                : (0.018 + 0.158 * edgeDrive);
+
+            CGFloat secondaryCoreGain = darkAppearance
+                ? (0.009 + 0.064 * edgeDrive)
+                : (0.0065 + 0.046 * edgeDrive);
+
+            CGFloat secondaryShoulderGain = darkAppearance
+                ? (0.005 + 0.023 * edgeDrive)
+                : (0.0035 + 0.017 * edgeDrive);
 
             /*
-             * The far-side secondary rim was one contributor to Beta3's
-             * strong right straight edge. Keep the lower/bottom response but
-             * attenuate it on vertical straight sides.
+             * Straight side middles are substantially below either horizontal
+             * rail in both appearances.
              */
-            CGFloat secondaryAxisWeight =
-                0.42 + 0.58 * horizontalEdge;
+            CGFloat sideMiddleGain = darkAppearance
+                ? (0.0018 + 0.010 * edgeDrive)
+                : (0.0015 + 0.008 * edgeDrive);
+
+            CGFloat transitionCornerGain = darkAppearance
+                ? (0.0045 + 0.022 * edgeDrive)
+                : (0.0035 + 0.016 * edgeDrive);
+
+            /*
+             * Only a tiny directional micro-variation survives. This keeps
+             * the TL arc and top segment visually equal instead of making the
+             * 45-degree corner peak brighter.
+             */
+            CGFloat primaryDirectionalMicro =
+                0.96 + 0.04 * pow(facing, 1.15);
+
+            CGFloat secondaryDirectionalMicro =
+                0.96 + 0.04 * pow(opposite, 1.15);
 
             CGFloat white =
                 filament * perimeterFloor +
-                filament * axisPerimeter +
-                filament * horizontalRail +
-                core * horizontalEdge * horizontalCoreGain +
-                filament * cornerBridge * cornerBridgeGain +
-                core * cornerBridge * cornerCoreGain +
-                shoulder * shoulderGain * pow(facing, 1.30) * (0.70 + 0.30 * edgeDrive) +
-                core * coreGain * pow(facing, 1.45) * (0.62 + 0.58 * edgeDrive) +
-                filament * filamentGain * pow(facing, 1.65) * (0.58 + 0.72 * edgeDrive) +
-                secondary * secondaryRimGain * pow(opposite, 1.25) *
-                    secondaryAxisWeight *
-                    (0.52 + 0.62 * edgeDrive);
+
+                shoulder * primaryRailMask *
+                    primaryShoulderGain +
+                core * primaryRailMask *
+                    primaryCoreGain +
+                filament * primaryRailMask *
+                    primaryFilamentGain *
+                    primaryDirectionalMicro +
+
+                shoulder * secondaryRailMask *
+                    secondaryShoulderGain +
+                core * secondaryRailMask *
+                    secondaryCoreGain +
+                filament * secondaryRailMask *
+                    secondaryFilamentGain *
+                    secondaryDirectionalMicro +
+
+                filament * sideMiddleMask *
+                    sideMiddleGain +
+
+                filament *
+                    (topRightTransition +
+                     bottomLeftTransition) *
+                    transitionCornerGain +
+
+                /*
+                 * Far-side white reflection is confined to the secondary
+                 * bottom/lower-right rail, not the straight right wall.
+                 */
+                secondary *
+                    secondaryRimGain *
+                    secondaryRailMask *
+                    (0.32 + 0.18 * edgeDrive);
 
             /*
              * Far-side thickness starts inside the edge.  It never occupies
@@ -1126,15 +1283,24 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 (insideDepth - darkShoulderCenter) /
                 MAX(0.001, darkShoulderWidth);
 
+            CGFloat darkStructureMask =
+                0.72 * secondaryRailMask +
+                0.18 * sideMiddleMask +
+                0.10 * (
+                    topRightTransition +
+                    bottomLeftTransition
+                );
+
             CGFloat dark =
                 exp(-(shadowOffset * shadowOffset * 1.10)) *
                 darkShoulderGain *
-                pow(opposite, 1.15);
+                (0.92 + 0.08 * pow(opposite, 1.15)) *
+                darkStructureMask;
 
             CGFloat edgePeak =
                 darkAppearance
-                    ? (0.190 + 0.245 * edgeDrive)
-                    : (0.145 + 0.175 * edgeDrive);
+                    ? (0.215 + 0.275 * edgeDrive)
+                    : (0.162 + 0.202 * edgeDrive);
 
             CGFloat signedLight =
                 MIN(edgePeak, MAX(-0.045, white - dark));
