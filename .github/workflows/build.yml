@@ -1,4 +1,4 @@
-name: Build RootHide 0.7.1 Safe Optical Beta1
+name: Build RootHide 0.7.1 Safe Optical Beta1.1
 
 on:
   workflow_dispatch:
@@ -54,6 +54,32 @@ jobs:
             echo "ERROR: Preferences framework link stub was not found."
             exit 1
           fi
+
+
+      - name: Source sanity gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Checking required imports..."
+          grep -Fq '#import <UIKit/UIKit.h>' Tweak.xm
+          grep -Fq '#import <CoreFoundation/CoreFoundation.h>' Tweak.xm
+          grep -Fq '#import <QuartzCore/QuartzCore.h>' Tweak.xm
+          grep -Fq '#import <objc/runtime.h>' Tweak.xm
+          grep -Fq '#import <dispatch/dispatch.h>' Tweak.xm
+          grep -Fq '#import <math.h>' Tweak.xm
+
+          echo "Rejecting opened-folder experimental code..."
+          if grep -Eq 'SBFloatyFolderView|GFOpenedFolder|_newPageBackgroundView|GFOpenedFolderHooks' Tweak.xm; then
+            echo "ERROR: opened-folder experimental code is not allowed in Safe Optical."
+            exit 1
+          fi
+
+          echo "Checking stable icon hook..."
+          grep -Fq 'SBFolderIconImageView' Tweak.xm
+          grep -Fq '%init(GFIconHooks)' Tweak.xm
+
+          echo "Source sanity gate passed."
 
       - name: Build RootHide package
         run: |
@@ -141,21 +167,24 @@ jobs:
           DYLIB="$(find "$TMP/root" -type f -name 'GlassFolders.dylib' | head -n 1)"
           test -n "$DYLIB"
 
+          STRINGS_FILE="$TMP/GlassFolders.strings"
+          strings "$DYLIB" > "$STRINGS_FILE"
+
           echo "Reject opened-folder symbols:"
-          if strings "$DYLIB" | grep -E 'SBFloatyFolderView|GFOpenedFolder|_newPageBackgroundView'; then
+          if grep -E 'SBFloatyFolderView|GFOpenedFolder|_newPageBackgroundView' "$STRINGS_FILE"; then
             echo "ERROR: opened-folder code leaked into Safe Optical build."
             exit 1
           fi
 
           echo "Require verified closed-folder hook:"
-          strings "$DYLIB" | grep -q 'SBFolderIconImageView'
+          grep -Fq 'SBFolderIconImageView' "$STRINGS_FILE"
 
           echo "Safe Optical boundary verified."
 
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.1-Beta1-SafeOptical-DEB
+          name: GlassFolders-0.7.1-Beta1.1-SafeOptical-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
