@@ -1,54 +1,52 @@
-# GlassFolders 0.5.12 — Frosted Open Glass
+# GlassFolders 0.5.13 — Soft Optical Rim
 
-Calibrated against the supplied Apple opened-folder reference.
+## Problem observed on device
 
-## Closed folder
+0.5.12 still looked too "cut out":
+- the glass boundary was geometrically hard
+- the white rim was too dim to read as a highlight
 
-The Backdrop Glass color remains unchanged.
+## Changes
 
-The hard outline has been removed:
-- no base white stroke
-- only one wider, much lower-opacity neutral-white rim
-- edge reads as a soft transition, not a frame
+### Backdrop edge sampling
 
-## Opened folder
+`gaussianBlur` now uses:
 
-Target: "slightly frosted but still transparent".
+`inputHardEdges = NO`
 
-Compared with 0.5.11:
-- stronger blur
-- lower saturation boost
-- tiny additional neutral-white tint
-- no hard base outline
-- wider but much dimmer soft rim
+for both closed and opened glass surfaces.
 
-The wallpaper color is still visible through the large panel, but details are
-more softly diffused than in the closed folder.
+This allows the backdrop material to transition more naturally at the clipped
+edge instead of behaving like a rigid card boundary.
 
-## Mapping
+### Closed folder rim
 
-One user-facing strength slider still controls both states.
+- width: 3.10pt
+- much lower effective opacity than a visible stroke
+- neutral white
+- strongest at upper-left
+- fades toward lower-right
+- static Gaussian blur radius: 1.25
 
-Closed folder:
-- clearer/thinner material
+### Opened folder rim
 
-Opened folder:
-- automatically one material-weight step thicker
+- width: 3.60pt
+- even softer because the large panel already has stronger frosted blur
+- static Gaussian blur radius: 1.55
 
-No separate "opened folder strength" setting is added.
+The rim is still static:
+- no animation
+- no timer
+- no DisplayLink
+- no motion sensor
 
-## Performance unchanged
+## Opened panel
 
-No:
-- daemon
-- Timer
-- DisplayLink
-- gyroscope
-- animated gradient
-- custom full-screen blur
-- custom transition animator
-
-The opened panel still follows SpringBoard's own background-alpha animation.
+The 0.5.12 "frosted transparent" calibration remains:
+- stronger blur than closed folders
+- low saturation boost
+- tiny neutral tint
+- wallpaper color still visible
 
 ## UX unchanged
 

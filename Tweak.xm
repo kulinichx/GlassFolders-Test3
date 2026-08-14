@@ -109,6 +109,27 @@ static id GFCreateCAFilter(NSString *type) {
     return func(filterClass, selector, type);
 }
 
+static void GFApplySoftGaussianBlurToLayer(CALayer *layer,
+                                           CGFloat radius) {
+    if (!layer || radius <= 0.0) {
+        return;
+    }
+
+    id blur = GFCreateCAFilter(@"gaussianBlur");
+
+    if (!blur) {
+        return;
+    }
+
+    [blur setValue:@(radius) forKey:@"inputRadius"];
+    [blur setValue:@YES forKey:@"inputNormalizeEdges"];
+    [blur setValue:@NO forKey:@"inputHardEdges"];
+
+    [layer setValue:@[blur] forKey:@"filters"];
+}
+
+
+
 
 @interface GFBackdropGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
@@ -188,7 +209,7 @@ static id GFCreateCAFilter(NSString *type) {
             if (blur) {
                 [blur setValue:@(blurRadius) forKey:@"inputRadius"];
                 [blur setValue:@YES forKey:@"inputNormalizeEdges"];
-                [blur setValue:@YES forKey:@"inputHardEdges"];
+                [blur setValue:@NO forKey:@"inputHardEdges"];
                 [filters addObject:blur];
             }
 
@@ -288,18 +309,25 @@ static id GFCreateCAFilter(NSString *type) {
              * comes from the backdrop material underneath it.
              */
             _gfWhiteRimGlow = [CAGradientLayer layer];
-            _gfWhiteRimGlow.startPoint = CGPointMake(0.00, 0.00);
-            _gfWhiteRimGlow.endPoint = CGPointMake(1.00, 1.00);
+            _gfWhiteRimGlow.startPoint = CGPointMake(0.00, 0.02);
+            _gfWhiteRimGlow.endPoint = CGPointMake(0.88, 0.78);
+            /*
+             * Soft optical rim:
+             * upper-left is clearly brighter, but the layer itself is blurred
+             * so it reads as a soft glass catch-light rather than a stroke.
+             */
             _gfWhiteRimGlow.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.34].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.20].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.085].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.028].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.006].CGColor
+                (id)[UIColor colorWithWhite:1.0 alpha:0.54].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.30].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.11].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.030].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.004].CGColor
             ];
             _gfWhiteRimGlow.locations =
-                @[@0.00, @0.18, @0.44, @0.72, @1.00];
-            _gfWhiteRimGlow.opacity = 0.08 + (0.11 * e);
+                @[@0.00, @0.16, @0.40, @0.70, @1.00];
+            _gfWhiteRimGlow.opacity = 0.10 + (0.13 * e);
+
+            GFApplySoftGaussianBlurToLayer(_gfWhiteRimGlow, 1.25);
 
             _gfWhiteRimMask = [CAShapeLayer layer];
             _gfWhiteRimMask.fillColor = UIColor.clearColor.CGColor;
@@ -349,7 +377,7 @@ static id GFCreateCAFilter(NSString *type) {
          * wider than a hairline, but much lower opacity.
          * The goal is a transition region, not a visible outline.
          */
-        CGFloat rimWidth = 2.35;
+        CGFloat rimWidth = 3.10;
         CGFloat inset = rimWidth * 0.5 + 0.30;
 
         CGRect pathRect = CGRectInset(self.bounds, inset, inset);
@@ -452,7 +480,7 @@ static id GFCreateCAFilter(NSString *type) {
             if (blur) {
                 [blur setValue:@(blurRadius) forKey:@"inputRadius"];
                 [blur setValue:@YES forKey:@"inputNormalizeEdges"];
-                [blur setValue:@YES forKey:@"inputHardEdges"];
+                [blur setValue:@NO forKey:@"inputHardEdges"];
                 [filters addObject:blur];
             }
 
@@ -493,18 +521,24 @@ static id GFCreateCAFilter(NSString *type) {
              * slightly wider because this is a much larger surface.
              */
             _gfWhiteRimGlow = [CAGradientLayer layer];
-            _gfWhiteRimGlow.startPoint = CGPointMake(0.00, 0.00);
-            _gfWhiteRimGlow.endPoint = CGPointMake(1.00, 1.00);
+            _gfWhiteRimGlow.startPoint = CGPointMake(0.00, 0.02);
+            _gfWhiteRimGlow.endPoint = CGPointMake(0.88, 0.78);
+            /*
+             * Opened panel uses an even softer rim because the surface is
+             * larger and already reads as glass from the frosted backdrop.
+             */
             _gfWhiteRimGlow.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.28].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.16].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.065].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.020].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.004].CGColor
+                (id)[UIColor colorWithWhite:1.0 alpha:0.40].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.22].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.080].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.022].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.003].CGColor
             ];
             _gfWhiteRimGlow.locations =
-                @[@0.00, @0.18, @0.44, @0.72, @1.00];
-            _gfWhiteRimGlow.opacity = 0.07 + (0.10 * e);
+                @[@0.00, @0.16, @0.40, @0.70, @1.00];
+            _gfWhiteRimGlow.opacity = 0.075 + (0.105 * e);
+
+            GFApplySoftGaussianBlurToLayer(_gfWhiteRimGlow, 1.55);
 
             _gfWhiteRimMask = [CAShapeLayer layer];
             _gfWhiteRimMask.fillColor = UIColor.clearColor.CGColor;
@@ -556,7 +590,7 @@ static id GFCreateCAFilter(NSString *type) {
          * Large panel edge is even softer than the closed icon.
          * Wide enough to suggest glass thickness, dim enough to avoid a frame.
          */
-        CGFloat rimWidth = 2.70;
+        CGFloat rimWidth = 3.60;
         CGFloat inset = rimWidth * 0.5 + 0.38;
 
         CGRect pathRect = CGRectInset(self.bounds, inset, inset);
