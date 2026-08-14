@@ -1,50 +1,65 @@
-# GlassFolders 0.7.3 Beta 2.4 — Background Hosted Glass
+# GlassFolders 0.7.3 Beta 2.5 — Sibling Glass + Powercuff Icon Layout
 
-Fixes the App Library card offset shown on-device.
+## App Library
 
-## Geometry correction
+Device testing established two separate failures:
 
-Beta 2.x inserted the custom glass into `SBHLibraryPodFolderView` and copied
-geometry from an inner background object into the pod's coordinate system.
+- putting glass on `SBHLibraryPodFolderView` can offset it;
+- putting glass inside `SBHLibraryCategoryPodBackgroundView` can make it
+  disappear with the system background host.
 
-The real App Library hierarchy has additional internal layout offsets, so the
-glass could be visibly shifted from the category card.
+Beta 2.5 uses Apple's category background as geometry only.
 
-Beta 2.4 removes that cross-view geometry entirely.
+The custom `GFPanelGlassView` is inserted immediately below it as a sibling in
+the SAME superview and copies:
 
-The glass is now a child of the real visual surface:
+- bounds;
+- center;
+- transform;
+- alpha;
+- corner radius.
 
-`SBHLibraryCategoryPodBackgroundView`
+The stock category background is then hidden.
 
-with:
+There is no cross-view coordinate conversion and the glass does not inherit the
+stock background's hidden state.
 
-`glass.frame = backgroundView.bounds`
+`SBHLibraryPodFolderView` remains discovery/lifecycle only.
 
-No frame conversion is used.
+## Settings icon
 
-`SBHLibraryPodFolderView` remains only a lifecycle/discovery bridge for
-lazily-created category backgrounds.
+PreferenceLoader recursively loads plist files under
+`/Library/PreferenceLoader/Preferences`.
 
-## Stock material
+Powercuff uses one same-name directory containing:
 
-The system background host remains alive, preserving Apple's frame, radius,
-reuse and animation lifecycle.
+- `Powercuff.plist`
+- `Powercuff.png`
+- `Powercuff@2x.png`
+- `Powercuff@3x.png`
 
-While enabled:
+with `entry.icon` pointing at the base PNG.
 
-- host background colors are cleared;
-- stock material descendants are hidden;
-- one `GFPanelGlassView` fills the host bounds;
-- icons, labels, hit-testing and expansion remain untouched.
+GlassFolders now mirrors that structure exactly:
 
-## Existing safeguards
+- `GlassFolders.plist`
+- `GlassFolders.png`
+- `GlassFolders@2x.png`
+- `GlassFolders@3x.png`
 
-Retained:
+The previous `GlassFoldersIcon*` basename is removed and CI rejects it if stale
+copies reappear.
 
-- closed Home Screen folder glass;
-- opened folder glass;
-- PreferenceLoader nested icon packaging and final-deb verification;
+## Safety
+
+Unchanged:
+
+- closed folder: `SBFolderIconImageView`;
+- opened folder: `SBFolderBackgroundView`;
+- App Library visual classes only:
+  `SBHLibraryPodFolderView` and
+  `SBHLibraryCategoryPodBackgroundView`;
 - RootHide arm64e;
-- SpringBoard-only injection;
-- no broad App Library controller/icon-list/search hooks;
-- no timer, polling, DisplayLink, gyro or continuous Metal rendering.
+- SpringBoard-only tweak injection;
+- no App Library controller/icon-list/search hooks;
+- no daemon, timer, polling, DisplayLink, gyro or continuous Metal renderer.

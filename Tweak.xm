@@ -1834,21 +1834,24 @@ static void GFUpdateOpenedFolderBackground(
 %end
 
 
-#pragma mark - App Library background-hosted glass
+#pragma mark - App Library sibling glass
 
 /*
- * Beta 2.4 geometry rule:
+ * Beta 2.5:
+ *   - Pod-hosted glass was visible but could be offset.
+ *   - Background-hosted glass can inherit the system background's hidden state.
  *
- * SBHLibraryPodFolderView is only a lifecycle/discovery bridge.
- * The custom glass lives INSIDE SBHLibraryCategoryPodBackgroundView itself.
+ * Use Apple's category background ONLY as the exact geometry object.
+ * The custom glass is its sibling in the SAME superview:
  *
- * Therefore:
- *   glass.frame = backgroundView.bounds
+ *   parent
+ *     ├─ GFPanelGlassView
+ *     └─ SBHLibraryCategoryPodBackgroundView (kept alive, visually hidden)
  *
- * There is no cross-view coordinate conversion and no copied pod frame.
- * This avoids the vertical offset seen on-device in Beta 2.x.
+ * No cross-view coordinate conversion is used.
  */
 static char kGFAppLibraryPodBackgroundKey;
+static char kGFAppLibrarySiblingGlassKey;
 
 
 static UIView *GFStoredAppLibraryBackgroundForPod(
@@ -1870,6 +1873,30 @@ static void GFSetStoredAppLibraryBackgroundForPod(
         podView,
         &kGFAppLibraryPodBackgroundKey,
         backgroundView,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+}
+
+
+static GFPanelGlassView *GFAppLibrarySiblingGlass(
+    UIView *backgroundView
+) {
+    return (GFPanelGlassView *)
+        objc_getAssociatedObject(
+            backgroundView,
+            &kGFAppLibrarySiblingGlassKey
+        );
+}
+
+
+static void GFSetAppLibrarySiblingGlass(
+    UIView *backgroundView,
+    GFPanelGlassView *glass
+) {
+    objc_setAssociatedObject(
+        backgroundView,
+        &kGFAppLibrarySiblingGlassKey,
+        glass,
         OBJC_ASSOCIATION_RETAIN_NONATOMIC
     );
 }
@@ -1945,7 +1972,7 @@ static UIView *GFResolveLibraryCategoryBackground(
 }
 
 
-static void GFUpdateAppLibraryBackgroundHost(
+static void GFRestoreAppLibraryBackground(
     UIView *backgroundView
 ) {
     if (!backgroundView) {
@@ -1953,53 +1980,52 @@ static void GFUpdateAppLibraryBackgroundHost(
     }
 
     GFPanelGlassView *glass =
-        GFPanelGlassForBackground(
+        GFAppLibrarySiblingGlass(
             backgroundView
         );
 
+    if (glass) {
+        [glass removeFromSuperview];
+
+        GFSetAppLibrarySiblingGlass(
+            backgroundView,
+            nil
+        );
+    }
+
+    GFSetStockPanelSubviewSuppressed(
+        backgroundView,
+        NO
+    );
+}
+
+
+static void GFUpdateAppLibraryBackgroundSibling(
+    UIView *backgroundView
+) {
+    if (!backgroundView) {
+        return;
+    }
+
     if (!GFShouldUseAppLibraryPods()) {
-        if (glass) {
-            [glass removeFromSuperview];
-
-            GFSetPanelGlassForBackground(
-                backgroundView,
-                nil
-            );
-        }
-
-        for (UIView *subview
-             in backgroundView.subviews) {
-
-            GFSetStockPanelSubviewSuppressed(
-                subview,
-                NO
-            );
-        }
+        GFRestoreAppLibraryBackground(
+            backgroundView
+        );
 
         return;
     }
 
-    /*
-     * Keep Apple's dedicated background object alive for exact geometry,
-     * reuse, corner radius and animations. Replace only its visible material.
-     */
-    backgroundView.opaque = NO;
-    backgroundView.backgroundColor =
-        UIColor.clearColor;
+    UIView *parent =
+        backgroundView.superview;
 
-    backgroundView.layer.backgroundColor =
-        UIColor.clearColor.CGColor;
-
-    for (UIView *subview
-         in backgroundView.subviews) {
-
-        if (subview != glass) {
-            GFSetStockPanelSubviewSuppressed(
-                subview,
-                YES
-            );
-        }
+    if (!parent) {
+        return;
     }
+
+    GFPanelGlassView *glass =
+        GFAppLibrarySiblingGlass(
+            backgroundView
+        );
 
     if (!glass) {
         glass =
@@ -2007,33 +2033,46 @@ static void GFUpdateAppLibraryBackgroundHost(
                 initWithStrength:
                     GFGlassStrength];
 
-        GFSetPanelGlassForBackground(
+        glass.userInteractionEnabled =
+            NO;
+
+        GFSetAppLibrarySiblingGlass(
             backgroundView,
             glass
         );
+    }
 
-        [backgroundView
-            addSubview:
-                glass];
-    } else if (glass.superview !=
-               backgroundView) {
-
+    if (glass.superview != parent) {
         [glass removeFromSuperview];
-
-        [backgroundView
-            addSubview:
-                glass];
     }
 
     /*
-     * Critical geometry fix: use only the host's own coordinate system.
+     * Keep the custom material exactly where Apple's dedicated category
+     * background sits in z-order, but as a sibling so it cannot inherit the
+     * background view's hidden flag.
      */
-    glass.frame =
+    [parent
+        insertSubview:glass
+         belowSubview:backgroundView];
+
+    /*
+     * Same-superview geometry.
+     * bounds + center + transform is safer than frame while transformed.
+     */
+    glass.bounds =
         backgroundView.bounds;
 
-    glass.autoresizingMask =
-        UIViewAutoresizingFlexibleWidth |
-        UIViewAutoresizingFlexibleHeight;
+    glass.center =
+        backgroundView.center;
+
+    glass.transform =
+        backgroundView.transform;
+
+    glass.alpha =
+        backgroundView.alpha;
+
+    glass.hidden =
+        NO;
 
     CGFloat radius =
         backgroundView.layer.cornerRadius;
@@ -2063,9 +2102,14 @@ static void GFUpdateAppLibraryBackgroundHost(
         setPreferredRadius:
             radius];
 
-    [backgroundView
-        bringSubviewToFront:
-            glass];
+    /*
+     * Hide only the visual background object itself.
+     * Icons, labels, hit testing and expansion remain system-owned.
+     */
+    GFSetStockPanelSubviewSuppressed(
+        backgroundView,
+        YES
+    );
 }
 
 
@@ -2082,7 +2126,7 @@ static void GFUpdateAppLibraryPod(
         );
 
     if (backgroundView) {
-        GFUpdateAppLibraryBackgroundHost(
+        GFUpdateAppLibraryBackgroundSibling(
             backgroundView
         );
     }
@@ -2120,11 +2164,6 @@ static void GFUpdateAppLibraryPod(
 - (void)didAddSubview:(UIView *)subview {
     %orig(subview);
 
-    if ([subview isKindOfClass:
-            [GFPanelGlassView class]]) {
-        return;
-    }
-
     GFUpdateAppLibraryPod(
         self
     );
@@ -2148,7 +2187,7 @@ static void GFUpdateAppLibraryPod(
 - (void)_updateVisualStyle {
     %orig;
 
-    GFUpdateAppLibraryBackgroundHost(
+    GFUpdateAppLibraryBackgroundSibling(
         self
     );
 }
@@ -2156,7 +2195,7 @@ static void GFUpdateAppLibraryPod(
 - (void)didMoveToWindow {
     %orig;
 
-    GFUpdateAppLibraryBackgroundHost(
+    GFUpdateAppLibraryBackgroundSibling(
         self
     );
 }
@@ -2164,39 +2203,35 @@ static void GFUpdateAppLibraryPod(
 - (void)layoutSubviews {
     %orig;
 
-    GFUpdateAppLibraryBackgroundHost(
+    GFUpdateAppLibraryBackgroundSibling(
         self
     );
 }
 
-- (void)didAddSubview:(UIView *)subview {
-    %orig(subview);
-
-    if ([subview isKindOfClass:
-            [GFPanelGlassView class]]) {
-        return;
-    }
-
+- (void)setHidden:(BOOL)hidden {
     if (GFShouldUseAppLibraryPods()) {
-        GFSetStockPanelSubviewSuppressed(
-            subview,
-            YES
+        %orig(YES);
+
+        GFUpdateAppLibraryBackgroundSibling(
+            self
         );
+    } else {
+        %orig(hidden);
     }
-
-    GFUpdateAppLibraryBackgroundHost(
-        self
-    );
 }
 
-- (void)setBackgroundColor:(UIColor *)color {
-    if (GFShouldUseAppLibraryPods()) {
-        %orig(UIColor.clearColor);
+- (void)setAlpha:(CGFloat)alpha {
+    %orig(alpha);
 
-        self.layer.backgroundColor =
-            UIColor.clearColor.CGColor;
-    } else {
-        %orig(color);
+    GFPanelGlassView *glass =
+        GFAppLibrarySiblingGlass(
+            self
+        );
+
+    if (glass &&
+        GFShouldUseAppLibraryPods()) {
+        glass.alpha =
+            alpha;
     }
 }
 
@@ -2206,7 +2241,7 @@ static void GFUpdateAppLibraryPod(
     %orig(previousTraitCollection);
 
     GFPanelGlassView *glass =
-        GFPanelGlassForBackground(
+        GFAppLibrarySiblingGlass(
             self
         );
 
@@ -2214,7 +2249,7 @@ static void GFUpdateAppLibraryPod(
         [glass gfRefreshMaterial];
     }
 
-    GFUpdateAppLibraryBackgroundHost(
+    GFUpdateAppLibraryBackgroundSibling(
         self
     );
 }

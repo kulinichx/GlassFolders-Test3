@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.3~beta2.4
+Version: 0.7.3~beta2.5
 Architecture: iphoneos-arm64e
-Description: Fixes App Library card offset by hosting Liquid Glass directly inside SBHLibraryCategoryPodBackgroundView bounds; no cross-view frame conversion. Existing icon packaging and RootHide safety checks are retained.
+Description: App Library category glass is now a same-superview sibling of the exact system background, copying bounds/center/transform and hiding only the system background. PreferenceLoader icon assets now mirror Powercuff naming exactly.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks
