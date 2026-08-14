@@ -113,8 +113,8 @@ static id GFCreateCAFilter(NSString *type) {
 @interface GFBackdropGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
-@property (nonatomic, strong) CAGradientLayer *gfSpecularBand;
-@property (nonatomic, strong) CAGradientLayer *gfSoftEdgeGlow;
+@property (nonatomic, strong) CAGradientLayer *gfTopEdgeGlow;
+@property (nonatomic, strong) CAGradientLayer *gfLeftEdgeGlow;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) NSInteger gfStyle;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
@@ -254,44 +254,42 @@ static id GFCreateCAFilter(NSString *type) {
              * no continuous animation.
              */
             /*
-             * Wider "glass catch" zone.
-             * The broad layer creates the thick refractive highlight region;
-             * the narrow layer provides a brighter specular core.
+             * Edge-only glass highlight.
+             *
+             * Test5.5 used a full-surface diagonal specular band. On-device
+             * that appeared as an unnatural white stripe across the folder.
+             *
+             * Test5.6 removes ALL diagonal/full-surface highlight layers.
+             * Only the top and left edges receive a soft static catch-light.
+             *
+             * No animation / no timer / no motion sensor.
              */
-            _gfSoftEdgeGlow = [CAGradientLayer layer];
-            _gfSoftEdgeGlow.startPoint = CGPointMake(0.02, 0.0);
-            _gfSoftEdgeGlow.endPoint = CGPointMake(0.98, 1.0);
-            _gfSoftEdgeGlow.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.06].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.24].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.54].CGColor,
+            _gfTopEdgeGlow = [CAGradientLayer layer];
+            _gfTopEdgeGlow.startPoint = CGPointMake(0.0, 0.5);
+            _gfTopEdgeGlow.endPoint = CGPointMake(1.0, 0.5);
+            _gfTopEdgeGlow.colors = @[
+                (id)[UIColor colorWithWhite:1.0 alpha:0.68].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.34].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.10].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor
+            ];
+            _gfTopEdgeGlow.locations = @[@0.00, @0.28, @0.68, @1.00];
+            _gfTopEdgeGlow.opacity = 0.15 + (0.24 * e);
+
+            _gfLeftEdgeGlow = [CAGradientLayer layer];
+            _gfLeftEdgeGlow.startPoint = CGPointMake(0.5, 0.0);
+            _gfLeftEdgeGlow.endPoint = CGPointMake(0.5, 1.0);
+            _gfLeftEdgeGlow.colors = @[
+                (id)[UIColor colorWithWhite:1.0 alpha:0.58].CGColor,
                 (id)[UIColor colorWithWhite:1.0 alpha:0.28].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.07].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.08].CGColor,
                 (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor
             ];
-            _gfSoftEdgeGlow.locations =
-                @[@0.00, @0.17, @0.31, @0.47, @0.63, @0.81, @1.00];
-            _gfSoftEdgeGlow.opacity = 0.17 + (0.34 * e);
+            _gfLeftEdgeGlow.locations = @[@0.00, @0.32, @0.72, @1.00];
+            _gfLeftEdgeGlow.opacity = 0.12 + (0.20 * e);
 
-            _gfSpecularBand = [CAGradientLayer layer];
-            _gfSpecularBand.startPoint = CGPointMake(0.03, 0.0);
-            _gfSpecularBand.endPoint = CGPointMake(0.97, 1.0);
-            _gfSpecularBand.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.06].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.20].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.76].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.22].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.06].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor
-            ];
-            _gfSpecularBand.locations =
-                @[@0.00, @0.27, @0.38, @0.48, @0.58, @0.70, @1.00];
-            _gfSpecularBand.opacity = 0.11 + (0.23 * e);
-
-            [self.layer addSublayer:_gfSoftEdgeGlow];
-            [self.layer addSublayer:_gfSpecularBand];
+            [self.layer addSublayer:_gfTopEdgeGlow];
+            [self.layer addSublayer:_gfLeftEdgeGlow];
         }
     }
 
@@ -303,8 +301,33 @@ static id GFCreateCAFilter(NSString *type) {
 
     self.gfFallbackBlurView.frame = self.bounds;
     self.gfTintView.frame = self.bounds;
-    self.gfSoftEdgeGlow.frame = CGRectInset(self.bounds, 0.8, 0.8);
-    self.gfSpecularBand.frame = CGRectInset(self.bounds, 0.25, 0.25);
+    if (self.gfTopEdgeGlow || self.gfLeftEdgeGlow) {
+        /*
+         * A slightly thicker soft highlight region than a one-pixel border,
+         * but confined to the perimeter so it can never form a diagonal bar.
+         */
+        CGFloat topThickness = 2.2;
+        CGFloat leftThickness = 2.0;
+        CGFloat inset = 2.0;
+
+        if (self.gfTopEdgeGlow) {
+            self.gfTopEdgeGlow.frame = CGRectMake(
+                inset,
+                0.45,
+                MAX(0.0, CGRectGetWidth(self.bounds) - inset * 2.0),
+                topThickness
+            );
+        }
+
+        if (self.gfLeftEdgeGlow) {
+            self.gfLeftEdgeGlow.frame = CGRectMake(
+                0.45,
+                inset,
+                leftThickness,
+                MAX(0.0, CGRectGetHeight(self.bounds) - inset * 2.0)
+            );
+        }
+    }
 
     CGFloat radius = self.gfPreferredRadius;
 
@@ -315,8 +338,8 @@ static id GFCreateCAFilter(NSString *type) {
     if (radius > 0.0) {
         self.layer.cornerRadius = radius;
         self.layer.cornerCurve = kCACornerCurveContinuous;
-        self.gfSoftEdgeGlow.cornerRadius = MAX(0.0, radius - 0.8);
-        self.gfSpecularBand.cornerRadius = MAX(0.0, radius - 0.25);
+        self.gfTopEdgeGlow.cornerRadius = 1.1;
+        self.gfLeftEdgeGlow.cornerRadius = 1.0;
     }
 }
 

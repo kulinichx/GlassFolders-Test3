@@ -1,60 +1,40 @@
-# GlassFolders 0.5.2 / Test5.2 — Edge Glass
+# GlassFolders 0.5.6 / Test5.6 — Clean Edge Glass
 
-## Why this version
+## Visual change
 
-Test5 was too visually flat compared with the supplied iOS 27 reference.
-Test5.1 increased the glass strength but used a full-area diagonal highlight.
+Test5.5's broad diagonal specular highlight looked like a white stripe across
+the folder on-device.
 
-Test5.2 changes the highlight model:
+Test5.6 removes the diagonal/full-surface highlight entirely.
 
-- very weak full border
-- stronger top/upper-left catch-light
-- no full-area diagonal highlight
-- no animated lighting
-- no gyroscope response
+Liquid Glass now keeps:
+- Backdrop Glass wallpaper sampling
+- blur + saturation
+- subtle overall border
+- soft top-edge catch light
+- soft left-edge catch light
 
-The design follows the principle that the material should remain translucent
-and let the wallpaper color pass through while using subtle edge light to make
-the glass boundary readable.
-
-## Liquid Glass
-
-Closed folder:
-- `UIBlurEffectStyleSystemUltraThinMaterialLight`
-- very light white tint
-- 1 physical-pixel weak border
-- one tiny static gradient located only on the top edge
-- top-left is brightest, fades toward the right
-
-Opened folder:
-- no new blur view
-- reuses Apple's existing `SBFloatyFolderView` material
-- larger surface is slightly "thicker" than the small closed-folder plate
-- Apple's own open/close animation remains intact
+There is no highlight layer spanning the interior of the folder.
 
 ## Performance
 
-No:
-- daemon
-- timer
-- DisplayLink
-- motion sensor
-- continuously animated gradient
-- custom full-screen blur
-- shadow rendering loop
+The change is lighter than Test5.5:
+- two tiny perimeter gradient strips
+- no full-surface gradient
+- no animation
+- no DisplayLink
+- no timer
+- no gyroscope
 
-At Clear 0%, no `UIVisualEffectView` is created for a closed folder.
+## Slider / haptics
 
-## Suggested test
+Unchanged from Test5.5:
+- 5% detents
+- smooth drag
+- crisp rigid tick when crossing a detent
+- magnetic settle on release
+- exact detent persistence
 
-Liquid Glass:
-- 40%
-- 45%
-- 50%
-- 55%
+## Settings button
 
-Compare 45–50% against the iOS 27 reference.
-
-If Edge Glass still looks too flat, the next A/B experiment should replace only
-the tiny top-edge highlight with a static diagonal specular band. Do not expose
-both as permanent user-facing options unless testing proves both are useful.
+`应用并注销`

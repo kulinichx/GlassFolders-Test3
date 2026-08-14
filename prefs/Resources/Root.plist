@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.5.5</string>
+			<string>GlassFolders 0.5.6</string>
 			<key>footerText</key>
-			<string>Backdrop Glass + 更明显的宽对角高光。滑块每 5% 一个磁吸档位，并提供更清脆的“嗒、嗒、嗒”触感。无后台进程、无持续动画。</string>
+			<string>Backdrop Glass + 边缘高光。已移除内部对角白色亮带，仅保留顶部/左侧柔和吃光。无后台进程、无持续动画。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -32,7 +32,7 @@
 			<key>label</key>
 			<string>风格</string>
 			<key>footerText</key>
-			<string>Clear 保持极简透明；Liquid Glass 使用 Backdrop blur + saturation + 极轻静态对角高光，尽量保留壁纸颜色。</string>
+			<string>Clear 保持极简透明；Liquid Glass 保留壁纸透色与模糊，只在顶部和左侧保留轻微玻璃高光，不再出现内部斜向白条。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
