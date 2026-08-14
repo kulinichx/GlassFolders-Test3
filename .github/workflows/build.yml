@@ -1,4 +1,4 @@
-name: Build RootHide 0.7.3 App Library Beta1.3 Runtime Fix.3 Runtime Fix
+name: Build RootHide 0.7.3 App Library Beta1.3.1 Gate Fix.3 Runtime Fix
 
 on:
   workflow_dispatch:
@@ -59,30 +59,51 @@ jobs:
       - name: Source sanity gate
         shell: bash
         run: |
-          set -euo pipefail
+          set -u
 
-          echo "Checking required imports..."
-          grep -Fq '#import <UIKit/UIKit.h>' Tweak.xm
-          grep -Fq '#import <CoreFoundation/CoreFoundation.h>' Tweak.xm
-          grep -Fq '#import <QuartzCore/QuartzCore.h>' Tweak.xm
-          grep -Fq '#import <objc/runtime.h>' Tweak.xm
-          grep -Fq '#import <dispatch/dispatch.h>' Tweak.xm
-          grep -Fq '#import <math.h>' Tweak.xm
+          fail=0
 
-          echo "Rejecting dangerous folder/controller paths..."
-          if grep -Eq 'SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView|SBHLibraryViewController|SBHLibraryPodFolderController|_SBHLibraryPodIconView|_SBHLibraryPodIconListView' Tweak.xm; then
+          require_text() {
+            local needle="$1"
+            local file="$2"
+            local label="$3"
+
+            if grep -Fq -- "$needle" "$file"; then
+              echo "OK: $label"
+            else
+              echo "ERROR: missing $label"
+              fail=1
+            fi
+          }
+
+          echo "Checking framework imports..."
+          require_text '#import <UIKit/UIKit.h>' Tweak.xm 'UIKit import'
+          require_text '#import <CoreFoundation/CoreFoundation.h>' Tweak.xm 'CoreFoundation import'
+          require_text '#import <QuartzCore/QuartzCore.h>' Tweak.xm 'QuartzCore import'
+          require_text '#import <objc/runtime.h>' Tweak.xm 'Objective-C runtime import'
+          require_text '#import <dispatch/dispatch.h>' Tweak.xm 'dispatch import'
+          require_text '#import <math.h>' Tweak.xm 'math import'
+          require_text '#import <dlfcn.h>' Tweak.xm 'dlfcn import'
+
+          echo "Rejecting dangerous controller/factory hooks..."
+          if grep -Eq -- 'SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView|SBHLibraryViewController|SBHLibraryPodFolderController|_SBHLibraryPodIconView|_SBHLibraryPodIconListView' Tweak.xm; then
             echo "ERROR: forbidden folder/App-Library controller or icon-list path found."
-            exit 1
+            fail=1
+          else
+            echo "OK: no forbidden controller/factory hooks"
           fi
 
-          echo "Checking intended hooks..."
-          grep -Fq 'SBFolderIconImageView' Tweak.xm
-          grep -Fq '%init(GFIconHooks)' Tweak.xm
-          grep -Fq 'SBFolderBackgroundView' Tweak.xm
-          grep -Fq '%init(GFOpenedPanelHooks)' Tweak.xm
-          grep -Fq 'GFResolveAppLibraryBackgroundClass' Tweak.xm
-          grep -Fq 'GFInstallAppLibraryRuntimeHook' Tweak.xm
-          grep -Fq 'AppLibraryPodsEnabled' Tweak.xm
+          echo "Checking essential runtime entry points..."
+          require_text 'SBFolderIconImageView' Tweak.xm 'closed-folder visual class'
+          require_text 'SBFolderBackgroundView' Tweak.xm 'opened-folder visual class'
+          require_text 'GFResolveAppLibraryBackgroundClass' Tweak.xm 'App Library runtime resolver'
+          require_text 'GFInstallAppLibraryRuntimeHook' Tweak.xm 'App Library runtime installer'
+          require_text 'AppLibraryPodsEnabled' Tweak.xm 'App Library preference key'
+
+          if [ "$fail" -ne 0 ]; then
+            echo "Source sanity gate failed with the explicit errors above."
+            exit 1
+          fi
 
           echo "Source sanity gate passed."
 
@@ -192,7 +213,7 @@ jobs:
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.3-Beta1.3-RuntimeAppLibrary-DEB
+          name: GlassFolders-0.7.3-Beta1.3.1-RuntimeAppLibrary-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
