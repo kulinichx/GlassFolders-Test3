@@ -113,8 +113,8 @@ static id GFCreateCAFilter(NSString *type) {
 @interface GFBackdropGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
-@property (nonatomic, strong) CAGradientLayer *gfTopEdgeGlow;
-@property (nonatomic, strong) CAGradientLayer *gfLeftEdgeGlow;
+@property (nonatomic, strong) CAGradientLayer *gfContinuousEdgeGlow;
+@property (nonatomic, strong) CAShapeLayer *gfContinuousEdgeMask;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) NSInteger gfStyle;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
@@ -254,42 +254,42 @@ static id GFCreateCAFilter(NSString *type) {
              * no continuous animation.
              */
             /*
-             * Edge-only glass highlight.
+             * Continuous rounded-edge glass highlight.
              *
-             * Test5.5 used a full-surface diagonal specular band. On-device
-             * that appeared as an unnatural white stripe across the folder.
+             * Test5.6 used two independent strips (top + left). At the rounded
+             * top-left corner those strips were inset and clipped separately,
+             * creating a visible "missing highlight" gap.
              *
-             * Test5.6 removes ALL diagonal/full-surface highlight layers.
-             * Only the top and left edges receive a soft static catch-light.
+             * Test5.7 uses ONE gradient layer masked by ONE continuous
+             * rounded-rectangle stroke. The highlight therefore flows through
+             * the corner with no seam.
              *
-             * No animation / no timer / no motion sensor.
+             * Brightness falls from upper-left -> lower-right.
+             * Static only: no animation / timer / motion sensor.
              */
-            _gfTopEdgeGlow = [CAGradientLayer layer];
-            _gfTopEdgeGlow.startPoint = CGPointMake(0.0, 0.5);
-            _gfTopEdgeGlow.endPoint = CGPointMake(1.0, 0.5);
-            _gfTopEdgeGlow.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.68].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.34].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.10].CGColor,
+            _gfContinuousEdgeGlow = [CAGradientLayer layer];
+            _gfContinuousEdgeGlow.startPoint = CGPointMake(0.00, 0.00);
+            _gfContinuousEdgeGlow.endPoint = CGPointMake(1.00, 1.00);
+            _gfContinuousEdgeGlow.colors = @[
+                (id)[UIColor colorWithWhite:1.0 alpha:0.82].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.54].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.24].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.07].CGColor,
                 (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor
             ];
-            _gfTopEdgeGlow.locations = @[@0.00, @0.28, @0.68, @1.00];
-            _gfTopEdgeGlow.opacity = 0.15 + (0.24 * e);
+            _gfContinuousEdgeGlow.locations =
+                @[@0.00, @0.22, @0.48, @0.73, @1.00];
+            _gfContinuousEdgeGlow.opacity = 0.18 + (0.30 * e);
 
-            _gfLeftEdgeGlow = [CAGradientLayer layer];
-            _gfLeftEdgeGlow.startPoint = CGPointMake(0.5, 0.0);
-            _gfLeftEdgeGlow.endPoint = CGPointMake(0.5, 1.0);
-            _gfLeftEdgeGlow.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.58].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.28].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.08].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.00].CGColor
-            ];
-            _gfLeftEdgeGlow.locations = @[@0.00, @0.32, @0.72, @1.00];
-            _gfLeftEdgeGlow.opacity = 0.12 + (0.20 * e);
+            _gfContinuousEdgeMask = [CAShapeLayer layer];
+            _gfContinuousEdgeMask.fillColor = UIColor.clearColor.CGColor;
+            _gfContinuousEdgeMask.strokeColor = UIColor.whiteColor.CGColor;
+            _gfContinuousEdgeMask.lineCap = kCALineCapRound;
+            _gfContinuousEdgeMask.lineJoin = kCALineJoinRound;
 
-            [self.layer addSublayer:_gfTopEdgeGlow];
-            [self.layer addSublayer:_gfLeftEdgeGlow];
+            _gfContinuousEdgeGlow.mask = _gfContinuousEdgeMask;
+
+            [self.layer addSublayer:_gfContinuousEdgeGlow];
         }
     }
 
@@ -301,32 +301,32 @@ static id GFCreateCAFilter(NSString *type) {
 
     self.gfFallbackBlurView.frame = self.bounds;
     self.gfTintView.frame = self.bounds;
-    if (self.gfTopEdgeGlow || self.gfLeftEdgeGlow) {
+    if (self.gfContinuousEdgeGlow && self.gfContinuousEdgeMask) {
+        self.gfContinuousEdgeGlow.frame = self.bounds;
+        self.gfContinuousEdgeMask.frame = self.bounds;
+
         /*
-         * A slightly thicker soft highlight region than a one-pixel border,
-         * but confined to the perimeter so it can never form a diagonal bar.
+         * A soft 2.8pt edge region gives the iOS 27-style thicker catch-light
+         * without becoming a hard white border.
+         *
+         * The path is inset by half the stroke width so the entire highlight
+         * remains inside the clipped folder shape.
          */
-        CGFloat topThickness = 2.2;
-        CGFloat leftThickness = 2.0;
-        CGFloat inset = 2.0;
+        CGFloat strokeWidth = 2.8;
+        CGFloat pathInset = strokeWidth * 0.5 + 0.35;
+        CGRect pathRect = CGRectInset(self.bounds, pathInset, pathInset);
 
-        if (self.gfTopEdgeGlow) {
-            self.gfTopEdgeGlow.frame = CGRectMake(
-                inset,
-                0.45,
-                MAX(0.0, CGRectGetWidth(self.bounds) - inset * 2.0),
-                topThickness
-            );
-        }
+        CGFloat pathRadius = MAX(
+            0.0,
+            radius - pathInset
+        );
 
-        if (self.gfLeftEdgeGlow) {
-            self.gfLeftEdgeGlow.frame = CGRectMake(
-                0.45,
-                inset,
-                leftThickness,
-                MAX(0.0, CGRectGetHeight(self.bounds) - inset * 2.0)
-            );
-        }
+        UIBezierPath *edgePath =
+            [UIBezierPath bezierPathWithRoundedRect:pathRect
+                                       cornerRadius:pathRadius];
+
+        self.gfContinuousEdgeMask.path = edgePath.CGPath;
+        self.gfContinuousEdgeMask.lineWidth = strokeWidth;
     }
 
     CGFloat radius = self.gfPreferredRadius;
@@ -338,8 +338,6 @@ static id GFCreateCAFilter(NSString *type) {
     if (radius > 0.0) {
         self.layer.cornerRadius = radius;
         self.layer.cornerCurve = kCACornerCurveContinuous;
-        self.gfTopEdgeGlow.cornerRadius = 1.1;
-        self.gfLeftEdgeGlow.cornerRadius = 1.0;
     }
 }
 

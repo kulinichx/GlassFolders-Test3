@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.5.6</string>
+			<string>GlassFolders 0.5.7</string>
 			<key>footerText</key>
-			<string>Backdrop Glass + 边缘高光。已移除内部对角白色亮带，仅保留顶部/左侧柔和吃光。无后台进程、无持续动画。</string>
+			<string>Backdrop Glass + 连续圆角边缘高光。修复左上圆角高光断层，不再使用两条独立高光条。无后台进程、无持续动画。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -32,7 +32,7 @@
 			<key>label</key>
 			<string>风格</string>
 			<key>footerText</key>
-			<string>Clear 保持极简透明；Liquid Glass 保留壁纸透色与模糊，只在顶部和左侧保留轻微玻璃高光，不再出现内部斜向白条。</string>
+			<string>Clear 保持极简透明；Liquid Glass 使用连续圆角高光路径，左上最亮并沿顶部/左侧自然衰减，右下接近透明。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
