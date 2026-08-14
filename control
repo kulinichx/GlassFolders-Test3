@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.4~beta1.6
+Version: 0.7.4~beta1.6.1
 Architecture: iphoneos-arm64e
-Description: Folder-only RootHide build with continuous equal-brightness upper-left-to-top and bottom-to-lower-right specular rails for both closed and opened folder glass; quiet side middles, rounded Settings icon, duplicate-entry cleanup, and kulinich author credit.
+Description: CI compile fix for Beta1.6 continuous specular rails. Removes eight obsolete unused variable declarations while preserving the top/TL and bottom/BR shared-rail optical formulas, folder-only RootHide runtime, rounded Settings icon, and kulinich credit.
 Maintainer: kulinich
 Author: kulinich
 Section: Tweaks

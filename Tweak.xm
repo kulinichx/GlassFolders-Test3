@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 1.6 — Continuous Specular Rails
+ * GlassFolders 0.7.4 Beta 1.6.1 — Unused Variable Fix
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -260,19 +260,6 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
         (0.43 + 0.10 * edgeDrive) * renderScale;
 
     /*
-     * Directional upper-left light. Fixed terms are deliberately small;
-     * percentage owns most of the brightness budget.
-     */
-    CGFloat highlightShoulderGain =
-        0.012 + 0.050 * edgeDrive;
-
-    CGFloat highlightCoreGain =
-        0.030 + 0.180 * edgeDrive;
-
-    CGFloat highlightFilamentGain =
-        0.045 + 0.310 * edgeDrive;
-
-    /*
      * Far-side rim remains, but vertical straight edges will be attenuated
      * below. Bottom and bottom-right are allowed to stay bright.
      */
@@ -372,9 +359,6 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                      * Straight left/right side middles remain deliberately
                      * quiet and receive only a low structural floor.
                      */
-                    CGFloat horizontalEdge =
-                        pow(fabs(ny), 2.08);
-
                     CGFloat verticalEdge =
                         pow(fabs(nx), 2.30);
 
@@ -964,18 +948,6 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     CGFloat filamentWidth =
         (0.62 + 0.12 * e) * renderScale;
 
-    CGFloat shoulderGain = darkAppearance
-        ? (0.030 + 0.010 * e)
-        : (0.020 + 0.007 * e);
-
-    CGFloat coreGain = darkAppearance
-        ? (0.120 + 0.040 * e)
-        : (0.078 + 0.028 * e);
-
-    CGFloat filamentGain = darkAppearance
-        ? (0.205 + 0.065 * e)
-        : (0.135 + 0.045 * e);
-
     /*
      * The far edge remains visible in both appearances.
      * Light mode gets a little more dark shoulder so a pale wallpaper does
@@ -1104,9 +1076,6 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              */
             CGFloat edgeDrive =
                 GFEdgeResponse(strength);
-
-            CGFloat horizontalEdge =
-                pow(fabs(ny), 2.10);
 
             CGFloat verticalEdge =
                 pow(fabs(nx), 2.32);

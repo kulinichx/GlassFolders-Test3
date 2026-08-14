@@ -1,72 +1,49 @@
-# GlassFolders 0.7.4 Beta 1.6 — Continuous Specular Rails
+# GlassFolders 0.7.4 Beta 1.6.1 — Unused Variable Fix
 
-This calibration implements the visual correction from the Apple reference:
+This is a compile-only correction to Beta 1.6.
 
-- upper-left rounded corner and the full top edge are ONE continuous
-  equal-brightness highlight;
-- the full bottom edge and lower-right rounded corner are ONE continuous
-  equal-brightness secondary highlight;
-- straight left/right side middles are substantially quieter.
+## GitHub Actions failure
 
-## Why this is different from Beta 1.5
+Beta 1.6 replaced the previous independent edge/corner lighting model with the
+new shared continuous specular rails, but eight old local declarations were
+left behind.
 
-Beta 1.5 still treated corner energy and straight-edge energy as separate
-components. Even with similar coefficients, the rounded corner could read as a
-bright spot attached to a different top line.
+Because the project compiles with warnings promoted to errors, Clang stopped on
+`-Wunused-variable`.
 
-Beta 1.6 constructs a shared geometric mask for each rail.
+Removed declarations:
 
-### Primary rail
+Closed optical map:
+- `horizontalEdge`
+- `highlightShoulderGain`
+- `highlightCoreGain`
+- `highlightFilamentGain`
 
-`primaryRailMask`
+Opened optical map:
+- `horizontalEdge`
+- `shoulderGain`
+- `coreGain`
+- `filamentGain`
 
-is the union of:
+## Optical behavior
 
-- the straight top-facing normal;
-- the saturated upper-left rounded-corner bridge.
+The Beta 1.6 formulas are otherwise unchanged:
 
-The same shoulder/core/filament gains are multiplied by the whole mask, so the
-highlight turns through the upper-left radius without changing luminance.
+- upper-left corner + top edge share `primaryRailMask`;
+- bottom edge + lower-right corner share `secondaryRailMask`;
+- both pieces inside each rail use the same luminance gains;
+- straight left/right side middles remain strongly suppressed;
+- opened and closed states use the same topology.
 
-### Secondary rail
-
-`secondaryRailMask`
-
-does the same for:
-
-- the straight bottom edge;
-- the lower-right rounded corner.
-
-The secondary rail is intentionally slightly softer than the primary rail, but
-its bottom segment and lower-right corner are equal to each other.
-
-### Other edges
-
-Upper-right and lower-left retain only low transition structure.
-
-The straight left/right side middles use `sideMiddleMask` and a very small gain,
-so they do not read as a uniform white outline.
-
-## Closed and opened folders
-
-Both optical maps use the same topology.
-
-The opened folder remains broader/softer because its glass surface is larger,
-but the highlight organization is identical.
-
-## Safety / performance
+## Runtime / safety
 
 Unchanged:
-
 - RootHide arm64e;
-- SpringBoard-only main injection;
-- only `SBFolderIconImageView` and `SBFolderBackgroundView`;
-- cached CPU-generated SDF optical textures;
-- no timer;
-- no DisplayLink;
-- no gyro;
-- no daemon;
+- SpringBoard-only injection;
+- `SBFolderIconImageView`;
+- `SBFolderBackgroundView`;
 - no App Library code;
-- rounded Settings icon retained;
-- duplicate PreferenceLoader cleanup retained;
-- `作者  kulinich` retained.
+- no daemon/timer/DisplayLink/gyro;
+- rounded Settings icon;
+- duplicate PreferenceLoader cleanup;
+- `作者  kulinich`.
