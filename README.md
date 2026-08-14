@@ -38,3 +38,7 @@ This is actually simpler than Test5.6:
 - no gyroscope
 
 Backdrop Glass, 5% detents, crisp haptics, and `应用并注销` remain unchanged.
+
+## Fix1
+
+Build fix only: resolve `radius` before it is used to construct the continuous rounded-edge mask. Visual parameters are unchanged.

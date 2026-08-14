@@ -301,6 +301,20 @@ static id GFCreateCAFilter(NSString *type) {
 
     self.gfFallbackBlurView.frame = self.bounds;
     self.gfTintView.frame = self.bounds;
+
+    /*
+     * Resolve the folder radius before constructing the continuous edge mask.
+     */
+    CGFloat radius = self.gfPreferredRadius;
+
+    if (radius <= 0.0 && self.superview) {
+        radius = self.superview.layer.cornerRadius;
+    }
+
+    if (radius > 0.0) {
+        self.layer.cornerRadius = radius;
+        self.layer.cornerCurve = kCACornerCurveContinuous;
+    }
     if (self.gfContinuousEdgeGlow && self.gfContinuousEdgeMask) {
         self.gfContinuousEdgeGlow.frame = self.bounds;
         self.gfContinuousEdgeMask.frame = self.bounds;
@@ -329,16 +343,6 @@ static id GFCreateCAFilter(NSString *type) {
         self.gfContinuousEdgeMask.lineWidth = strokeWidth;
     }
 
-    CGFloat radius = self.gfPreferredRadius;
-
-    if (radius <= 0.0 && self.superview) {
-        radius = self.superview.layer.cornerRadius;
-    }
-
-    if (radius > 0.0) {
-        self.layer.cornerRadius = radius;
-        self.layer.cornerCurve = kCACornerCurveContinuous;
-    }
 }
 
 @end
