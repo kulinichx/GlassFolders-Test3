@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 2.1 — Lighter closed Liquid Glass
+ * GlassFolders 0.7.4 Beta 2.2 — Baseline restore + Clear reference + symmetric opened rails
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -19,8 +19,7 @@
  * - Clear opened panel uses a thin neutral-white optical lift, never a hue tint
  * - oversized opened-folder backdrop sampling before final rounded clipping
  * - stronger CABackdropLayer for wallpaper color / blur / saturation
- * - native App Library category-pod visual style layered into closed folders
- * - explicitly activates the pod's own _updateVisualStyle after attachment
+ * - native App Library category-pod view reused passively in closed folders
  * - cached rounded-rect SDF lighting
  * - one continuous equal-brightness upper-left -> top specular rail
  * - one continuous equal-brightness bottom -> lower-right specular rail
@@ -773,50 +772,10 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
 }
 
 
-/*
- * A freshly allocated pod background is not guaranteed to have run the same
- * visual-style pass that SpringBoard performs after inserting a real App
- * Library category card into the hierarchy.  AppLibraryController's public
- * source confirms that _updateVisualStyle is the class' material refresh
- * point.  Trigger it only on OUR detached/reused instance, never by hooking
- * the real App Library.
- *
- * This is deliberately one-shot per host view and wrapped in @try.  We do not
- * poke MaterialKit recipes, KVC private ivars, or global controllers here.
- */
-static BOOL GFActivateNativeAppLibraryPodVisual(UIView *podView) {
-    if (!podView || CGRectIsEmpty(podView.bounds)) {
-        return NO;
-    }
-
-    SEL updateSelector =
-        NSSelectorFromString(@"_updateVisualStyle");
-
-    @try {
-        if ([podView respondsToSelector:updateSelector]) {
-            IMP imp =
-                [podView methodForSelector:updateSelector];
-
-            if (imp) {
-                typedef void (*GFVoidMessageIMP)(id, SEL);
-                ((GFVoidMessageIMP)imp)(podView, updateSelector);
-            }
-        }
-
-        [podView setNeedsLayout];
-        [podView layoutIfNeeded];
-        return YES;
-    } @catch (__unused NSException *exception) {
-        return NO;
-    }
-}
-
-
 @interface GFBackdropGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
 @property (nonatomic, strong) UIView *gfAppLibraryPodVisual;
-@property (nonatomic, assign) BOOL gfAppLibraryVisualActivated;
 @property (nonatomic, strong) CALayer *gfOpticalLightingLayer;
 @property (nonatomic, assign) CGSize gfLightingSize;
 @property (nonatomic, assign) CGFloat gfLightingRadius;
@@ -948,7 +907,6 @@ static BOOL GFActivateNativeAppLibraryPodVisual(UIView *podView) {
             _gfAppLibraryPodVisual =
                 GFCreateNativeAppLibraryPodVisual(_gfStrength);
 
-            _gfAppLibraryVisualActivated = NO;
 
             if (_gfAppLibraryPodVisual) {
                 if (_gfTintView) {
@@ -997,21 +955,6 @@ static BOOL GFActivateNativeAppLibraryPodVisual(UIView *podView) {
             self.gfAppLibraryPodVisual.layer.cornerCurve = kCACornerCurveContinuous;
             self.gfAppLibraryPodVisual.layer.masksToBounds = YES;
 
-            /*
-             * Activate only after frame/radius and hierarchy attachment are
-             * valid, which is much closer to the lifecycle of a real App
-             * Library category pod than calling the method immediately after
-             * alloc/init.
-             */
-            if (!self.gfAppLibraryVisualActivated &&
-                self.gfAppLibraryPodVisual.superview &&
-                !CGRectIsEmpty(self.gfAppLibraryPodVisual.bounds)) {
-
-                self.gfAppLibraryVisualActivated =
-                    GFActivateNativeAppLibraryPodVisual(
-                        self.gfAppLibraryPodVisual
-                    );
-            }
         }
     }
 
@@ -1122,7 +1065,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
 
     NSString *cacheKey = [NSString stringWithFormat:
-        @"P20-%@-%@-%zux%zu-r%.2f-s%ld",
+        @"P22-%@-%@-%zux%zu-r%.2f-s%ld",
         (style == 1) ? @"LG" : @"CL",
         darkAppearance ? @"D" : @"L",
         pixelWidth,
@@ -1170,39 +1113,67 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     CGFloat radius = MAX(0.0, cornerRadius * renderScale);
     CGFloat e = GFSpecularResponse(strength);
 
+    BOOL clearStyle = (style == 0);
+
     /*
-     * Large surfaces should read "thicker" than the closed folder:
-     * broader shoulder, but a restrained filament so it never becomes
-     * a hard white rounded-rect stroke.
+     * Clear and Liquid Glass intentionally use different edge optics.
+     * Clear is a thin transparent sheet: a broader, softer white shoulder,
+     * very little hard filament, and almost no dark thickness shoulder.
+     * Liquid Glass keeps the existing narrower/high-energy rail.
+     *
+     * These are neutral-white optics only. No hue is introduced here.
      */
     CGFloat shoulderWidth =
-        (8.0 + 2.4 * e) * renderScale;
+        (clearStyle
+            ? (10.4 + 2.6 * e)
+            : (8.0 + 2.4 * e)) * renderScale;
+
     CGFloat coreWidth =
-        (1.30 + 0.34 * e) * renderScale;
+        (clearStyle
+            ? (2.00 + 0.40 * e)
+            : (1.30 + 0.34 * e)) * renderScale;
+
     CGFloat filamentWidth =
-        (0.62 + 0.12 * e) * renderScale;
+        (clearStyle
+            ? (0.82 + 0.12 * e)
+            : (0.62 + 0.12 * e)) * renderScale;
 
-    /*
-     * The far edge remains visible in both appearances.
-     * Light mode gets a little more dark shoulder so a pale wallpaper does
-     * not erase the shape.
-     */
     CGFloat secondaryRimWidth =
-        (0.78 + 0.12 * e) * renderScale;
+        (clearStyle
+            ? (1.02 + 0.15 * e)
+            : (0.78 + 0.12 * e)) * renderScale;
 
-    CGFloat secondaryRimGain = darkAppearance
-        ? (0.092 + 0.032 * e)
-        : (0.082 + 0.030 * e);
+    CGFloat secondaryRimGain;
+    if (clearStyle) {
+        secondaryRimGain = darkAppearance
+            ? (0.034 + 0.014 * e)
+            : (0.026 + 0.011 * e);
+    } else {
+        secondaryRimGain = darkAppearance
+            ? (0.092 + 0.032 * e)
+            : (0.082 + 0.030 * e);
+    }
 
     CGFloat darkShoulderCenter =
-        (2.8 + 0.5 * e) * renderScale;
+        (clearStyle
+            ? (3.15 + 0.55 * e)
+            : (2.8 + 0.5 * e)) * renderScale;
 
     CGFloat darkShoulderWidth =
-        (2.4 + 0.5 * e) * renderScale;
+        (clearStyle
+            ? (3.00 + 0.60 * e)
+            : (2.4 + 0.5 * e)) * renderScale;
 
-    CGFloat darkShoulderGain = darkAppearance
-        ? (0.008 + 0.003 * e)
-        : (0.020 + 0.005 * e);
+    CGFloat darkShoulderGain;
+    if (clearStyle) {
+        darkShoulderGain = darkAppearance
+            ? (0.0010 + 0.0010 * e)
+            : (0.0030 + 0.0015 * e);
+    } else {
+        darkShoulderGain = darkAppearance
+            ? (0.008 + 0.003 * e)
+            : (0.020 + 0.005 * e);
+    }
 
     const CGFloat invSqrt2 = 0.70710678118;
     const CGFloat lightX = -invSqrt2;
@@ -1343,16 +1314,6 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             CGFloat rightFacing =
                 MAX(0.0, nx);
 
-            CGFloat topLeftCornerSelector =
-                GFClamp01(
-                    2.10 * leftFacing * topFacing
-                );
-
-            CGFloat bottomRightCornerSelector =
-                GFClamp01(
-                    2.10 * rightFacing * bottomFacing
-                );
-
             CGFloat topRightCornerSelector =
                 GFClamp01(
                     2.05 * rightFacing * topFacing
@@ -1363,38 +1324,11 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                     2.05 * leftFacing * bottomFacing
                 );
 
-            CGFloat topLeftCornerBridge =
-                pow(topLeftCornerSelector, 0.56);
-
-            CGFloat bottomRightCornerBridge =
-                pow(bottomRightCornerSelector, 0.56);
-
             CGFloat topRightTransition =
                 pow(topRightCornerSelector, 0.90);
 
             CGFloat bottomLeftTransition =
                 pow(bottomLeftCornerSelector, 0.90);
-
-            /*
-             * Raw joined rails. Endpoint ownership is applied using position
-             * because the normal alone cannot tell a straight horizontal edge
-             * from the opposite rounded corner.
-             */
-            CGFloat primaryRailRaw =
-                GFClamp01(
-                    MAX(
-                        pow(topFacing, 1.06),
-                        topLeftCornerBridge
-                    )
-                );
-
-            CGFloat secondaryRailRaw =
-                GFClamp01(
-                    MAX(
-                        pow(bottomFacing, 1.06),
-                        bottomRightCornerBridge
-                    )
-                );
 
             CGFloat endpointRadius =
                 MAX(
@@ -1405,135 +1339,87 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                     )
                 );
 
-            CGFloat rightArcProgress =
-                GFClamp01(
-                    (
-                        x -
-                        (width - endpointRadius)
-                    ) /
-                    endpointRadius
-                );
-
-            CGFloat leftArcProgress =
-                GFClamp01(
-                    (
-                        endpointRadius - x
-                    ) /
-                    endpointRadius
-                );
-
-            CGFloat rightArcSmooth =
-                rightArcProgress *
-                rightArcProgress *
-                (
-                    3.0 -
-                    2.0 * rightArcProgress
-                );
-
-            CGFloat leftArcSmooth =
-                leftArcProgress *
-                leftArcProgress *
-                (
-                    3.0 -
-                    2.0 * leftArcProgress
-                );
-
             /*
-             * Keep 12% at the non-owned corner endpoint. This preserves the
-             * rounded silhouette without letting TR join the main top rail or
-             * BL join the main bottom rail.
+             * Beta 2.2 — symmetric continuous tangent rails.
+             *
+             * Do not splice a "corner mask" into a separate straight-edge
+             * mask. The SDF normal is already unit length, so in the owned
+             * upper-left quadrant:
+             *
+             *     hypot(topFacing, leftFacing) == 1
+             *
+             * from the top straight, through every point of the TL arc, to
+             * the left straight. The same identity holds for the mirrored
+             * lower-right quadrant. Using that invariant gives one energy-flat
+             * optical rail across BOTH tangents instead of pieces which only
+             * happen to overlap.
+             *
+             * Geometry is an exact 180-degree mirror:
+             *
+             *   primary   : top -> TL arc -> left tail
+             *   secondary : bottom -> BR arc -> right tail
+             *
+             * Dark/light appearance may change gain later, but never this
+             * geometry. The connection/fade relationship is therefore
+             * identical in both appearance modes.
              */
-            CGFloat primaryEndpointGate =
-                1.0 -
-                0.88 * rightArcSmooth;
+            CGFloat primaryQuadrantEnergy =
+                GFClamp01(
+                    hypot(topFacing, leftFacing)
+                );
 
-            CGFloat secondaryEndpointGate =
-                1.0 -
-                0.88 * leftArcSmooth;
+            CGFloat secondaryQuadrantEnergy =
+                GFClamp01(
+                    hypot(bottomFacing, rightFacing)
+                );
 
-            CGFloat primaryRailMask =
-                primaryRailRaw *
-                primaryEndpointGate;
-
-            CGFloat secondaryRailMask =
-                secondaryRailRaw *
-                secondaryEndpointGate;
-
-            /*
-             * FIX5 — one geometric rail across BOTH tangents.
-             *
-             * FIX4 solved the side tangent (TL -> left, BR -> right), but the
-             * horizontal tangent could still show a tiny break because the
-             * quarter-arc ownership ended on one pixel column while the top /
-             * bottom straight rail immediately fell back to a normal-derived
-             * mask.  At 1.5x that hand-off is visible as a hairline gap.
-             *
-             * The owned rail is now explicit geometry:
-             *
-             *   primary   = TL quarter arc + top straight + TL side tail
-             *   secondary = bottom straight + BR quarter arc + BR side tail
-             *
-             * The straight and curved pieces deliberately overlap by a small
-             * sub-point-safe amount at the tangent.  There is no alpha fade at
-             * an internal join; fading happens only at the true free endpoint
-             * (TR for primary, BL for secondary) and at the side tails.
-             */
             CGFloat tangentOverlap =
-                MAX(2.0 * renderScale,
-                    endpointRadius * 0.055);
+                MAX(
+                    2.25 * renderScale,
+                    endpointRadius * 0.060
+                );
 
-            CGFloat topLeftArcOwnership =
-                (x <= endpointRadius + tangentOverlap &&
-                 y <= endpointRadius)
-                    ? 1.0
-                    : 0.0;
-
-            CGFloat bottomRightArcOwnership =
-                (x >= width - endpointRadius - tangentOverlap &&
-                 y >= height - endpointRadius)
-                    ? 1.0
-                    : 0.0;
-
-            /*
-             * Position-owned horizontal rails remove the last normal-field
-             * ambiguity at the arc/straight tangent.  The surrounding SDF
-             * band still controls actual edge thickness, so these masks do
-             * not paint the panel interior.
-             */
-            CGFloat topStraightOwnership =
-                (y <= endpointRadius &&
-                 x >= endpointRadius - tangentOverlap &&
-                 x <= width - endpointRadius)
-                    ? 1.0
-                    : 0.0;
-
-            CGFloat bottomStraightOwnership =
-                (y >= height - endpointRadius &&
-                 x >= endpointRadius &&
-                 x <= width - endpointRadius + tangentOverlap)
-                    ? 1.0
-                    : 0.0;
-
-            /*
-             * Preserve FIX4's already-good side hand-off: about half a radius
-             * with a C2-continuous smootherstep roll-off.
-             */
             CGFloat sideTailLength =
-                MAX(10.0 * renderScale,
-                    endpointRadius * 0.50);
+                MAX(
+                    11.0 * renderScale,
+                    endpointRadius * 0.52
+                );
+
+            /*
+             * Keep full energy for a tiny distance AFTER each tangent. The
+             * fade begins only outside that overlap, so the tangent itself can
+             * never be a fade endpoint. This removes the hairline dip at
+             * TL<->top and BR<->bottom while preserving a natural side fade.
+             */
+            CGFloat topEnvelope =
+                (y <= endpointRadius + tangentOverlap)
+                    ? 1.0
+                    : 0.0;
+
+            CGFloat bottomEnvelope =
+                (y >= height - endpointRadius - tangentOverlap)
+                    ? 1.0
+                    : 0.0;
+
+            CGFloat topLeftFadeStart =
+                endpointRadius + tangentOverlap;
+
+            CGFloat bottomRightFadeStart =
+                height - endpointRadius - tangentOverlap;
 
             CGFloat topLeftTailProgress =
                 GFClamp01(
-                    (y - endpointRadius) /
+                    (y - topLeftFadeStart) /
                     MAX(1.0, sideTailLength)
                 );
 
             CGFloat bottomRightTailProgress =
                 GFClamp01(
-                    ((height - endpointRadius) - y) /
+                    (bottomRightFadeStart - y) /
                     MAX(1.0, sideTailLength)
                 );
 
+            /* C2-continuous smootherstep: 6t^5 - 15t^4 + 10t^3. */
             CGFloat tlT = topLeftTailProgress;
             CGFloat brT = bottomRightTailProgress;
 
@@ -1545,44 +1431,77 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 brT * brT * brT *
                 (brT * (brT * 6.0 - 15.0) + 10.0);
 
-            CGFloat topLeftSideTail =
-                (y >= endpointRadius &&
-                 y <= endpointRadius + sideTailLength)
-                    ? pow(leftFacing, 1.35) *
-                      (1.0 - topLeftTailSmooth)
-                    : 0.0;
+            CGFloat leftTailEnvelope =
+                (y <= topLeftFadeStart)
+                    ? 1.0
+                    : ((y <= topLeftFadeStart + sideTailLength)
+                        ? (1.0 - topLeftTailSmooth)
+                        : 0.0);
 
-            CGFloat bottomRightSideTail =
-                (y <= height - endpointRadius &&
-                 y >= height - endpointRadius - sideTailLength)
-                    ? pow(rightFacing, 1.35) *
-                      (1.0 - bottomRightTailSmooth)
-                    : 0.0;
+            CGFloat rightTailEnvelope =
+                (y >= bottomRightFadeStart)
+                    ? 1.0
+                    : ((y >= bottomRightFadeStart - sideTailLength)
+                        ? (1.0 - bottomRightTailSmooth)
+                        : 0.0);
 
-            CGFloat primaryOwnedGeometry =
-                MAX(
-                    MAX(topLeftArcOwnership,
-                        topStraightOwnership),
-                    topLeftSideTail
-                );
+            /*
+             * At TL the top and left envelopes overlap at exactly 1.0; at BR
+             * the bottom and right envelopes do the same. MAX cannot create a
+             * valley at an internal join. Only the true side tail may fade.
+             */
+            CGFloat primaryEnvelope =
+                MAX(topEnvelope, leftTailEnvelope);
 
-            CGFloat secondaryOwnedGeometry =
-                MAX(
-                    MAX(bottomRightArcOwnership,
-                        bottomStraightOwnership),
-                    bottomRightSideTail
-                );
+            CGFloat secondaryEnvelope =
+                MAX(bottomEnvelope, rightTailEnvelope);
 
-            primaryRailMask =
+            /*
+             * Free endpoints remain soft: primary rolls away through the TR
+             * arc, secondary through the BL arc. Use a C2 gate here too so the
+             * opposite corners never introduce a hard shoulder.
+             */
+            CGFloat rightArcProgress =
                 GFClamp01(
-                    MAX(primaryRailMask,
-                        primaryOwnedGeometry)
+                    (x - (width - endpointRadius)) /
+                    endpointRadius
                 );
 
-            secondaryRailMask =
+            CGFloat leftArcProgress =
                 GFClamp01(
-                    MAX(secondaryRailMask,
-                        secondaryOwnedGeometry)
+                    (endpointRadius - x) /
+                    endpointRadius
+                );
+
+            CGFloat rr = rightArcProgress;
+            CGFloat lr = leftArcProgress;
+
+            CGFloat rightArcSmooth =
+                rr * rr * rr *
+                (rr * (rr * 6.0 - 15.0) + 10.0);
+
+            CGFloat leftArcSmooth =
+                lr * lr * lr *
+                (lr * (lr * 6.0 - 15.0) + 10.0);
+
+            CGFloat primaryEndpointGate =
+                1.0 - 0.88 * rightArcSmooth;
+
+            CGFloat secondaryEndpointGate =
+                1.0 - 0.88 * leftArcSmooth;
+
+            CGFloat primaryRailMask =
+                GFClamp01(
+                    primaryQuadrantEnergy *
+                    primaryEnvelope *
+                    primaryEndpointGate
+                );
+
+            CGFloat secondaryRailMask =
+                GFClamp01(
+                    secondaryQuadrantEnergy *
+                    secondaryEnvelope *
+                    secondaryEndpointGate
                 );
 
             CGFloat coveredByRails =
@@ -1603,44 +1522,85 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 : 0.0035;
 
             /*
-             * Opened surfaces are optically thicker, so both joined rails use
-             * broader shoulder/core energy than the desktop icon.
+             * Liquid Glass keeps the existing high-energy rail. Clear gets a
+             * separate broad/soft rail so it does not read as "Liquid Glass
+             * with less blur".  Dark appearance needs more white definition;
+             * light appearance deliberately backs it off.
              */
-            CGFloat primaryFilamentGain = darkAppearance
-                ? (0.036 + 0.300 * edgeDrive)
-                : (0.027 + 0.215 * edgeDrive);
+            CGFloat primaryFilamentGain;
+            CGFloat primaryCoreGain;
+            CGFloat primaryShoulderGain;
+            CGFloat secondaryFilamentGain;
+            CGFloat secondaryCoreGain;
+            CGFloat secondaryShoulderGain;
+            CGFloat sideMiddleGain;
+            CGFloat transitionCornerGain;
 
-            CGFloat primaryCoreGain = darkAppearance
-                ? (0.014 + 0.090 * edgeDrive)
-                : (0.010 + 0.064 * edgeDrive);
+            if (clearStyle) {
+                primaryFilamentGain = darkAppearance
+                    ? (0.010 + 0.075 * edgeDrive)
+                    : (0.008 + 0.055 * edgeDrive);
 
-            CGFloat primaryShoulderGain = darkAppearance
-                ? (0.008 + 0.035 * edgeDrive)
-                : (0.006 + 0.025 * edgeDrive);
+                primaryCoreGain = darkAppearance
+                    ? (0.014 + 0.055 * edgeDrive)
+                    : (0.010 + 0.040 * edgeDrive);
 
-            CGFloat secondaryFilamentGain = darkAppearance
-                ? (0.024 + 0.220 * edgeDrive)
-                : (0.018 + 0.158 * edgeDrive);
+                primaryShoulderGain = darkAppearance
+                    ? (0.015 + 0.045 * edgeDrive)
+                    : (0.011 + 0.034 * edgeDrive);
 
-            CGFloat secondaryCoreGain = darkAppearance
-                ? (0.009 + 0.064 * edgeDrive)
-                : (0.0065 + 0.046 * edgeDrive);
+                secondaryFilamentGain = darkAppearance
+                    ? (0.007 + 0.052 * edgeDrive)
+                    : (0.005 + 0.038 * edgeDrive);
 
-            CGFloat secondaryShoulderGain = darkAppearance
-                ? (0.005 + 0.023 * edgeDrive)
-                : (0.0035 + 0.017 * edgeDrive);
+                secondaryCoreGain = darkAppearance
+                    ? (0.009 + 0.038 * edgeDrive)
+                    : (0.006 + 0.028 * edgeDrive);
 
-            /*
-             * Straight side middles are substantially below either horizontal
-             * rail in both appearances.
-             */
-            CGFloat sideMiddleGain = darkAppearance
-                ? (0.0018 + 0.010 * edgeDrive)
-                : (0.0015 + 0.008 * edgeDrive);
+                secondaryShoulderGain = darkAppearance
+                    ? (0.009 + 0.032 * edgeDrive)
+                    : (0.006 + 0.023 * edgeDrive);
 
-            CGFloat transitionCornerGain = darkAppearance
-                ? (0.0025 + 0.012 * edgeDrive)
-                : (0.0020 + 0.009 * edgeDrive);
+                sideMiddleGain = darkAppearance
+                    ? (0.0010 + 0.0040 * edgeDrive)
+                    : (0.0008 + 0.0030 * edgeDrive);
+
+                transitionCornerGain = darkAppearance
+                    ? (0.0013 + 0.0050 * edgeDrive)
+                    : (0.0010 + 0.0038 * edgeDrive);
+            } else {
+                primaryFilamentGain = darkAppearance
+                    ? (0.036 + 0.300 * edgeDrive)
+                    : (0.027 + 0.215 * edgeDrive);
+
+                primaryCoreGain = darkAppearance
+                    ? (0.014 + 0.090 * edgeDrive)
+                    : (0.010 + 0.064 * edgeDrive);
+
+                primaryShoulderGain = darkAppearance
+                    ? (0.008 + 0.035 * edgeDrive)
+                    : (0.006 + 0.025 * edgeDrive);
+
+                secondaryFilamentGain = darkAppearance
+                    ? (0.024 + 0.220 * edgeDrive)
+                    : (0.018 + 0.158 * edgeDrive);
+
+                secondaryCoreGain = darkAppearance
+                    ? (0.009 + 0.064 * edgeDrive)
+                    : (0.0065 + 0.046 * edgeDrive);
+
+                secondaryShoulderGain = darkAppearance
+                    ? (0.005 + 0.023 * edgeDrive)
+                    : (0.0035 + 0.017 * edgeDrive);
+
+                sideMiddleGain = darkAppearance
+                    ? (0.0018 + 0.010 * edgeDrive)
+                    : (0.0015 + 0.008 * edgeDrive);
+
+                transitionCornerGain = darkAppearance
+                    ? (0.0025 + 0.012 * edgeDrive)
+                    : (0.0020 + 0.009 * edgeDrive);
+            }
 
             /*
              * Only a tiny directional micro-variation survives. This keeps
@@ -1714,10 +1674,16 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 (0.92 + 0.08 * pow(opposite, 1.15)) *
                 darkStructureMask;
 
-            CGFloat edgePeak =
-                darkAppearance
+            CGFloat edgePeak;
+            if (clearStyle) {
+                edgePeak = darkAppearance
+                    ? (0.130 + 0.140 * edgeDrive)
+                    : (0.100 + 0.100 * edgeDrive);
+            } else {
+                edgePeak = darkAppearance
                     ? (0.215 + 0.275 * edgeDrive)
                     : (0.162 + 0.202 * edgeDrive);
+            }
 
             CGFloat signedLight =
                 MIN(edgePeak, MAX(-0.045, white - dark));
@@ -1926,20 +1892,32 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
         if (self.gfStyle == 0) {
             /*
-             * Beta 2.1 Clear follows the supplied Apple reference: the open
-             * folder is a transparent luminous sheet over SpringBoard's
-             * already-blurred open-folder presentation.  Do NOT blur that
-             * presentation a second time; doing so is what produced the
-             * broad purple/blue milky patch from the previous implementation.
+             * Clear reference target: a THIN backdrop sample, not no blur and
+             * not a weaker copy of Liquid Glass.  The panel applies only a
+             * shallow local Gaussian blur over SpringBoard's presentation, so
+             * wallpaper color regions stay recognizable instead of merging
+             * into a large milky patch.
              *
-             * Keep this backdrop sample effectively absent.  The panel body
-             * below is made only by a neutral-white transmission lift plus
-             * the white optical rails, so all chroma stays wallpaper-owned.
+             * Dark mode uses a little more saturation/neutral brightness to
+             * keep the transparent sheet readable against dark wallpaper.
+             * Light mode backs both off to avoid a white acrylic card.  None
+             * of these filters introduces a hue.
              */
-            blurRadius = 0.0;
-            saturation = 1.0;
-            brightness = 0.0;
-            sampleAlpha = 0.0;
+            blurRadius = darkAppearance
+                ? (1.00 + 3.20 * materialResponse)
+                : (0.80 + 2.70 * materialResponse);
+
+            saturation = darkAppearance
+                ? (1.020 + 0.060 * materialResponse)
+                : (1.010 + 0.040 * materialResponse);
+
+            brightness = darkAppearance
+                ? (0.004 + 0.012 * materialResponse)
+                : (0.001 + 0.006 * materialResponse);
+
+            sampleAlpha = darkAppearance
+                ? (0.58 + 0.20 * materialResponse)
+                : (0.50 + 0.18 * materialResponse);
         } else {
             /*
              * Liquid Glass: a thicker but not blackened backdrop.
@@ -2024,8 +2002,11 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             setValue:@1.0
               forKey:@"scale"];
 
-        self.gfBackdropSampleView.hidden =
-            (self.gfStyle == 0);
+        /*
+         * Both styles use the real wallpaper-owned backdrop. Clear simply
+         * uses a much shallower/less dominant sample than Liquid Glass.
+         */
+        self.gfBackdropSampleView.hidden = NO;
 
         if (self.gfFallbackBlurView) {
             [self.gfFallbackBlurView
@@ -2036,37 +2017,39 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     } else if (self.gfStrength > 0.001) {
         self.gfBackdropSampleView.hidden = YES;
 
+        if (!self.gfFallbackBlurView) {
+            UIBlurEffectStyle effectStyle =
+                (self.gfStyle == 0)
+                    ? UIBlurEffectStyleSystemUltraThinMaterial
+                    : UIBlurEffectStyleSystemThinMaterial;
+
+            UIBlurEffect *effect =
+                [UIBlurEffect effectWithStyle:effectStyle];
+
+            self.gfFallbackBlurView =
+                [[UIVisualEffectView alloc]
+                    initWithEffect:effect];
+
+            self.gfFallbackBlurView.userInteractionEnabled =
+                NO;
+
+            [self insertSubview:self.gfFallbackBlurView
+                   aboveSubview:self.gfBackdropSampleView];
+        }
+
         if (self.gfStyle == 0) {
             /*
-             * Clear must stay a transparent transmission sheet even on the
-             * fallback path. Do not silently turn it back into UltraThin
-             * Material, which would reintroduce a second local blur.
+             * Fallback Clear remains intentionally light. UltraThinMaterial is
+             * used only when CABackdropLayer is unavailable, and at a low alpha
+             * so it cannot become a milky system material card.
              */
-            if (self.gfFallbackBlurView) {
-                [self.gfFallbackBlurView removeFromSuperview];
-                self.gfFallbackBlurView = nil;
-            }
+            self.gfFallbackBlurView.alpha = darkAppearance
+                ? MIN(0.32, 0.12 + 0.20 * materialResponse)
+                : MIN(0.26, 0.10 + 0.17 * materialResponse);
         } else {
-            if (!self.gfFallbackBlurView) {
-                UIBlurEffect *effect =
-                    [UIBlurEffect effectWithStyle:
-                        UIBlurEffectStyleSystemThinMaterial];
-
-                self.gfFallbackBlurView =
-                    [[UIVisualEffectView alloc]
-                        initWithEffect:effect];
-
-                self.gfFallbackBlurView.userInteractionEnabled =
-                    NO;
-
-                [self insertSubview:self.gfFallbackBlurView
-                       aboveSubview:self.gfBackdropSampleView];
-            }
-
-            self.gfFallbackBlurView.alpha =
-                darkAppearance
-                    ? MIN(0.48, 0.20 + 0.30 * materialResponse)
-                    : MIN(0.40, 0.16 + 0.25 * materialResponse);
+            self.gfFallbackBlurView.alpha = darkAppearance
+                ? MIN(0.48, 0.20 + 0.30 * materialResponse)
+                : MIN(0.40, 0.16 + 0.25 * materialResponse);
         }
     }
 
@@ -2086,18 +2069,18 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
         if (self.gfStyle == 0) {
             /*
-             * Reference Clear: a visible but still neutral transmission
-             * sheet.  At the common 55% setting this is ~5.5% white in dark
-             * appearance and ~3% in light appearance.  There is deliberately
-             * no chromatic tint and no second local blur, so pink/purple/blue
-             * areas move only with the wallpaper behind the folder.
+             * Clear body is not white and not colored. This is only a small
+             * neutral transmission lift on top of the shallow wallpaper blur.
+             * At 55% it is ~2.8% white in dark appearance and ~1.4% in light
+             * appearance.  The lower light-mode value prevents bright
+             * wallpapers from turning the folder into a pale card.
              */
             neutralLift = darkAppearance
-                ? (0.055 + 0.100 * tintResponse) * self.gfStrength
-                : (0.025 + 0.065 * tintResponse) * self.gfStrength;
+                ? (0.035 + 0.035 * tintResponse) * self.gfStrength
+                : (0.015 + 0.025 * tintResponse) * self.gfStrength;
 
             self.gfTintView.alpha =
-                MIN(darkAppearance ? 0.140 : 0.085, neutralLift);
+                MIN(darkAppearance ? 0.070 : 0.040, neutralLift);
         } else {
             /*
              * Liquid Glass needs a little more neutral transmission in dark
@@ -2116,16 +2099,14 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     }
 
     /*
-     * Both styles share the already-fixed continuous rail geometry.
-     * Appearance only changes optical energy: dark backgrounds need a little
-     * more white specular definition; light backgrounds rely more on the
-     * renderer's dark shoulder so the edge does not become a white outline.
+     * Both styles keep the fixed continuous rail GEOMETRY, but Clear uses a
+     * separately rendered broad/soft optical texture. Dark mode gets more
+     * neutral-white definition; light mode is intentionally quieter.
      */
     if (self.gfStyle == 0) {
-        /* Clear is luminous, not metallic: keep the rail present but softer. */
         self.gfOpticalLayer.opacity = darkAppearance
-            ? (0.46 + 0.08 * materialResponse)
-            : (0.38 + 0.07 * materialResponse);
+            ? (0.68 + 0.05 * materialResponse)
+            : (0.56 + 0.05 * materialResponse);
     } else {
         self.gfOpticalLayer.opacity = darkAppearance
             ? 1.0
@@ -2144,10 +2125,10 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
     if (self.gfStyle == 0) {
         continuityAlpha = darkAppearance
-            ? (0.040 + 0.055 * continuityEdge)
-            : (0.028 + 0.040 * continuityEdge);
+            ? (0.022 + 0.028 * continuityEdge)
+            : (0.014 + 0.022 * continuityEdge);
         self.layer.borderWidth =
-            (self.gfStrength > 0.001) ? 0.58 : 0.0;
+            (self.gfStrength > 0.001) ? 0.45 : 0.0;
     } else {
         continuityAlpha = darkAppearance
             ? (0.025 + 0.040 * continuityEdge)

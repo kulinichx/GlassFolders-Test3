@@ -1,27 +1,32 @@
-# GlassFolders 0.7.4 Beta 2.1
+# GlassFolders 0.7.4 Beta 2.2
 
-Beta 2.1 is a targeted closed-folder correction. It restores the lighter Liquid Glass closed-icon appearance shown in the earlier reference by reverting only the native App Library pod blend strength. Opened Liquid Glass continuity, Clear behavior, wallpaper-owned chroma, and dark/light adaptation remain unchanged in this release.
+Beta 2.2 deliberately changes three locked visual targets before the App Library phase resumes.
 
-## Liquid Glass opened folder
+## 1. Liquid Glass closed-folder baseline
 
-The host panel is clipped with `kCACornerCurveContinuous`. Apple describes the continuous corner as a squircle-style corner, so a hand-rasterized circular edge can show a hairline tangent mismatch even when its segment masks are mathematically continuous. The current implementation therefore uses two layers of protection: the directional optical filament is centered slightly inside the clip, and a very faint native `CALayer` border supplies an exact continuous-corner continuity floor. The native border is not the visible highlight by itself; the white directional rails remain responsible for the Liquid Glass reflection.
+The closed Liquid Glass path is restored to the earlier proven light reference, not approximated with another alpha tweak. The later one-shot `_updateVisualStyle` activation for the detached `SBHLibraryCategoryPodBackgroundView` is removed completely. The pod remains a passive reusable visual view at the earlier blend (`min(0.78, 0.42 + 0.36*r)`), matching the older working closed-folder implementation.
 
-This specifically targets upper-left corner -> top/left and bottom-right corner -> bottom/right continuity without returning to the expensive 2x lighting-map experiment. The cached opened-panel lighting map remains 1.5x.
+No opened Liquid Glass material or rail geometry is changed in this step.
 
-## Clear opened folder
+## 2. Clear opened-folder reference pass
 
-Clear now follows the supplied Apple reference instead of acting like a weak Liquid Glass preset. SpringBoard already blurs the presentation behind an opened folder, so Clear no longer applies a second local Gaussian blur. The panel is a transparent sheet with a neutral-white transmission lift plus soft white edge reflection. Purple, blue, pink, orange, and every other hue come only from the wallpaper / desktop behind it.
+Clear is rebuilt as its own material rather than a weak Liquid Glass preset or a completely unfiltered transparent sheet. The stock `SBFolderBackgroundView` material stays suppressed; our `CABackdropLayer` now applies only a shallow local Gaussian blur with partial sample opacity. Hue is never injected: purple, blue, pink, orange, green, and all other chroma come from the wallpaper / desktop behind the folder.
 
-Dark appearance uses a stronger neutral transmission and edge definition; light appearance reduces both to avoid a milky white card. At 0% the Clear panel remains fully transparent.
+At the common 55% strength, Clear uses roughly a 2.7 pt local blur in dark appearance and 2.2 pt in light appearance, versus roughly 7 pt for Liquid Glass. Clear also receives a small neutral-white transmission lift (about 2.8% dark / 1.4% light at 55%) and a separate broad, soft white edge texture.
 
-## App Library path
+Dark appearance uses slightly stronger neutral brightness, saturation recovery, and white edge definition so the transparent sheet remains visible over dark wallpaper. Light appearance reduces all three so a bright wallpaper does not become a milky white card. These are luminance/contrast changes only; there is no chromatic tint.
 
-The existing closed-folder App Library reuse remains enabled: an independent `SBHLibraryCategoryPodBackgroundView` is created for Liquid Glass folders and its own `_updateVisualStyle` is invoked after hierarchy/frame/radius are valid. The real App Library is not hooked or modified.
+## 3. Liquid Glass opened highlight continuity
 
-## Stability
+The opened Liquid Glass highlight is treated as two symmetric continuous rails instead of separate corner/edge pieces: top -> upper-left arc -> left-side fade, and bottom -> lower-right arc -> right-side fade. The internal tangents keep full rail energy; fading starts only after the side tangent and uses the same C2 smootherstep length on both sides. Dark/light appearance changes gain only, never the geometry.
 
-No timer, display link, continuous CPU renderer, or 2x/3x opened-panel texture was added. The optical image remains cached and regenerated only for material-relevant changes.
+The opened optical map stays at the existing 1.5x cached render scale; this pass does not restore the higher-load 2x experiment.
 
-## Beta 2.1 closed Liquid Glass correction
+## Stability / scope
 
-The native `SBHLibraryCategoryPodBackgroundView` remains in use, but its alpha is restored from the stronger Beta 1.9/2.0 blend (`min(0.90, 0.58 + 0.34*r)`) to the earlier lighter blend (`min(0.78, 0.42 + 0.36*r)`). This is intentionally the only closed-Liquid material change in this release.
+- no App Library controller hooks
+- no `_updateVisualStyle` activation in the closed folder path
+- no daemon, timer, display link, gyro, or Metal render loop
+- opened optical map stays at the existing 1.5x cached render scale
+- Liquid Glass opened rail geometry changes only in the two locked continuity pairs; material/body parameters are unchanged by that rail pass
+- real App Library is not modified in this pass
