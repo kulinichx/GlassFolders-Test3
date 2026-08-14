@@ -1,4 +1,4 @@
-name: Build RootHide 0.7.3 App Library Beta1.4 Exact Hook.3 Runtime Fix
+name: Build RootHide 0.7.3 App Library Beta1.4.1 Logos Init Fix.3 Runtime Fix
 
 on:
   workflow_dispatch:
@@ -215,7 +215,7 @@ jobs:
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.3-Beta1.4-AppLibraryExact-DEB
+          name: GlassFolders-0.7.3-Beta1.4.1-AppLibraryExact-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
