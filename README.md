@@ -1,71 +1,91 @@
-# GlassFolders 0.6.0 RC3 — Open Panel Host Fix
+# GlassFolders 0.7.0 Beta 1 — Optical Glass
 
-## Root cause fixed
+This is a rendering-model change.
 
-Previous opened-folder builds placed the custom glass under
-`SBFloatyFolderView`.
+## Why
 
-On the tested iOS 16.6 SpringBoard build, that object behaves as a large
-container. When the old direct-child background lookup failed, the code used:
+Earlier versions tried to create glass lighting with:
 
-`targetFrame = self.bounds`
+- drawn rims
+- blurred strokes
+- linear/radial CAGradientLayer overlays
+- wide diagonal gradients
 
-That made the custom backdrop effectively full-screen.
+That repeatedly caused two failures:
 
-## RC3 host strategy
+1. highlight too sharp -> hard/artificial line
+2. blur strong enough -> highlight disappears
 
-RC3 never uses the full `SBFloatyFolderView.bounds` as a fallback.
+## Optical model
 
-It recursively searches the opened-folder hierarchy for the real panel host,
-scoring candidates by:
+### Backdrop material
 
-- folder/background/clip/material/backdrop class-name signals
-- rounded-corner geometry
-- panel-like area relative to the root container
-- reasonable aspect ratio
+`CABackdropLayer` remains responsible for:
 
-Strong candidates such as a floaty-folder background clip/background view are
-preferred.
-
-Once identified:
-
-- custom glass is inserted into that host
-- `glass.frame = host.bounds`
-- corner radius comes from that host
-- app icons/page controls remain outside/above the glass
-- surrounding wallpaper blur remains SpringBoard stock
-
-## Safe fallback
-
-If RC3 cannot identify the actual folder panel:
-
-- custom opened glass is removed
-- Apple's stock opened-folder background remains visible
-- no custom full-screen blur is created
-
-Wrong full-screen output is no longer an accepted fallback.
-
-## Visual model retained
-
-Closed:
-- clear-like backdrop
-- broad soft upper-left -> lower-right specular sheen
-- no hard border
-
-Opened:
-- rounded independent panel
-- lightly frosted transparent material
-- restrained saturation
+- real wallpaper color
+- blur
+- saturation
 - tiny neutral tint
-- no diagonal white stripe
 
-## Performance / UX retained
+### SDF lighting map
 
-- no daemon
-- no Timer
-- no DisplayLink
-- no gyroscope
-- no custom transition animator
-- 5% detents
-- rigid haptic ticks
+A small CPU-generated texture is derived from:
+
+- rounded-rectangle signed distance
+- numerical surface normal
+- fixed upper-left light vector
+- wide soft highlight shoulder
+- narrower bright highlight core
+- weak opposite lower-right dark falloff
+
+No border is drawn.
+
+No diagonal white stripe is drawn.
+
+The diagonal glass feeling emerges because upper-left-facing normals receive
+more white light while lower-right-facing normals receive a tiny dark falloff.
+
+## Closed folder
+
+- clearer backdrop material
+- stronger optical highlight than opened panel
+- wide shoulder + visible core
+- no stroke / rim mask
+
+## Opened folder
+
+- RC3 real panel-host detection is retained
+- independent rounded panel only
+- lighter frosted-transparent backdrop
+- wider, lower-contrast optical shoulder
+- no full-screen custom blur
+
+If the real panel host cannot be identified, GlassFolders keeps the stock
+SpringBoard panel instead of falling back to full-screen glass.
+
+## Performance
+
+The optical texture is generated only for a new combination of:
+
+- size
+- corner radius
+- 5% strength step
+- closed/opened mode
+
+Textures are cached in `NSCache`.
+
+There is no:
+
+- DisplayLink
+- per-frame Metal rendering
+- Timer
+- gyroscope
+- animated gradient
+- daemon
+
+## UX retained
+
+- Clear / Liquid Glass
+- 5% magnetic detents
+- rigid haptic tick
 - 应用并注销

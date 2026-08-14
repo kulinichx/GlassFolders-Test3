@@ -2,25 +2,23 @@
 #import <CoreFoundation/CoreFoundation.h>
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
+#import <dispatch/dispatch.h>
 #import <math.h>
 
 /*
- * GlassFolders 0.5.3 / Test5.3 — Backdrop Glass
+ * GlassFolders 0.7.0 Beta 1 — Optical Glass
  *
- * Why:
- * Test5.2's UIVisualEffectView "Light" material looked like a pale frosted card
- * on-device. This version instead uses CABackdropLayer + CAFilter when
- * available, so the wallpaper color remains visible and saturated.
+ * Rendering model:
+ * - CABackdropLayer supplies real wallpaper color + blur/saturation.
+ * - A cached CPU-generated optical map supplies glass lighting.
+ * - Lighting is derived from rounded-rect signed distance + surface normals.
+ * - Upper-left gets a bright core plus a wide soft shoulder.
+ * - Lower-right gets a very weak dark falloff for thickness.
  *
- * Lightweight-first:
- * - no daemon
- * - no DisplayLink
- * - no timer
- * - no gyroscope
- * - no continuously animated gradient
- * - no custom full-screen blur
+ * The optical map is generated only for a new size/radius/5% strength step
+ * and cached. It is NOT rendered every frame.
  *
- * The backdrop filters are static and GPU/compositor driven.
+ * No daemon / DisplayLink / Timer / gyroscope / Metal render loop.
  */
 
 static CFStringRef const GFPreferencesDomain = CFSTR("com.local.glassfolders");
@@ -110,14 +108,371 @@ static id GFCreateCAFilter(NSString *type) {
 }
 
 
+static inline CGFloat GFClamp01(CGFloat value) {
+    return MIN(1.0, MAX(0.0, value));
+}
+
+static inline CGFloat GFRoundedRectSDF(CGFloat x,
+                                      CGFloat y,
+                                      CGFloat width,
+                                      CGFloat height,
+                                      CGFloat radius) {
+    CGFloat halfW = width * 0.5;
+    CGFloat halfH = height * 0.5;
+
+    radius = MAX(0.0, MIN(radius, MIN(halfW, halfH)));
+
+    CGFloat qx =
+        fabs(x - halfW) - (halfW - radius);
+    CGFloat qy =
+        fabs(y - halfH) - (halfH - radius);
+
+    CGFloat outsideX = MAX(qx, 0.0);
+    CGFloat outsideY = MAX(qy, 0.0);
+
+    CGFloat outside = hypot(outsideX, outsideY);
+    CGFloat inside = MIN(MAX(qx, qy), 0.0);
+
+    return outside + inside - radius;
+}
+
+static NSCache *GFOpticalLightingCache(void) {
+    static NSCache *cache = nil;
+    static dispatch_once_t onceToken;
+
+    dispatch_once(&onceToken, ^{
+        cache = [[NSCache alloc] init];
+        cache.countLimit = 24;
+        cache.totalCostLimit = 12 * 1024 * 1024;
+    });
+
+    return cache;
+}
+
+/*
+ * Generate a static optical-lighting texture.
+ *
+ * This is NOT a blurred stroke and NOT a diagonal gradient.
+ *
+ * Each pixel derives from:
+ * - distance to the rounded edge,
+ * - local edge normal,
+ * - fixed upper-left light direction.
+ *
+ * Therefore the rounded corner naturally carries the highlight through it.
+ */
+static UIImage *GFCreateOpticalLightingImage(CGSize size,
+                                             CGFloat cornerRadius,
+                                             CGFloat strength,
+                                             BOOL opened) {
+    if (size.width < 2.0 || size.height < 2.0) {
+        return nil;
+    }
+
+    CGFloat screenScale = UIScreen.mainScreen.scale;
+
+    CGFloat renderScale = opened
+        ? MIN(screenScale, 1.35)
+        : MIN(screenScale, 2.0);
+
+    size_t pixelWidth =
+        (size_t)MAX(2.0, floor(size.width * renderScale + 0.5));
+    size_t pixelHeight =
+        (size_t)MAX(2.0, floor(size.height * renderScale + 0.5));
+
+    NSInteger strengthStep =
+        MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
+
+    NSString *cacheKey = [NSString stringWithFormat:
+        @"%@-%zux%zu-r%.2f-s%ld",
+        opened ? @"O" : @"C",
+        pixelWidth,
+        pixelHeight,
+        cornerRadius,
+        (long)strengthStep
+    ];
+
+    NSCache *cache = GFOpticalLightingCache();
+    UIImage *cached = [cache objectForKey:cacheKey];
+
+    if (cached) {
+        return cached;
+    }
+
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    size_t bytesPerRow = pixelWidth * 4;
+
+    CGContextRef context = CGBitmapContextCreate(
+        NULL,
+        pixelWidth,
+        pixelHeight,
+        8,
+        bytesPerRow,
+        colorSpace,
+        kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big
+    );
+
+    CGColorSpaceRelease(colorSpace);
+
+    if (!context) {
+        return nil;
+    }
+
+    unsigned char *pixels =
+        (unsigned char *)CGBitmapContextGetData(context);
+
+    if (!pixels) {
+        CGContextRelease(context);
+        return nil;
+    }
+
+    CGFloat width = (CGFloat)pixelWidth;
+    CGFloat height = (CGFloat)pixelHeight;
+    CGFloat radius = MAX(0.0, cornerRadius * renderScale);
+
+    CGFloat e = sqrt(GFClamp01(strength));
+
+    /*
+     * Two-zone edge lighting:
+     *
+     * SHOULDER = wide, low-contrast transition.
+     * CORE     = narrower, brighter reflection.
+     *
+     * This is what prevents the old "hard line OR invisible blur" problem.
+     */
+    CGFloat shoulderPoints = opened
+        ? (11.5 + 4.5 * e)
+        : (6.0 + 3.2 * e);
+
+    CGFloat corePoints = opened
+        ? (2.4 + 0.9 * e)
+        : (1.45 + 0.65 * e);
+
+    CGFloat shoulderWidth = shoulderPoints * renderScale;
+    CGFloat coreWidth = corePoints * renderScale;
+
+    CGFloat highlightShoulderGain = opened
+        ? (0.050 + 0.018 * e)
+        : (0.082 + 0.030 * e);
+
+    CGFloat highlightCoreGain = opened
+        ? (0.070 + 0.020 * e)
+        : (0.115 + 0.035 * e);
+
+    CGFloat shadowShoulderGain = opened
+        ? (0.018 + 0.008 * e)
+        : (0.024 + 0.010 * e);
+
+    CGFloat shadowCoreGain = opened
+        ? (0.024 + 0.009 * e)
+        : (0.034 + 0.012 * e);
+
+    /*
+     * Upper-left fixed light.
+     * UIKit +Y points down, hence the negative Y component.
+     */
+    CGFloat lightX = -0.735;
+    CGFloat lightY = -0.678;
+
+    CGFloat epsilon = MAX(0.65, renderScale * 0.55);
+
+    for (size_t py = 0; py < pixelHeight; py++) {
+        for (size_t px = 0; px < pixelWidth; px++) {
+            CGFloat x = (CGFloat)px + 0.5;
+            CGFloat y = (CGFloat)py + 0.5;
+
+            CGFloat sdf =
+                GFRoundedRectSDF(
+                    x, y, width, height, radius
+                );
+
+            /*
+             * Lighting exists only inside the rounded glass surface.
+             */
+            if (sdf > 0.0) {
+                continue;
+            }
+
+            CGFloat insideDepth = -sdf;
+
+            /*
+             * Extremely weak whole-surface diagonal bias.
+             * This creates a broad light-to-dark direction without a stripe.
+             */
+            CGFloat u = x / MAX(1.0, width);
+            CGFloat v = y / MAX(1.0, height);
+            CGFloat diagonal =
+                GFClamp01(1.0 - (u + v) * 0.5);
+
+            CGFloat ambientWhite =
+                pow(diagonal, 2.45) *
+                (opened ? 0.0085 : 0.0120);
+
+            CGFloat ambientDark =
+                pow(1.0 - diagonal, 2.60) *
+                (opened ? 0.0045 : 0.0065);
+
+            CGFloat signedLight =
+                ambientWhite - ambientDark;
+
+            CGFloat maxBand = shoulderWidth * 3.2;
+
+            if (insideDepth <= maxBand) {
+                /*
+                 * Numerical gradient of the SDF = local outward normal.
+                 */
+                CGFloat dx =
+                    GFRoundedRectSDF(
+                        x + epsilon, y, width, height, radius
+                    ) -
+                    GFRoundedRectSDF(
+                        x - epsilon, y, width, height, radius
+                    );
+
+                CGFloat dy =
+                    GFRoundedRectSDF(
+                        x, y + epsilon, width, height, radius
+                    ) -
+                    GFRoundedRectSDF(
+                        x, y - epsilon, width, height, radius
+                    );
+
+                CGFloat normalLength = hypot(dx, dy);
+
+                if (normalLength > 0.0001) {
+                    CGFloat nx = dx / normalLength;
+                    CGFloat ny = dy / normalLength;
+
+                    CGFloat ndotl =
+                        nx * lightX + ny * lightY;
+
+                    CGFloat facing = MAX(0.0, ndotl);
+                    CGFloat opposite = MAX(0.0, -ndotl);
+
+                    CGFloat shoulderRatio =
+                        insideDepth /
+                        MAX(0.001, shoulderWidth);
+
+                    CGFloat coreRatio =
+                        insideDepth /
+                        MAX(0.001, coreWidth);
+
+                    CGFloat shoulder =
+                        exp(-(shoulderRatio * shoulderRatio));
+
+                    CGFloat core =
+                        exp(-(coreRatio * coreRatio));
+
+                    CGFloat lightFacing =
+                        pow(facing, opened ? 1.25 : 1.38);
+
+                    CGFloat shadowFacing =
+                        pow(opposite, opened ? 1.18 : 1.28);
+
+                    CGFloat white =
+                        (
+                            shoulder * highlightShoulderGain +
+                            core * highlightCoreGain
+                        ) * lightFacing;
+
+                    CGFloat dark =
+                        (
+                            shoulder * shadowShoulderGain +
+                            core * shadowCoreGain
+                        ) * shadowFacing;
+
+                    signedLight += white - dark;
+                }
+            }
+
+            /*
+             * Prevent the lighting map from ever becoming a painted frame.
+             */
+            CGFloat positiveCap =
+                opened ? 0.145 : 0.225;
+
+            CGFloat negativeCap =
+                opened ? 0.070 : 0.085;
+
+            signedLight =
+                MIN(
+                    positiveCap,
+                    MAX(-negativeCap, signedLight)
+                );
+
+            CGFloat alpha = fabs(signedLight);
+
+            if (alpha < 0.001) {
+                continue;
+            }
+
+            size_t index =
+                py * bytesPerRow + px * 4;
+
+            unsigned char a =
+                (unsigned char)lround(
+                    GFClamp01(alpha) * 255.0
+                );
+
+            if (signedLight >= 0.0) {
+                /*
+                 * Premultiplied neutral white.
+                 */
+                pixels[index + 0] = a;
+                pixels[index + 1] = a;
+                pixels[index + 2] = a;
+                pixels[index + 3] = a;
+            } else {
+                /*
+                 * Premultiplied neutral black.
+                 */
+                pixels[index + 0] = 0;
+                pixels[index + 1] = 0;
+                pixels[index + 2] = 0;
+                pixels[index + 3] = a;
+            }
+        }
+    }
+
+    CGImageRef cgImage =
+        CGBitmapContextCreateImage(context);
+
+    CGContextRelease(context);
+
+    if (!cgImage) {
+        return nil;
+    }
+
+    UIImage *image =
+        [UIImage imageWithCGImage:cgImage
+                            scale:renderScale
+                      orientation:UIImageOrientationUp];
+
+    size_t cost =
+        pixelWidth * pixelHeight * 4;
+
+    if (image) {
+        [cache setObject:image
+                  forKey:cacheKey
+                    cost:cost];
+    }
+
+    CGImageRelease(cgImage);
+
+    return image;
+}
+
+
+
 
 
 
 @interface GFBackdropGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
-@property (nonatomic, strong) CAGradientLayer *gfSurfaceHighlight;
-@property (nonatomic, strong) CAGradientLayer *gfDiagonalSheen;
+@property (nonatomic, strong) CALayer *gfOpticalLightingLayer;
+@property (nonatomic, assign) CGSize gfLightingSize;
+@property (nonatomic, assign) CGFloat gfLightingRadius;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) NSInteger gfStyle;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
@@ -238,122 +593,13 @@ static id GFCreateCAFilter(NSString *type) {
         }
 
         if (_gfStyle == 1 && _gfStrength > 0.001) {
-            /*
-             * A very light static diagonal specular band.
-             * This is the A/B direction discussed after Edge Glass looked flat.
-             * It never animates and never reads motion sensors.
-             */
-            /*
-             * Two static layers:
-             * 1) a broader, soft internal glow (the "thick glass edge")
-             * 2) a narrower specular band on top of it
-             *
-             * Both are static CAGradientLayer objects: no timer / no motion /
-             * no continuous animation.
-             */
-            /*
-             * Continuous rounded-edge glass highlight.
-             *
-             * Test5.6 used two independent strips (top + left). At the rounded
-             * top-left corner those strips were inset and clipped separately,
-             * creating a visible "missing highlight" gap.
-             *
-             * Test5.7 uses ONE gradient layer masked by ONE continuous
-             * rounded-rectangle stroke. The highlight therefore flows through
-             * the corner with no seam.
-             *
-             * Brightness falls from upper-left -> lower-right.
-             * Static only: no animation / timer / motion sensor.
-             */
-            /*
-             * Native-style local rim:
-             * keep a relatively soft/wide highlight region, but only around
-             * the upper-left corner and upper edge.
-             *
-             * This avoids the "neon outline" look seen in Test5.7.
-             */
-            /*
-             * Native Transparent Glass:
-             * a short, soft upper-left catch-light only.
-             * The material remains the main visual effect.
-             */
-            /*
-             * Apple-style transparent rim:
-             *
-             * 1) A very faint COMPLETE white outline keeps the glass shape
-             *    coherent on every wallpaper.
-             *
-             * 2) A wider white rim uses a full rounded-rect stroke mask, but
-             *    its gradient is strongest at the upper-left and smoothly
-             *    fades toward the lower-right.
-             *
-             * The highlight itself is neutral white. Wallpaper color only
-             * comes from the backdrop material underneath it.
-             */
-            /*
-             * RC material highlight:
-             * no stroke, no rim, no edge mask.
-             *
-             * This is a broad, low-contrast surface light field anchored
-             * outside/near the upper-left. It should read as light on glass,
-             * not as a drawn border.
-             */
-            _gfSurfaceHighlight = [CAGradientLayer layer];
+            _gfOpticalLightingLayer = [CALayer layer];
+            _gfOpticalLightingLayer.contentsGravity = kCAGravityResize;
+            _gfOpticalLightingLayer.magnificationFilter = kCAFilterLinear;
+            _gfOpticalLightingLayer.minificationFilter = kCAFilterLinear;
+            _gfOpticalLightingLayer.opaque = NO;
 
-            if (@available(iOS 12.0, *)) {
-                _gfSurfaceHighlight.type = kCAGradientLayerRadial;
-            }
-
-            _gfSurfaceHighlight.startPoint = CGPointMake(0.08, 0.06);
-            _gfSurfaceHighlight.endPoint = CGPointMake(0.78, 0.78);
-            _gfSurfaceHighlight.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.120].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.050].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.012].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.000].CGColor
-            ];
-            _gfSurfaceHighlight.locations = @[@0.00, @0.36, @0.66, @1.00];
-            _gfSurfaceHighlight.opacity = 0.74 + (0.16 * e);
-
-            [self.layer addSublayer:_gfSurfaceHighlight];
-
-            /*
-             * Broad diagonal specular sheen.
-             *
-             * IMPORTANT:
-             * The gradient axis runs upper-right -> lower-left so the visible
-             * iso-brightness band itself reads upper-left -> lower-right.
-             *
-             * The bright region is intentionally WIDE. There is no narrow
-             * white center line, so it reads as reflected light across a
-             * glass surface rather than a stripe painted on top.
-             */
-            _gfDiagonalSheen = [CAGradientLayer layer];
-            _gfDiagonalSheen.startPoint = CGPointMake(0.96, 0.03);
-            _gfDiagonalSheen.endPoint = CGPointMake(0.04, 0.97);
-            _gfDiagonalSheen.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.000].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.018].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.065].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.105].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.118].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.105].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.065].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.018].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.000].CGColor
-            ];
-            _gfDiagonalSheen.locations = @[
-                @0.00, @0.12, @0.25, @0.37, @0.50,
-                @0.63, @0.75, @0.88, @1.00
-            ];
-
-            /*
-             * Strength changes presence only mildly. The sheen should remain
-             * subtle even at high glass strength.
-             */
-            _gfDiagonalSheen.opacity = 0.52 + (0.16 * e);
-
-            [self.layer addSublayer:_gfDiagonalSheen];
+            [self.layer addSublayer:_gfOpticalLightingLayer];
         }
     }
 
@@ -379,22 +625,47 @@ static id GFCreateCAFilter(NSString *type) {
         self.layer.cornerRadius = radius;
         self.layer.cornerCurve = kCACornerCurveContinuous;
     }
-    if (self.gfSurfaceHighlight) {
-        /*
-         * Slight overscan makes the radial field fade naturally before it
-         * reaches the clipped folder boundary.
-         */
-        self.gfSurfaceHighlight.frame =
-            CGRectInset(self.bounds, -6.0, -6.0);
-    }
+    if (self.gfOpticalLightingLayer) {
+        self.gfOpticalLightingLayer.frame = self.bounds;
 
-    if (self.gfDiagonalSheen) {
-        /*
-         * More overscan for the diagonal field keeps the broad highlight from
-         * revealing rectangular gradient edges near the rounded corners.
-         */
-        self.gfDiagonalSheen.frame =
-            CGRectInset(self.bounds, -14.0, -14.0);
+        CGSize currentSize = self.bounds.size;
+        CGFloat effectiveRadius = radius;
+
+        if (effectiveRadius <= 0.0) {
+            effectiveRadius =
+                MIN(currentSize.width, currentSize.height) * 0.22;
+        }
+
+        BOOL sizeChanged =
+            fabs(self.gfLightingSize.width - currentSize.width) > 0.50 ||
+            fabs(self.gfLightingSize.height - currentSize.height) > 0.50;
+
+        BOOL radiusChanged =
+            fabs(self.gfLightingRadius - effectiveRadius) > 0.25;
+
+        if (sizeChanged ||
+            radiusChanged ||
+            self.gfOpticalLightingLayer.contents == nil) {
+
+            UIImage *lighting =
+                GFCreateOpticalLightingImage(
+                    currentSize,
+                    effectiveRadius,
+                    self.gfStrength,
+                    NO
+                );
+
+            self.gfOpticalLightingLayer.contents =
+                lighting ? (id)lighting.CGImage : nil;
+
+            self.gfOpticalLightingLayer.contentsScale =
+                lighting
+                    ? lighting.scale
+                    : UIScreen.mainScreen.scale;
+
+            self.gfLightingSize = currentSize;
+            self.gfLightingRadius = effectiveRadius;
+        }
     }
 
 }
@@ -419,7 +690,9 @@ static id GFCreateCAFilter(NSString *type) {
 @interface GFOpenedFolderGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
-@property (nonatomic, strong) CAGradientLayer *gfSurfaceHighlight;
+@property (nonatomic, strong) CALayer *gfOpticalLightingLayer;
+@property (nonatomic, assign) CGSize gfLightingSize;
+@property (nonatomic, assign) CGFloat gfLightingRadius;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
 - (instancetype)initWithStrength:(CGFloat)strength;
@@ -460,9 +733,9 @@ static id GFCreateCAFilter(NSString *type) {
              * Opened "frosted transparent" calibration:
              * visibly softer than the closed icon, but still transparent.
              */
-            CGFloat blurRadius = 7.5 + (13.0 * e);
-            CGFloat saturation = 1.00 + (0.12 * e);
-            CGFloat brightness = 0.002 + (0.006 * e);
+            CGFloat blurRadius = 5.8 + (10.5 * e);
+            CGFloat saturation = 1.00 + (0.10 * e);
+            CGFloat brightness = 0.004 + (0.008 * e);
 
             id saturate = GFCreateCAFilter(@"colorSaturate");
             id brighten = GFCreateCAFilter(@"colorBrightness");
@@ -508,7 +781,7 @@ static id GFCreateCAFilter(NSString *type) {
          * Keep the opened folder neutral.
          * Wallpaper remains the color source.
          */
-        CGFloat tintAlpha = 0.022 + (0.024 * e);
+        CGFloat tintAlpha = 0.030 + (0.028 * e);
 
         if (_gfStrength > 0.001 && tintAlpha > 0.001) {
             _gfTintView = [[UIView alloc] initWithFrame:CGRectZero];
@@ -519,35 +792,13 @@ static id GFCreateCAFilter(NSString *type) {
         }
 
         if (_gfStrength > 0.001) {
-            /*
-             * Same Apple-style white edge language as the closed folder,
-             * slightly wider because this is a much larger surface.
-             */
-            /*
-             * Large surface highlight:
-             * weaker than the closed icon because the frosted material itself
-             * already establishes depth.
-             *
-             * Again: no line, no border, no rim mask.
-             */
-            _gfSurfaceHighlight = [CAGradientLayer layer];
+            _gfOpticalLightingLayer = [CALayer layer];
+            _gfOpticalLightingLayer.contentsGravity = kCAGravityResize;
+            _gfOpticalLightingLayer.magnificationFilter = kCAFilterLinear;
+            _gfOpticalLightingLayer.minificationFilter = kCAFilterLinear;
+            _gfOpticalLightingLayer.opaque = NO;
 
-            if (@available(iOS 12.0, *)) {
-                _gfSurfaceHighlight.type = kCAGradientLayerRadial;
-            }
-
-            _gfSurfaceHighlight.startPoint = CGPointMake(0.08, 0.05);
-            _gfSurfaceHighlight.endPoint = CGPointMake(0.70, 0.72);
-            _gfSurfaceHighlight.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.085].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.032].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.007].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.000].CGColor
-            ];
-            _gfSurfaceHighlight.locations = @[@0.00, @0.34, @0.66, @1.00];
-            _gfSurfaceHighlight.opacity = 0.64 + (0.14 * e);
-
-            [self.layer addSublayer:_gfSurfaceHighlight];
+            [self.layer addSublayer:_gfOpticalLightingLayer];
         }
     }
 
@@ -585,9 +836,42 @@ static id GFCreateCAFilter(NSString *type) {
         self.layer.cornerCurve = kCACornerCurveContinuous;
     }
 
-    if (self.gfSurfaceHighlight) {
-        self.gfSurfaceHighlight.frame =
-            CGRectInset(self.bounds, -10.0, -10.0);
+    if (self.gfOpticalLightingLayer) {
+        self.gfOpticalLightingLayer.frame = self.bounds;
+
+        CGSize currentSize = self.bounds.size;
+        CGFloat effectiveRadius = radius;
+
+        BOOL sizeChanged =
+            fabs(self.gfLightingSize.width - currentSize.width) > 0.75 ||
+            fabs(self.gfLightingSize.height - currentSize.height) > 0.75;
+
+        BOOL radiusChanged =
+            fabs(self.gfLightingRadius - effectiveRadius) > 0.35;
+
+        if (sizeChanged ||
+            radiusChanged ||
+            self.gfOpticalLightingLayer.contents == nil) {
+
+            UIImage *lighting =
+                GFCreateOpticalLightingImage(
+                    currentSize,
+                    effectiveRadius,
+                    self.gfStrength,
+                    YES
+                );
+
+            self.gfOpticalLightingLayer.contents =
+                lighting ? (id)lighting.CGImage : nil;
+
+            self.gfOpticalLightingLayer.contentsScale =
+                lighting
+                    ? lighting.scale
+                    : UIScreen.mainScreen.scale;
+
+            self.gfLightingSize = currentSize;
+            self.gfLightingRadius = effectiveRadius;
+        }
     }
 }
 
