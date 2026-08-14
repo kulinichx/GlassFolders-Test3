@@ -1,4 +1,4 @@
-name: Build RootHide 0.7 Beta5
+name: Build RootHide 0.7.1 Safe Optical Beta1
 
 on:
   workflow_dispatch:
@@ -80,9 +80,9 @@ jobs:
           DEB="${{ steps.package.outputs.deb }}"
           DEB_ABS="$GITHUB_WORKSPACE/$DEB"
 
-          rm -rf /tmp/gf-070b5
-          mkdir -p /tmp/gf-070b5
-          cd /tmp/gf-070b5
+          rm -rf /tmp/gf-070b4
+          mkdir -p /tmp/gf-070b4
+          cd /tmp/gf-070b4
 
           ar -x "$DEB_ABS"
           DATA_TAR="$(find . -maxdepth 1 -type f -name 'data.tar.*' | head -n 1)"
@@ -119,10 +119,43 @@ jobs:
         run: |
           shasum -a 256 "${{ steps.package.outputs.deb }}"
 
+
+      - name: Safety gate - closed-folder only
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DEB="${{ steps.package.outputs.deb }}"
+          TMP="/tmp/gf-safe-optical-check"
+
+          rm -rf "$TMP"
+          mkdir -p "$TMP/root"
+
+          cd "$TMP"
+          ar x "$GITHUB_WORKSPACE/$DEB"
+
+          DATA_TAR="$(find . -maxdepth 1 -type f \( -name 'data.tar.*' -o -name 'data.tar' \) | head -n 1)"
+          test -n "$DATA_TAR"
+          tar -xf "$DATA_TAR" -C "$TMP/root"
+
+          DYLIB="$(find "$TMP/root" -type f -name 'GlassFolders.dylib' | head -n 1)"
+          test -n "$DYLIB"
+
+          echo "Reject opened-folder symbols:"
+          if strings "$DYLIB" | grep -E 'SBFloatyFolderView|GFOpenedFolder|_newPageBackgroundView'; then
+            echo "ERROR: opened-folder code leaked into Safe Optical build."
+            exit 1
+          fi
+
+          echo "Require verified closed-folder hook:"
+          strings "$DYLIB" | grep -q 'SBFolderIconImageView'
+
+          echo "Safe Optical boundary verified."
+
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7-Beta5-DEB
+          name: GlassFolders-0.7.1-Beta1-SafeOptical-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
