@@ -10,7 +10,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.2 Closed Edge Beta 5</string>
+			<string>GlassFolders 0.7.3 App Library Beta 1</string>
 			<key>footerText</key>
 			<string>桌面保持稳定光学玻璃；Liquid Glass 打开文件夹改为浅色、半透明、轻磨砂圆角面板，并自动适配系统深色/浅色模式。</string>
 		</dict>
@@ -55,6 +55,26 @@
 				<integer>0</integer>
 				<integer>1</integer>
 			</array>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>App 资源库</string>
+			<key>footerText</key>
+			<string>单独控制 App 资源库首页的分类大文件夹。开启后复用当前 Liquid Glass 强度和深色/浅色自适应；关闭时完全保留系统原生分类背景。本测试版默认关闭。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>资源库大文件夹</string>
+			<key>key</key>
+			<string>AppLibraryPodsEnabled</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.local.glassfolders</string>
 		</dict>
 		<dict>
 			<key>cell</key>

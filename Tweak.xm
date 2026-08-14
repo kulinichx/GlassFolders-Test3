@@ -6,11 +6,12 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.2 Beta 5 — Closed Edge Intensity
+ * GlassFolders 0.7.3 Beta 1 — App Library Pods
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
  * - opened panel is attached only to SBFolderBackgroundView
+ * - optional App Library category-card background glass
  * - no parent folder container / page-background factory / transition hook
  *
  * Optical model:
@@ -25,6 +26,7 @@
 static CFStringRef const GFPreferencesDomain = CFSTR("com.local.glassfolders");
 
 static BOOL GFEnabled = YES;
+static BOOL GFAppLibraryPodsEnabled = NO;
 static NSInteger GFStyle = 0;          // 0 Clear, 1 Liquid Glass
 static CGFloat GFGlassStrength = 0.0;  // 0.0 ... 1.0
 
@@ -81,6 +83,8 @@ static void GFLoadPreferences(void) {
     CFPreferencesAppSynchronize(GFPreferencesDomain);
 
     GFEnabled = GFReadBool(CFSTR("Enabled"), YES);
+    GFAppLibraryPodsEnabled =
+        GFReadBool(CFSTR("AppLibraryPodsEnabled"), NO);
     GFStyle = GFReadInteger(CFSTR("Style"), 0);
     GFGlassStrength = GFReadPercent(CFSTR("GlassStrength"), 55.0);
 
@@ -1549,6 +1553,14 @@ static inline BOOL GFShouldUseOpenedPanel(void) {
 }
 
 
+static inline BOOL GFShouldUseAppLibraryPods(void) {
+    return
+        GFEnabled &&
+        GFAppLibraryPodsEnabled &&
+        GFStyle == 1;
+}
+
+
 static GFPanelGlassView *GFPanelGlassForBackground(
     UIView *backgroundView
 ) {
@@ -1742,6 +1754,128 @@ static void GFUpdateOpenedFolderBackground(
 }
 
 
+
+#pragma mark - App Library category pod glass
+
+/*
+ * App Library safety boundary
+ *
+ * The category card has a dedicated visual background view class. We attach
+ * only to that background surface. No App Library controller, category-folder
+ * controller, icon-list view, or icon view is hooked.
+ *
+ * This matters because the new option should be visual-only and should not
+ * participate in App Library navigation, selection, layout, or folder opening.
+ */
+static void GFUpdateAppLibraryCategoryBackground(
+    UIView *backgroundView
+) {
+    if (!backgroundView) {
+        return;
+    }
+
+    GFPanelGlassView *glass =
+        GFPanelGlassForBackground(
+            backgroundView
+        );
+
+    if (!GFShouldUseAppLibraryPods()) {
+        if (glass) {
+            [glass removeFromSuperview];
+
+            GFSetPanelGlassForBackground(
+                backgroundView,
+                nil
+            );
+        }
+
+        for (UIView *subview
+             in backgroundView.subviews) {
+
+            GFSetStockPanelSubviewSuppressed(
+                subview,
+                NO
+            );
+        }
+
+        return;
+    }
+
+    /*
+     * Preserve the system background hierarchy and lifecycle; suppress only
+     * its visual children while the custom glass is active.
+     */
+    backgroundView.backgroundColor =
+        UIColor.clearColor;
+
+    for (UIView *subview
+         in backgroundView.subviews) {
+
+        if (subview != glass) {
+            GFSetStockPanelSubviewSuppressed(
+                subview,
+                YES
+            );
+        }
+    }
+
+    if (!glass) {
+        glass =
+            [[GFPanelGlassView alloc]
+                initWithStrength:
+                    GFGlassStrength];
+
+        GFSetPanelGlassForBackground(
+            backgroundView,
+            glass
+        );
+
+        [backgroundView
+            addSubview:glass];
+    } else if (glass.superview != backgroundView) {
+        [glass removeFromSuperview];
+
+        [backgroundView
+            addSubview:glass];
+    }
+
+    glass.frame =
+        backgroundView.bounds;
+
+    glass.autoresizingMask =
+        UIViewAutoresizingFlexibleWidth |
+        UIViewAutoresizingFlexibleHeight;
+
+    /*
+     * Prefer Apple's actual category-card radius. If it has not propagated to
+     * the host layer yet, derive a conservative continuous radius from size.
+     */
+    CGFloat radius =
+        backgroundView.layer.cornerRadius;
+
+    if (radius <= 0.0) {
+        CGFloat shortSide =
+            MIN(
+                CGRectGetWidth(backgroundView.bounds),
+                CGRectGetHeight(backgroundView.bounds)
+            );
+
+        radius =
+            MIN(
+                34.0,
+                MAX(20.0, shortSide * 0.14)
+            );
+    }
+
+    [glass
+        setPreferredRadius:
+            radius];
+
+    [backgroundView
+        bringSubviewToFront:glass];
+}
+
+
 @interface SBFolderBackgroundView : UIView
 @end
 
@@ -1813,6 +1947,63 @@ static void GFUpdateOpenedFolderBackground(
 %end
 
 
+
+@interface SBHLibraryCategoryPodBackgroundView : UIView
+- (void)_updateVisualStyle;
+@end
+
+
+%group GFAppLibraryHooks
+
+%hook SBHLibraryCategoryPodBackgroundView
+
+- (void)_updateVisualStyle {
+    %orig;
+
+    GFUpdateAppLibraryCategoryBackground(
+        self
+    );
+}
+
+- (void)didMoveToWindow {
+    %orig;
+
+    GFUpdateAppLibraryCategoryBackground(
+        self
+    );
+}
+
+- (void)layoutSubviews {
+    %orig;
+
+    GFUpdateAppLibraryCategoryBackground(
+        self
+    );
+}
+
+- (void)traitCollectionDidChange:
+    (UITraitCollection *)previousTraitCollection {
+
+    %orig(previousTraitCollection);
+
+    GFPanelGlassView *glass =
+        GFPanelGlassForBackground(self);
+
+    if (glass) {
+        [glass gfRefreshMaterial];
+    }
+
+    GFUpdateAppLibraryCategoryBackground(
+        self
+    );
+}
+
+%end
+
+%end
+
+
+
 @interface SBFolderIconImageView : UIView
 - (void)setBackgroundView:(UIView *)backgroundView;
 @end
@@ -1870,6 +2061,15 @@ static void GFUpdateOpenedFolderBackground(
          */
         if (objc_getClass("SBFolderBackgroundView")) {
             %init(GFOpenedPanelHooks);
+        }
+
+        /*
+         * App Library category-card background is optional at runtime.
+         * If Apple changes the class on a different OS build, this group is
+         * simply not initialized; desktop/opened folder behavior remains.
+         */
+        if (objc_getClass("SBHLibraryCategoryPodBackgroundView")) {
+            %init(GFAppLibraryHooks);
         }
     }
 }

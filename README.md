@@ -1,57 +1,59 @@
-# GlassFolders 0.7.2 Beta 5 — Closed Edge Intensity
+# GlassFolders 0.7.3 Beta 1 — App Library Pods
 
-Beta 5 fixes the percentage response of the Home Screen / closed folder.
+This build adds one new independently controlled surface: the large category
+cards on the App Library overview page.
 
-## Root cause
+## New preference
 
-Beta 4's aggressive percentage-driven edge curve was applied to the opened
-panel, while the small closed folder still used the older `s^0.8` specular
-mapping with large fixed gains.
+Settings → GlassFolders → App 资源库 → 资源库大文件夹
 
-That is why an on-device closed-folder screenshot at 100% looked very similar
-to 75%.
+- default: OFF for upgrade safety;
+- ON: applies the current Liquid Glass strength to App Library category cards;
+- OFF: leaves the App Library category-card background stock;
+- the master Enable switch still controls the whole tweak.
 
-## Beta 5 closed-folder response
+The App Library option currently applies to Liquid Glass mode only.
 
-The closed folder now uses the dedicated `GFEdgeResponse()` curve too.
+## Runtime boundary
 
-Approximate edge drive:
+The App Library implementation hooks only:
 
-- 25% -> ~0.10
-- 50% -> ~0.29
-- 55% -> ~0.35
-- 75% -> ~0.62
-- 100% -> 1.00
+`SBHLibraryCategoryPodBackgroundView`
 
-The optical peak itself is also percentage-dependent, so the high end cannot
-be flattened by a fixed alpha clamp.
+It does not hook App Library controllers, category-folder controllers,
+pod icon views, pod icon-list views, search controllers, or navigation.
 
-## Luminance distribution
+The background host keeps its system lifecycle. Its stock visual child views
+remain allocated and are only hidden while custom glass is enabled.
 
-The 100% screenshot also showed too much light on the straight left/right
-sides. Beta 5 reallocates the brightness budget:
+## Material
 
-- top: strong;
-- bottom: strong, slightly below top;
-- top-left rounded corner: strongest;
-- bottom-right rounded corner: strong;
-- straight left/right sides: deliberately quieter;
-- far-side secondary rim: favors bottom and bottom-right over straight right.
+App Library category cards reuse the large-surface `GFPanelGlassView`:
 
-The corner bridge comes from the rounded-rect SDF surface normal; it is not a
-painted `CAShapeLayer` stroke.
+- wallpaper-driven `CABackdropLayer`;
+- adaptive dark/light material;
+- cached SDF optical map;
+- top/bottom highlight rails;
+- connected top-left/bottom-right corner highlights;
+- current Glass Strength value.
 
-## Material and stability
+Cards of the same size/radius/strength/appearance share the cached optical map,
+so adding multiple App Library categories does not create a separate lighting
+texture for every category.
 
-Material blur/tint curves are unchanged. The opened-panel Beta 4 logic is also
-retained.
+## Existing behavior
 
-Runtime boundary remains:
+Unchanged:
 
-- closed folder: `SBFolderIconImageView`;
-- opened panel: `SBFolderBackgroundView`;
-- no parent folder-container/factory/transition-alpha hooks;
-- SpringBoard-only injection;
-- RootHide arm64e.
+- closed Home Screen folder optical calibration;
+- opened folder `SBFolderBackgroundView` implementation;
+- 5% strength detents and haptics;
+- RootHide arm64e build;
+- SpringBoard-only injection.
 
-No daemon, timer, DisplayLink, gyroscope, or continuous Metal renderer.
+No daemon, timer, DisplayLink, gyroscope, or continuous Metal rendering.
+
+## Build safety
+
+GitHub Actions rejects broader App Library controller/icon-list symbols and
+requires `SBHLibraryCategoryPodBackgroundView` in the final tweak dylib.

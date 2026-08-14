@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.2~beta5
+Version: 0.7.3~beta1
 Architecture: iphoneos-arm64e
-Description: Percentage-driven closed-folder optical edge calibration: stronger top/bottom and top-left/bottom-right highlights, quieter straight side edges, with the existing adaptive opened-panel architecture retained.
+Description: Adds an independent App Library category-card Liquid Glass option using only SBHLibraryCategoryPodBackgroundView, while preserving the existing closed/open folder optical calibration.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks
