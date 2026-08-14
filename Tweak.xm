@@ -6,11 +6,12 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.1 Beta 1.1 — Safe Optical
+ * GlassFolders 0.7.2 Beta 1 — Adaptive Open Glass
  *
- * Stable scope:
- * - closed SpringBoard folder icons only
- * - no opened-folder private hierarchy modification
+ * Scope:
+ * - stable closed SpringBoard folder icon path
+ * - opened panel is attached only to SBFolderBackgroundView
+ * - no parent folder container / page-background factory / transition hook
  *
  * Optical model:
  * - CABackdropLayer for wallpaper color / blur / saturation
@@ -539,6 +540,938 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
 @end
 
 
+#pragma mark - Opened folder panel: conservative material takeover
+
+/*
+ * IMPORTANT STABILITY BOUNDARY
+ *
+ * We deliberately do NOT hook:
+ * - parent folder container hooks
+ * - page-background factory hooks
+ * - background-alpha transition hooks
+ * - outside wallpaper-background hooks
+ *
+ * SBFolderBackgroundView is already the actual visual panel.  We let
+ * SpringBoard create and animate it normally, then replace only its material.
+ * The parent view's native alpha / transform animation therefore also drives
+ * this child without a separate transition hook.
+ */
+
+static BOOL GFUsesDarkAppearance(UIView *view) {
+    UIUserInterfaceStyle style = UIUserInterfaceStyleUnspecified;
+
+    if (view) {
+        style = view.traitCollection.userInterfaceStyle;
+    }
+
+    if (style == UIUserInterfaceStyleUnspecified) {
+        style = UIScreen.mainScreen.traitCollection.userInterfaceStyle;
+    }
+
+    return style == UIUserInterfaceStyleDark;
+}
+
+
+static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
+                                                 CGFloat cornerRadius,
+                                                 CGFloat strength,
+                                                 BOOL darkAppearance) {
+    if (size.width < 2.0 ||
+        size.height < 2.0 ||
+        strength <= 0.001) {
+        return nil;
+    }
+
+    /*
+     * The opened panel uses broader light bands than the desktop icon.
+     * 1.5x is enough for the thin filament while avoiding a multi-megabyte
+     * 3x render for every large folder page.
+     */
+    CGFloat renderScale = MIN(UIScreen.mainScreen.scale, 1.50);
+
+    size_t pixelWidth =
+        (size_t)MAX(2.0, floor(size.width * renderScale + 0.5));
+    size_t pixelHeight =
+        (size_t)MAX(2.0, floor(size.height * renderScale + 0.5));
+
+    NSInteger strengthStep =
+        MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
+
+    NSString *cacheKey = [NSString stringWithFormat:
+        @"P-%@-%zux%zu-r%.2f-s%ld",
+        darkAppearance ? @"D" : @"L",
+        pixelWidth,
+        pixelHeight,
+        cornerRadius,
+        (long)strengthStep
+    ];
+
+    NSCache *cache = GFOpticalLightingCache();
+    UIImage *cached = [cache objectForKey:cacheKey];
+
+    if (cached) {
+        return cached;
+    }
+
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    size_t bytesPerRow = pixelWidth * 4;
+
+    CGContextRef context = CGBitmapContextCreate(
+        NULL,
+        pixelWidth,
+        pixelHeight,
+        8,
+        bytesPerRow,
+        colorSpace,
+        kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big
+    );
+
+    CGColorSpaceRelease(colorSpace);
+
+    if (!context) {
+        return nil;
+    }
+
+    unsigned char *pixels =
+        (unsigned char *)CGBitmapContextGetData(context);
+
+    if (!pixels) {
+        CGContextRelease(context);
+        return nil;
+    }
+
+    CGFloat width = (CGFloat)pixelWidth;
+    CGFloat height = (CGFloat)pixelHeight;
+    CGFloat radius = MAX(0.0, cornerRadius * renderScale);
+    CGFloat e = sqrt(GFClamp01(strength));
+
+    /*
+     * Large surfaces should read "thicker" than the closed folder:
+     * broader shoulder, but a restrained filament so it never becomes
+     * a hard white rounded-rect stroke.
+     */
+    CGFloat shoulderWidth =
+        (9.5 + 3.0 * e) * renderScale;
+    CGFloat coreWidth =
+        (1.55 + 0.42 * e) * renderScale;
+    CGFloat filamentWidth =
+        (0.50 + 0.10 * e) * renderScale;
+
+    CGFloat shoulderGain = darkAppearance
+        ? (0.026 + 0.008 * e)
+        : (0.018 + 0.006 * e);
+
+    CGFloat coreGain = darkAppearance
+        ? (0.082 + 0.018 * e)
+        : (0.055 + 0.014 * e);
+
+    CGFloat filamentGain = darkAppearance
+        ? (0.125 + 0.026 * e)
+        : (0.080 + 0.020 * e);
+
+    /*
+     * The far edge remains visible in both appearances.
+     * Light mode gets a little more dark shoulder so a pale wallpaper does
+     * not erase the shape.
+     */
+    CGFloat secondaryRimWidth =
+        (0.72 + 0.10 * e) * renderScale;
+
+    CGFloat secondaryRimGain = darkAppearance
+        ? (0.052 + 0.012 * e)
+        : (0.046 + 0.012 * e);
+
+    CGFloat darkShoulderCenter =
+        (2.8 + 0.5 * e) * renderScale;
+
+    CGFloat darkShoulderWidth =
+        (2.4 + 0.5 * e) * renderScale;
+
+    CGFloat darkShoulderGain = darkAppearance
+        ? (0.010 + 0.003 * e)
+        : (0.018 + 0.004 * e);
+
+    const CGFloat invSqrt2 = 0.70710678118;
+    const CGFloat lightX = -invSqrt2;
+    const CGFloat lightY = -invSqrt2;
+
+    CGFloat epsilon = MAX(0.70, renderScale * 0.60);
+    CGFloat aaWidth = MAX(0.90, renderScale * 0.75);
+
+    for (size_t py = 0; py < pixelHeight; py++) {
+        for (size_t px = 0; px < pixelWidth; px++) {
+            CGFloat x = (CGFloat)px + 0.5;
+            CGFloat y = (CGFloat)py + 0.5;
+
+            CGFloat sdf =
+                GFRoundedRectSDF(
+                    x, y, width, height, radius
+                );
+
+            CGFloat edgeCoverage =
+                GFClamp01(0.5 - sdf / aaWidth);
+
+            if (edgeCoverage <= 0.001) {
+                continue;
+            }
+
+            CGFloat insideDepth = MAX(0.0, -sdf);
+            CGFloat maxBand =
+                MAX(
+                    shoulderWidth * 3.0,
+                    darkShoulderCenter + darkShoulderWidth * 3.0
+                );
+
+            if (insideDepth > maxBand) {
+                continue;
+            }
+
+            CGFloat dx =
+                GFRoundedRectSDF(
+                    x + epsilon, y, width, height, radius
+                ) -
+                GFRoundedRectSDF(
+                    x - epsilon, y, width, height, radius
+                );
+
+            CGFloat dy =
+                GFRoundedRectSDF(
+                    x, y + epsilon, width, height, radius
+                ) -
+                GFRoundedRectSDF(
+                    x, y - epsilon, width, height, radius
+                );
+
+            CGFloat normalLength = hypot(dx, dy);
+
+            if (normalLength <= 0.0001) {
+                continue;
+            }
+
+            CGFloat nx = dx / normalLength;
+            CGFloat ny = dy / normalLength;
+
+            CGFloat ndotl = nx * lightX + ny * lightY;
+            CGFloat facing = MAX(0.0, ndotl);
+            CGFloat opposite = MAX(0.0, -ndotl);
+
+            CGFloat shoulderRatio =
+                insideDepth / MAX(0.001, shoulderWidth);
+
+            CGFloat coreRatio =
+                insideDepth / MAX(0.001, coreWidth);
+
+            CGFloat filamentRatio =
+                insideDepth / MAX(0.001, filamentWidth);
+
+            CGFloat secondaryRatio =
+                insideDepth / MAX(0.001, secondaryRimWidth);
+
+            CGFloat shoulder =
+                exp(-(shoulderRatio * shoulderRatio));
+
+            CGFloat core =
+                exp(-(coreRatio * coreRatio * 1.30));
+
+            CGFloat filament =
+                exp(-pow(filamentRatio, 2.55));
+
+            CGFloat secondary =
+                exp(-pow(secondaryRatio, 2.30));
+
+            CGFloat white =
+                shoulder * shoulderGain * pow(facing, 1.30) +
+                core * coreGain * pow(facing, 1.45) +
+                filament * filamentGain * pow(facing, 1.65) +
+                secondary * secondaryRimGain * pow(opposite, 1.25);
+
+            /*
+             * Far-side thickness starts inside the edge.  It never occupies
+             * the same pixels as the secondary white filament.
+             */
+            CGFloat shadowOffset =
+                (insideDepth - darkShoulderCenter) /
+                MAX(0.001, darkShoulderWidth);
+
+            CGFloat dark =
+                exp(-(shadowOffset * shadowOffset * 1.10)) *
+                darkShoulderGain *
+                pow(opposite, 1.15);
+
+            CGFloat signedLight =
+                MIN(0.190, MAX(-0.045, white - dark));
+
+            CGFloat alpha =
+                fabs(signedLight) * edgeCoverage;
+
+            if (alpha < 0.001) {
+                continue;
+            }
+
+            size_t index =
+                py * bytesPerRow + px * 4;
+
+            unsigned char a =
+                (unsigned char)lround(
+                    GFClamp01(alpha) * 255.0
+                );
+
+            if (signedLight >= 0.0) {
+                pixels[index + 0] = a;
+                pixels[index + 1] = a;
+                pixels[index + 2] = a;
+                pixels[index + 3] = a;
+            } else {
+                pixels[index + 0] = 0;
+                pixels[index + 1] = 0;
+                pixels[index + 2] = 0;
+                pixels[index + 3] = a;
+            }
+        }
+    }
+
+    CGImageRef cgImage =
+        CGBitmapContextCreateImage(context);
+
+    CGContextRelease(context);
+
+    if (!cgImage) {
+        return nil;
+    }
+
+    UIImage *image =
+        [UIImage imageWithCGImage:cgImage
+                            scale:renderScale
+                      orientation:UIImageOrientationUp];
+
+    if (image) {
+        [cache setObject:image
+                  forKey:cacheKey
+                    cost:pixelWidth * pixelHeight * 4];
+    }
+
+    CGImageRelease(cgImage);
+    return image;
+}
+
+
+@interface GFPanelGlassView : UIView
+@property (nonatomic, strong) UIView *gfTintView;
+@property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
+@property (nonatomic, strong) CALayer *gfOpticalLayer;
+@property (nonatomic, assign) CGFloat gfStrength;
+@property (nonatomic, assign) CGFloat gfPreferredRadius;
+@property (nonatomic, assign) CGSize gfLightingSize;
+@property (nonatomic, assign) CGFloat gfLightingRadius;
+@property (nonatomic, assign) BOOL gfLastDarkAppearance;
+@property (nonatomic, assign) BOOL gfHasAppearance;
+- (instancetype)initWithStrength:(CGFloat)strength;
+- (void)setPreferredRadius:(CGFloat)radius;
+- (void)gfRefreshMaterial;
+@end
+
+
+@implementation GFPanelGlassView
+
++ (Class)layerClass {
+    Class backdropClass =
+        NSClassFromString(@"CABackdropLayer");
+
+    return backdropClass ?: [CALayer class];
+}
+
+- (instancetype)initWithStrength:(CGFloat)strength {
+    self = [super initWithFrame:CGRectZero];
+
+    if (self) {
+        _gfStrength =
+            MIN(1.0, MAX(0.0, strength));
+
+        self.backgroundColor = UIColor.clearColor;
+        self.userInteractionEnabled = NO;
+        self.clipsToBounds = YES;
+        self.layer.masksToBounds = YES;
+        self.layer.allowsEdgeAntialiasing = YES;
+
+        _gfTintView =
+            [[UIView alloc] initWithFrame:CGRectZero];
+
+        _gfTintView.userInteractionEnabled = NO;
+        _gfTintView.backgroundColor =
+            UIColor.whiteColor;
+
+        [self addSubview:_gfTintView];
+
+        _gfOpticalLayer =
+            [CALayer layer];
+
+        _gfOpticalLayer.contentsGravity =
+            kCAGravityResize;
+
+        _gfOpticalLayer.magnificationFilter =
+            kCAFilterLinear;
+
+        _gfOpticalLayer.minificationFilter =
+            kCAFilterLinear;
+
+        _gfOpticalLayer.opaque = NO;
+
+        [self.layer addSublayer:_gfOpticalLayer];
+
+        [self gfRefreshMaterial];
+    }
+
+    return self;
+}
+
+- (void)setPreferredRadius:(CGFloat)radius {
+    CGFloat safeRadius = MAX(0.0, radius);
+
+    if (fabs(self.gfPreferredRadius - safeRadius) > 0.25) {
+        self.gfPreferredRadius = safeRadius;
+        [self setNeedsLayout];
+    }
+}
+
+- (void)gfRefreshMaterial {
+    BOOL darkAppearance =
+        GFUsesDarkAppearance(self);
+
+    self.gfLastDarkAppearance =
+        darkAppearance;
+
+    self.gfHasAppearance = YES;
+
+    CGFloat e = sqrt(self.gfStrength);
+
+    BOOL isBackdropLayer =
+        [NSStringFromClass(self.layer.class)
+            containsString:@"Backdrop"];
+
+    if (self.gfStrength > 0.001 &&
+        isBackdropLayer) {
+
+        /*
+         * Dark mode:
+         *   a slightly stronger lift is required because SpringBoard's outer
+         *   folder environment is already dimmed.
+         *
+         * Light mode:
+         *   less white tint + less brightness so the panel does not become
+         *   an opaque milky card on a bright wallpaper.
+         */
+        CGFloat blurRadius = darkAppearance
+            ? (5.2 + 6.6 * e)
+            : (4.7 + 5.5 * e);
+
+        CGFloat saturation = darkAppearance
+            ? (1.05 + 0.11 * e)
+            : (1.03 + 0.08 * e);
+
+        CGFloat brightness = darkAppearance
+            ? (0.018 + 0.018 * e)
+            : (0.002 + 0.006 * e);
+
+        id saturate =
+            GFCreateCAFilter(@"colorSaturate");
+
+        id brighten =
+            GFCreateCAFilter(@"colorBrightness");
+
+        id blur =
+            GFCreateCAFilter(@"gaussianBlur");
+
+        NSMutableArray *filters =
+            [NSMutableArray array];
+
+        if (saturate) {
+            [saturate
+                setValue:@(saturation)
+                  forKey:@"inputAmount"];
+
+            [filters addObject:saturate];
+        }
+
+        if (brighten) {
+            [brighten
+                setValue:@(brightness)
+                  forKey:@"inputAmount"];
+
+            [filters addObject:brighten];
+        }
+
+        if (blur) {
+            [blur
+                setValue:@(blurRadius)
+                  forKey:@"inputRadius"];
+
+            [blur
+                setValue:@YES
+                  forKey:@"inputNormalizeEdges"];
+
+            [blur
+                setValue:@YES
+                  forKey:@"inputHardEdges"];
+
+            [filters addObject:blur];
+        }
+
+        [self.layer
+            setValue:filters
+              forKey:@"filters"];
+
+        [self.layer
+            setValue:@1.0
+              forKey:@"scale"];
+
+        if (self.gfFallbackBlurView) {
+            [self.gfFallbackBlurView
+                removeFromSuperview];
+
+            self.gfFallbackBlurView = nil;
+        }
+    } else if (self.gfStrength > 0.001) {
+        if (!self.gfFallbackBlurView) {
+            UIBlurEffect *effect =
+                [UIBlurEffect
+                    effectWithStyle:
+                        UIBlurEffectStyleSystemUltraThinMaterial];
+
+            self.gfFallbackBlurView =
+                [[UIVisualEffectView alloc]
+                    initWithEffect:effect];
+
+            self.gfFallbackBlurView.userInteractionEnabled =
+                NO;
+
+            [self insertSubview:self.gfFallbackBlurView
+                   belowSubview:self.gfTintView];
+        }
+
+        self.gfFallbackBlurView.alpha =
+            darkAppearance
+                ? MIN(0.62, 0.24 + 0.42 * e)
+                : MIN(0.52, 0.18 + 0.34 * e);
+    }
+
+    /*
+     * Neutral tint only. Wallpaper remains the chromatic source.
+     */
+    self.gfTintView.alpha =
+        self.gfStrength > 0.001
+            ? (
+                darkAppearance
+                    ? (0.026 + 0.030 * e)
+                    : (0.008 + 0.014 * e)
+              )
+            : 0.0;
+
+    /*
+     * Force the optical texture to be regenerated when light/dark mode
+     * changes even if the panel dimensions are unchanged.
+     */
+    self.gfOpticalLayer.contents = nil;
+
+    [self setNeedsLayout];
+}
+
+- (void)traitCollectionDidChange:
+    (UITraitCollection *)previousTraitCollection {
+
+    [super
+        traitCollectionDidChange:
+            previousTraitCollection];
+
+    UIUserInterfaceStyle previousStyle =
+        previousTraitCollection
+            ? previousTraitCollection.userInterfaceStyle
+            : UIUserInterfaceStyleUnspecified;
+
+    UIUserInterfaceStyle currentStyle =
+        self.traitCollection.userInterfaceStyle;
+
+    if (previousStyle != currentStyle) {
+        [self gfRefreshMaterial];
+    }
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+
+    self.gfFallbackBlurView.frame =
+        self.bounds;
+
+    self.gfTintView.frame =
+        self.bounds;
+
+    CGFloat radius =
+        self.gfPreferredRadius;
+
+    /*
+     * SBFolderBackgroundView normally already has the actual system radius.
+     * 38 pt is used only if the host has not exposed one yet.
+     */
+    if (radius <= 0.0) {
+        radius = 38.0;
+    }
+
+    CGFloat maxRadius =
+        MIN(
+            CGRectGetWidth(self.bounds),
+            CGRectGetHeight(self.bounds)
+        ) * 0.50;
+
+    radius =
+        MIN(radius, maxRadius);
+
+    self.layer.cornerRadius = radius;
+    self.layer.cornerCurve =
+        kCACornerCurveContinuous;
+
+    self.gfOpticalLayer.frame =
+        self.bounds;
+
+    BOOL darkAppearance =
+        GFUsesDarkAppearance(self);
+
+    BOOL appearanceChanged =
+        !self.gfHasAppearance ||
+        self.gfLastDarkAppearance != darkAppearance;
+
+    if (appearanceChanged) {
+        [self gfRefreshMaterial];
+        return;
+    }
+
+    CGSize currentSize =
+        self.bounds.size;
+
+    BOOL sizeChanged =
+        fabs(
+            self.gfLightingSize.width -
+            currentSize.width
+        ) > 0.75 ||
+        fabs(
+            self.gfLightingSize.height -
+            currentSize.height
+        ) > 0.75;
+
+    BOOL radiusChanged =
+        fabs(
+            self.gfLightingRadius -
+            radius
+        ) > 0.35;
+
+    if (self.gfOpticalLayer.contents == nil ||
+        sizeChanged ||
+        radiusChanged) {
+
+        UIImage *lighting =
+            GFCreateOpenedPanelLightingImage(
+                currentSize,
+                radius,
+                self.gfStrength,
+                darkAppearance
+            );
+
+        self.gfOpticalLayer.contents =
+            lighting
+                ? (id)lighting.CGImage
+                : nil;
+
+        self.gfOpticalLayer.contentsScale =
+            lighting
+                ? lighting.scale
+                : UIScreen.mainScreen.scale;
+
+        self.gfLightingSize =
+            currentSize;
+
+        self.gfLightingRadius =
+            radius;
+    }
+}
+
+@end
+
+
+/*
+ * Per-instance storage. No global array and no polling.
+ */
+static char kGFPanelGlassAssociationKey;
+static char kGFStockSubviewWasHiddenKey;
+static char kGFStockSubviewOriginalHiddenKey;
+
+
+static inline BOOL GFShouldUseOpenedPanel(void) {
+    return GFEnabled && GFStyle == 1;
+}
+
+
+static GFPanelGlassView *GFPanelGlassForBackground(
+    UIView *backgroundView
+) {
+    return (GFPanelGlassView *)
+        objc_getAssociatedObject(
+            backgroundView,
+            &kGFPanelGlassAssociationKey
+        );
+}
+
+
+static void GFSetPanelGlassForBackground(
+    UIView *backgroundView,
+    GFPanelGlassView *glass
+) {
+    objc_setAssociatedObject(
+        backgroundView,
+        &kGFPanelGlassAssociationKey,
+        glass,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+}
+
+
+/*
+ * Preserve the stock material objects and their lifecycle; only visibility
+ * is suppressed. This is intentionally safer than deleting or recursively
+ * rewriting SpringBoard's private view tree.
+ */
+static void GFSetStockPanelSubviewSuppressed(
+    UIView *subview,
+    BOOL suppressed
+) {
+    if (!subview ||
+        [subview isKindOfClass:
+            [GFPanelGlassView class]]) {
+        return;
+    }
+
+    NSNumber *wasHiddenMarker =
+        objc_getAssociatedObject(
+            subview,
+            &kGFStockSubviewWasHiddenKey
+        );
+
+    if (suppressed) {
+        if (!wasHiddenMarker) {
+            objc_setAssociatedObject(
+                subview,
+                &kGFStockSubviewOriginalHiddenKey,
+                @(subview.hidden),
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+
+            objc_setAssociatedObject(
+                subview,
+                &kGFStockSubviewWasHiddenKey,
+                @YES,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+        }
+
+        subview.hidden = YES;
+    } else if (wasHiddenMarker) {
+        NSNumber *originalHidden =
+            objc_getAssociatedObject(
+                subview,
+                &kGFStockSubviewOriginalHiddenKey
+            );
+
+        subview.hidden =
+            originalHidden
+                ? originalHidden.boolValue
+                : NO;
+
+        objc_setAssociatedObject(
+            subview,
+            &kGFStockSubviewWasHiddenKey,
+            nil,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+
+        objc_setAssociatedObject(
+            subview,
+            &kGFStockSubviewOriginalHiddenKey,
+            nil,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+}
+
+
+static void GFUpdateOpenedFolderBackground(
+    UIView *backgroundView
+) {
+    if (!backgroundView) {
+        return;
+    }
+
+    GFPanelGlassView *glass =
+        GFPanelGlassForBackground(
+            backgroundView
+        );
+
+    if (!GFShouldUseOpenedPanel()) {
+        if (glass) {
+            [glass removeFromSuperview];
+
+            GFSetPanelGlassForBackground(
+                backgroundView,
+                nil
+            );
+        }
+
+        for (UIView *subview
+             in backgroundView.subviews) {
+            GFSetStockPanelSubviewSuppressed(
+                subview,
+                NO
+            );
+        }
+
+        return;
+    }
+
+    /*
+     * The host itself can carry a stock dark fill even when all material
+     * subviews are hidden.
+     */
+    backgroundView.backgroundColor =
+        UIColor.clearColor;
+
+    for (UIView *subview
+         in backgroundView.subviews) {
+
+        if (subview != glass) {
+            GFSetStockPanelSubviewSuppressed(
+                subview,
+                YES
+            );
+        }
+    }
+
+    if (!glass) {
+        glass =
+            [[GFPanelGlassView alloc]
+                initWithStrength:
+                    GFGlassStrength];
+
+        /*
+         * Associate BEFORE insertion. If UIKit calls didAddSubview: during
+         * addSubview:, the hook can already identify this as our glass.
+         */
+        GFSetPanelGlassForBackground(
+            backgroundView,
+            glass
+        );
+
+        [backgroundView
+            addSubview:glass];
+    } else if (glass.superview != backgroundView) {
+        [glass removeFromSuperview];
+        [backgroundView addSubview:glass];
+    }
+
+    glass.frame =
+        backgroundView.bounds;
+
+    glass.autoresizingMask =
+        UIViewAutoresizingFlexibleWidth |
+        UIViewAutoresizingFlexibleHeight;
+
+    CGFloat radius =
+        backgroundView.layer.cornerRadius;
+
+    if (radius <= 0.0) {
+        radius = 38.0;
+    }
+
+    [glass
+        setPreferredRadius:
+            radius];
+
+    /*
+     * SBFolderBackgroundView is a visual background surface; keep our layer
+     * above its hidden material children. The folder icon grid is not a child
+     * of this visual background class.
+     */
+    [backgroundView
+        bringSubviewToFront:glass];
+}
+
+
+@interface SBFolderBackgroundView : UIView
+@end
+
+
+%group GFOpenedPanelHooks
+
+%hook SBFolderBackgroundView
+
+- (void)didAddSubview:(UIView *)subview {
+    %orig(subview);
+
+    if (GFShouldUseOpenedPanel() &&
+        ![subview isKindOfClass:
+            [GFPanelGlassView class]]) {
+
+        /*
+         * Synchronous suppression means newly-created stock material cannot
+         * become the first rendered dark frame.
+         */
+        GFSetStockPanelSubviewSuppressed(
+            subview,
+            YES
+        );
+    }
+}
+
+- (void)didMoveToWindow {
+    %orig;
+
+    /*
+     * This is after SpringBoard constructed the background object and its
+     * material children, but before normal on-screen compositing.
+     * We do not insert our view during the private object's initializer.
+     */
+    GFUpdateOpenedFolderBackground(self);
+}
+
+- (void)layoutSubviews {
+    %orig;
+
+    GFUpdateOpenedFolderBackground(self);
+}
+
+- (void)setBackgroundColor:(UIColor *)color {
+    if (GFShouldUseOpenedPanel()) {
+        %orig(UIColor.clearColor);
+    } else {
+        %orig(color);
+    }
+}
+
+- (void)traitCollectionDidChange:
+    (UITraitCollection *)previousTraitCollection {
+
+    %orig(previousTraitCollection);
+
+    GFPanelGlassView *glass =
+        GFPanelGlassForBackground(self);
+
+    if (glass) {
+        [glass gfRefreshMaterial];
+    }
+
+    GFUpdateOpenedFolderBackground(self);
+}
+
+%end
+
+%end
+
+
 @interface SBFolderIconImageView : UIView
 - (void)setBackgroundView:(UIView *)backgroundView;
 @end
@@ -589,5 +1522,13 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
         if (objc_getClass("SBFolderIconImageView")) {
             %init(GFIconHooks);
         }
-}
+
+        /*
+         * Opened panel is optional at runtime. If the class name changes on
+         * an unexpected build, the stable desktop-folder path still loads.
+         */
+        if (objc_getClass("SBFolderBackgroundView")) {
+            %init(GFOpenedPanelHooks);
+        }
+    }
 }

@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.1 Safe Optical Beta 1.1</string>
+			<string>GlassFolders 0.7.2 Adaptive Open Glass Beta 1</string>
 			<key>footerText</key>
-			<string>稳定基线：本版只修改桌面关闭状态。左上为多层镜面高光，右边/底边为独立细亮玻璃边；打开文件夹暂时保持系统原生。</string>
+			<string>桌面保持稳定光学玻璃；Liquid Glass 打开文件夹改为浅色、半透明、轻磨砂圆角面板，并自动适配系统深色/浅色模式。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -32,7 +32,7 @@
 			<key>label</key>
 			<string>风格</string>
 			<key>footerText</key>
-			<string>Liquid Glass：桌面文件夹使用真实壁纸透色 + 光学边缘。打开文件夹本版保持系统原生，以隔离稳定性风险。</string>
+			<string>Liquid Glass：桌面与打开面板都从壁纸取色。打开面板只接管 SBFolderBackgroundView 材质，不修改 SpringBoard 的文件夹创建和转场流程。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -88,7 +88,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>材质由壁纸提供颜色；高光使用中性白。右/下边缘与左上主高光独立计算，不使用硬描边。</string>
+			<string>深色模式提高通透面板的亮度与高光；浅色模式降低白色覆盖并增强远侧边缘对比。两种模式都不使用固定灰色卡片。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
