@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.4 Beta 2.2</string>
+			<string>GlassFolders 0.7.4 Beta 2.3</string>
 			<key>footerText</key>
-			<string>Beta 2.2：第一步把关闭状态 Liquid Glass 精确退回之前验证过的浅色基线，并移除后来加入的 _updateVisualStyle 主动激活；第二步按参考图重做 Clear 打开态：只使用壁纸来源的浅层模糊与中性白高光，深色/浅色模式分别调节，不添加紫/蓝/粉等彩色 tint；第三步把 Liquid Glass 打开态的“上→左上→左侧渐隐”和“下→右下→右侧渐隐”改成严格对称的连续高光轨道，连接点不参与衰减。</string>
+			<string>Beta 2.3：Liquid Glass 关闭态不再“近似调浅”，而是恢复到此前真机确认满意版本的完整关闭视觉链；Clear 打开态按锁定参考图重做为浅模糊、高透过、壁纸取色的独立材质，并分别处理深色/浅色模式；Liquid Glass 打开态将“上→左上→左侧渐隐”与“下→右下→右侧渐隐”作为严格镜像的连续高光轨道处理。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -32,7 +32,7 @@
 			<key>label</key>
 			<string>风格</string>
 			<key>footerText</key>
-			<string>Clear：使用独立的浅层 backdrop blur，颜色完全来自壁纸；深色模式增加少量中性亮度/白色高光，浅色模式降低这些中性光学量，避免乳白。Liquid Glass：保持更厚的 blur / saturation 与更强白色镜面高光。两种风格均不添加紫、蓝、粉等彩色 tint。</string>
+			<string>Clear：颜色只来自壁纸/桌面 backdrop，本身不添加紫、蓝、粉等彩色 tint；使用比 Liquid Glass 更浅的局部 blur、更高的 backdrop 保留率与柔和白色高光。深色模式增加少量中性亮度/白色透光，浅色模式自动收弱。Liquid Glass：保持更厚的 blur / saturation 与更强白色镜面高光。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -88,7 +88,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>关闭文件夹的 Liquid Glass 仍可创建独立的 SBHLibraryCategoryPodBackgroundView 作为被动视觉层，但 Beta 2.2 不再主动调用其 _updateVisualStyle；这样精确恢复之前验证过的浅色关闭态，避免系统 material 再次叠深。真实 App 资源库本身不会被 hook 或修改。</string>
+			<string>关闭文件夹的 Liquid Glass 现在完整恢复到此前真机确认满意的较浅基线：原 blur / saturation、中性 brightness、白色透光、被动 SBHLibraryCategoryPodBackgroundView blend 与关闭态光照图均保持该基线。不主动调用 _updateVisualStyle；真实 App 资源库本身不会被 hook 或修改。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

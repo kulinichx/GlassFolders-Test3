@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.4~beta2.2
+Version: 0.7.4~beta2.3
 Architecture: iphoneos-arm64e
-Description: Beta 2.2 restores the proven lighter closed Liquid Glass baseline, rebuilds Clear opened folders as a shallow wallpaper-owned blur with separate dark/light neutral optics and no chromatic tint, and makes the opened Liquid Glass top/TL/left and bottom/BR/right highlight rails geometrically continuous and symmetric.
+Description: Beta 2.3 exactly restores the previously accepted lighter Liquid Glass closed-folder implementation, rebuilds Clear opened folders as a shallow wallpaper-owned material with separate dark/light neutral optics and no chromatic tint, and uses mirrored continuous highlight rails for top->upper-left->left fade and bottom->lower-right->right fade.
 Maintainer: kulinich
 Author: kulinich
 Section: Tweaks

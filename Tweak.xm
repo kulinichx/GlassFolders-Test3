@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 2.2 — Baseline restore + Clear reference + symmetric opened rails
+ * GlassFolders 0.7.4 Beta 2.3 — closed baseline exact restore + Clear optical pass + mirrored rail continuity
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -813,6 +813,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
             [NSStringFromClass(self.layer.class) containsString:@"Backdrop"];
 
         CGFloat materialResponse = GFMaterialResponse(_gfStrength);
+        CGFloat tintResponse = GFTintResponse(_gfStrength);
 
         if (_gfStrength > 0.001 && isBackdropLayer) {
             /*
@@ -826,7 +827,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
             if (_gfStyle == 1) {
                 blurRadius = 4.8 + (7.5 * materialResponse);
                 saturation = 1.08 + (0.20 * materialResponse);
-                brightness = 0.0;
+                brightness = 0.006 + (0.014 * materialResponse);
             } else {
                 blurRadius = 1.8 + (6.0 * materialResponse);
                 saturation = 1.05 + (0.24 * materialResponse);
@@ -885,14 +886,17 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
         }
 
         /*
-         * No chromatic or milky body tint in Liquid Glass.  The wallpaper is
-         * the color source; the body only performs backdrop blur/saturation.
-         * Clear keeps the legacy tiny neutral lift.
+         * Neutral optical transmission only. No hue is introduced here:
+         * wallpaper/backdrop remains the sole color source. Liquid Glass
+         * restores the proven Beta1.8 light-body lift that produced the
+         * user's accepted closed-folder reference.
          */
         CGFloat tintAlpha = 0.0;
 
-        if (_gfStrength > 0.001 && _gfStyle != 1) {
-            tintAlpha = 0.018 * _gfStrength;
+        if (_gfStrength > 0.001) {
+            tintAlpha = (_gfStyle == 1)
+                ? 0.030 + (0.060 * tintResponse)
+                : 0.018 * _gfStrength;
         }
 
         if (tintAlpha > 0.001) {
@@ -1065,7 +1069,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
 
     NSString *cacheKey = [NSString stringWithFormat:
-        @"P22-%@-%@-%zux%zu-r%.2f-s%ld",
+        @"P23-%@-%@-%zux%zu-r%.2f-s%ld",
         (style == 1) ? @"LG" : @"CL",
         darkAppearance ? @"D" : @"L",
         pixelWidth,
@@ -1340,7 +1344,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 );
 
             /*
-             * Beta 2.2 — symmetric continuous tangent rails.
+             * Beta 2.3 — symmetric continuous tangent rails.
              *
              * Do not splice a "corner mask" into a separate straight-edge
              * mask. The SDF normal is already unit length, so in the owned
@@ -1373,16 +1377,48 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                     hypot(bottomFacing, rightFacing)
                 );
 
+            /*
+             * Do not hold the side tangent at exactly the same energy as the
+             * top/bottom rail and then suddenly begin fading.  Ease the last
+             * part of each owned corner by only 6%, then continue that same
+             * value into the long side tail.  This makes top->TL->left and
+             * bottom->BR->right feel like one reflection turning a corner.
+             */
+            CGFloat primaryTurn = leftFacing /
+                MAX(0.001, topFacing + leftFacing);
+            CGFloat secondaryTurn = rightFacing /
+                MAX(0.001, bottomFacing + rightFacing);
+
+            CGFloat primaryTurnT =
+                GFClamp01((primaryTurn - 0.48) / 0.52);
+            CGFloat secondaryTurnT =
+                GFClamp01((secondaryTurn - 0.48) / 0.52);
+
+            CGFloat primaryTurnSmooth =
+                primaryTurnT * primaryTurnT * primaryTurnT *
+                (primaryTurnT * (primaryTurnT * 6.0 - 15.0) + 10.0);
+            CGFloat secondaryTurnSmooth =
+                secondaryTurnT * secondaryTurnT * secondaryTurnT *
+                (secondaryTurnT * (secondaryTurnT * 6.0 - 15.0) + 10.0);
+
+            CGFloat primaryTurnGain = 1.0 - 0.060 * primaryTurnSmooth;
+            CGFloat secondaryTurnGain = 1.0 - 0.060 * secondaryTurnSmooth;
+
             CGFloat tangentOverlap =
                 MAX(
-                    2.25 * renderScale,
-                    endpointRadius * 0.060
+                    1.35 * renderScale,
+                    endpointRadius * 0.032
                 );
 
+            /*
+             * Apple-like turn-off: after the TL/BR tangent the reflection
+             * must breathe along the side instead of collapsing within half
+             * a radius.  The two sides are exact mirrors.
+             */
             CGFloat sideTailLength =
                 MAX(
-                    11.0 * renderScale,
-                    endpointRadius * 0.52
+                    22.0 * renderScale,
+                    endpointRadius * 1.12
                 );
 
             /*
@@ -1493,6 +1529,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             CGFloat primaryRailMask =
                 GFClamp01(
                     primaryQuadrantEnergy *
+                    primaryTurnGain *
                     primaryEnvelope *
                     primaryEndpointGate
                 );
@@ -1500,6 +1537,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             CGFloat secondaryRailMask =
                 GFClamp01(
                     secondaryQuadrantEnergy *
+                    secondaryTurnGain *
                     secondaryEnvelope *
                     secondaryEndpointGate
                 );
@@ -1904,20 +1942,20 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              * of these filters introduces a hue.
              */
             blurRadius = darkAppearance
-                ? (1.00 + 3.20 * materialResponse)
-                : (0.80 + 2.70 * materialResponse);
+                ? (0.55 + 1.70 * materialResponse)
+                : (0.45 + 1.50 * materialResponse);
 
             saturation = darkAppearance
-                ? (1.020 + 0.060 * materialResponse)
-                : (1.010 + 0.040 * materialResponse);
+                ? (1.030 + 0.080 * materialResponse)
+                : (1.020 + 0.060 * materialResponse);
 
             brightness = darkAppearance
-                ? (0.004 + 0.012 * materialResponse)
-                : (0.001 + 0.006 * materialResponse);
+                ? (0.018 + 0.035 * materialResponse)
+                : (0.006 + 0.018 * materialResponse);
 
             sampleAlpha = darkAppearance
-                ? (0.58 + 0.20 * materialResponse)
-                : (0.50 + 0.18 * materialResponse);
+                ? (0.78 + 0.12 * materialResponse)
+                : (0.72 + 0.10 * materialResponse);
         } else {
             /*
              * Liquid Glass: a thicker but not blackened backdrop.
@@ -2076,11 +2114,11 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              * wallpapers from turning the folder into a pale card.
              */
             neutralLift = darkAppearance
-                ? (0.035 + 0.035 * tintResponse) * self.gfStrength
-                : (0.015 + 0.025 * tintResponse) * self.gfStrength;
+                ? (0.065 + 0.055 * tintResponse) * self.gfStrength
+                : (0.028 + 0.032 * tintResponse) * self.gfStrength;
 
             self.gfTintView.alpha =
-                MIN(darkAppearance ? 0.070 : 0.040, neutralLift);
+                MIN(darkAppearance ? 0.095 : 0.050, neutralLift);
         } else {
             /*
              * Liquid Glass needs a little more neutral transmission in dark
@@ -2105,8 +2143,8 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
      */
     if (self.gfStyle == 0) {
         self.gfOpticalLayer.opacity = darkAppearance
-            ? (0.68 + 0.05 * materialResponse)
-            : (0.56 + 0.05 * materialResponse);
+            ? (0.76 + 0.06 * materialResponse)
+            : (0.62 + 0.05 * materialResponse);
     } else {
         self.gfOpticalLayer.opacity = darkAppearance
             ? 1.0
