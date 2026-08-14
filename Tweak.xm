@@ -6,15 +6,17 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 1.7 — End-Gated Specular Rails
+ * GlassFolders 0.7.4 Beta 1.8 — Native App Library Pod Layer
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
  * - opened panel attached only to SBFolderBackgroundView
- * - no App Library / controller / transition / page-factory hooks
+ * - reuses SBHLibraryCategoryPodBackgroundView as a read-only visual layer
+ * - no App Library controller / transition / page-factory hooks
  *
  * Optical model:
- * - CABackdropLayer for wallpaper color / blur / saturation
+ * - stronger CABackdropLayer for wallpaper color / blur / saturation
+ * - native App Library category-pod visual style layered into closed folders
  * - cached rounded-rect SDF lighting
  * - one continuous equal-brightness upper-left -> top specular rail
  * - one continuous equal-brightness bottom -> lower-right specular rail
@@ -537,7 +539,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                         );
 
                     CGFloat perimeterFloor =
-                        0.0025 + 0.0038 * edgeDrive;
+                        0.0040 + 0.0060 * edgeDrive;
 
                     /*
                      * Primary rail = top + upper-left, same gain everywhere.
@@ -547,22 +549,22 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                      * pair.
                      */
                     CGFloat primaryFilamentGain =
-                        0.020 + 0.285 * edgeDrive;
+                        0.030 + 0.360 * edgeDrive;
 
                     CGFloat primaryCoreGain =
-                        0.008 + 0.090 * edgeDrive;
+                        0.010 + 0.110 * edgeDrive;
 
                     CGFloat primaryShoulderGain =
-                        0.004 + 0.030 * edgeDrive;
+                        0.005 + 0.038 * edgeDrive;
 
                     CGFloat secondaryFilamentGain =
-                        0.012 + 0.205 * edgeDrive;
+                        0.018 + 0.270 * edgeDrive;
 
                     CGFloat secondaryCoreGain =
-                        0.005 + 0.058 * edgeDrive;
+                        0.007 + 0.078 * edgeDrive;
 
                     CGFloat secondaryShoulderGain =
-                        0.0025 + 0.018 * edgeDrive;
+                        0.0035 + 0.025 * edgeDrive;
 
                     /*
                      * Straight sides are now only a silhouette cue.
@@ -658,7 +660,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
              * response instead of capping 75% and 100% at the same ceiling.
              */
             CGFloat closedEdgePeak =
-                0.120 + 0.400 * edgeDrive;
+                0.160 + 0.500 * edgeDrive;
 
             signedLight =
                 MIN(
@@ -707,9 +709,62 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
 
 
 
+
+#pragma mark - Native App Library category-pod visual reuse
+
+/*
+ * This is the targeted path for matching Apple's App Library card body.
+ *
+ * SBHLibraryCategoryPodBackgroundView is the actual SpringBoardHome class
+ * used for App Library category backgrounds.  Rather than guessing its
+ * private MaterialKit recipe, we instantiate a separate copy and let
+ * SpringBoard's own SBHVisualStylingView machinery configure it.
+ *
+ * Important: this does NOT hook or alter the real App Library.  It only
+ * creates an independent visual view of the same class inside our folder
+ * background container.  If the class cannot be created, the stronger
+ * CABackdrop fallback remains fully functional.
+ */
+static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
+    Class podClass = NSClassFromString(@"SBHLibraryCategoryPodBackgroundView");
+
+    if (!podClass || ![podClass isSubclassOfClass:[UIView class]]) {
+        return nil;
+    }
+
+    UIView *podView = nil;
+
+    @try {
+        podView = [[podClass alloc] initWithFrame:CGRectZero];
+    } @catch (__unused NSException *exception) {
+        podView = nil;
+    }
+
+    if (![podView isKindOfClass:[UIView class]]) {
+        return nil;
+    }
+
+    podView.userInteractionEnabled = NO;
+    podView.clipsToBounds = YES;
+    podView.layer.masksToBounds = YES;
+
+    /*
+     * The native App Library visual sits over our wallpaper-preserving
+     * CABackdrop body.  Partial alpha intentionally makes the desktop folder
+     * a little more luminous than the older stock folder while avoiding an
+     * opaque card.  Strength still has visible authority.
+     */
+    CGFloat materialResponse = GFMaterialResponse(strength);
+    podView.alpha = MIN(0.78, 0.42 + 0.36 * materialResponse);
+
+    return podView;
+}
+
+
 @interface GFBackdropGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
+@property (nonatomic, strong) UIView *gfAppLibraryPodVisual;
 @property (nonatomic, strong) CALayer *gfOpticalLightingLayer;
 @property (nonatomic, assign) CGSize gfLightingSize;
 @property (nonatomic, assign) CGFloat gfLightingRadius;
@@ -759,9 +814,9 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
             CGFloat brightness;
 
             if (_gfStyle == 1) {
-                blurRadius = 1.6 + (4.2 * materialResponse);
-                saturation = 1.04 + (0.16 * materialResponse);
-                brightness = 0.001 + (0.003 * materialResponse);
+                blurRadius = 4.8 + (7.5 * materialResponse);
+                saturation = 1.08 + (0.20 * materialResponse);
+                brightness = 0.006 + (0.014 * materialResponse);
             } else {
                 blurRadius = 1.8 + (6.0 * materialResponse);
                 saturation = 1.05 + (0.24 * materialResponse);
@@ -800,15 +855,20 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
              * Conservative fallback for systems where CABackdropLayer cannot
              * be resolved. This is not the primary iOS 16 path.
              */
+            UIBlurEffectStyle fallbackStyle =
+                (_gfStyle == 1)
+                    ? UIBlurEffectStyleSystemThinMaterial
+                    : UIBlurEffectStyleSystemUltraThinMaterial;
+
             UIBlurEffect *effect =
-                [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterial];
+                [UIBlurEffect effectWithStyle:fallbackStyle];
 
             _gfFallbackBlurView =
                 [[UIVisualEffectView alloc] initWithEffect:effect];
 
             _gfFallbackBlurView.userInteractionEnabled = NO;
             _gfFallbackBlurView.alpha =
-                (_gfStyle == 1) ? MIN(0.64, 0.24 + 0.42 * materialResponse)
+                (_gfStyle == 1) ? MIN(0.86, 0.56 + 0.30 * materialResponse)
                                 : 0.55 * _gfStrength;
 
             [self addSubview:_gfFallbackBlurView];
@@ -821,7 +881,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
 
         if (_gfStrength > 0.001) {
             tintAlpha = (_gfStyle == 1)
-                ? 0.0010 + (0.006 * tintResponse)
+                ? 0.030 + (0.060 * tintResponse)
                 : 0.018 * _gfStrength;
         }
 
@@ -834,6 +894,18 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
         }
 
         if (_gfStyle == 1 && _gfStrength > 0.001) {
+            _gfAppLibraryPodVisual =
+                GFCreateNativeAppLibraryPodVisual(_gfStrength);
+
+            if (_gfAppLibraryPodVisual) {
+                if (_gfTintView) {
+                    [self insertSubview:_gfAppLibraryPodVisual
+                           belowSubview:_gfTintView];
+                } else {
+                    [self addSubview:_gfAppLibraryPodVisual];
+                }
+            }
+
             _gfOpticalLightingLayer = [CALayer layer];
             _gfOpticalLightingLayer.contentsGravity = kCAGravityResize;
             _gfOpticalLightingLayer.magnificationFilter = kCAFilterLinear;
@@ -851,6 +923,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
     [super layoutSubviews];
 
     self.gfFallbackBlurView.frame = self.bounds;
+    self.gfAppLibraryPodVisual.frame = self.bounds;
     self.gfTintView.frame = self.bounds;
 
     /*
@@ -865,7 +938,15 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
     if (radius > 0.0) {
         self.layer.cornerRadius = radius;
         self.layer.cornerCurve = kCACornerCurveContinuous;
+
+        if (self.gfAppLibraryPodVisual) {
+            self.gfAppLibraryPodVisual.layer.cornerRadius = radius;
+            self.gfAppLibraryPodVisual.layer.cornerCurve = kCACornerCurveContinuous;
+            self.gfAppLibraryPodVisual.layer.masksToBounds = YES;
+        }
     }
+
+
     if (self.gfOpticalLightingLayer) {
         self.gfOpticalLightingLayer.frame = self.bounds;
 

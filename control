@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.4~beta1.7
+Version: 0.7.4~beta1.8
 Architecture: iphoneos-arm64e
-Description: Folder-only RootHide build with position-gated continuous specular rails: upper-left plus top remain one equal-brightness primary rail while upper-right fades before the corner; bottom plus lower-right remain one secondary rail while lower-left stays subtle. Rounded Settings icon, duplicate-entry cleanup, and kulinich credit retained.
+Description: RootHide build that reuses SBHLibraryCategoryPodBackgroundView as an independent native App Library visual layer inside closed folders, then adds a stronger wallpaper-preserving CABackdrop body and brighter specular rails. The real App Library is not modified; the conservative opened-folder path is retained.
 Maintainer: kulinich
 Author: kulinich
 Section: Tweaks
