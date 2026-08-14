@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.4~beta1
+Version: 0.7.4~beta1.1
 Architecture: iphoneos-arm64e
-Description: Stable folder-only GlassFolders build with all experimental library-page hooks removed. Focuses on closed/open folder glass and deterministic settings icon packaging.
+Description: Clean folder-only RootHide build. All App Library experiments are removed; uses only stable closed/open folder hooks and a bundle-relative PreferenceLoader icon with verified packaged PNG resources.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks

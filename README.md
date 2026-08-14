@@ -1,50 +1,54 @@
-# GlassFolders 0.7.4 Beta 1 — Folder Only / Icon Focus
+# GlassFolders 0.7.4 Beta 1.1 — CLEAN
 
-This build removes the experimental system-library page work completely.
+This is a clean folder-only repository build.
 
 ## Runtime
 
-Only two SpringBoard visual paths remain:
+Only the previously stable SpringBoard visual paths remain:
 
-- `SBFolderIconImageView` for closed Home Screen folders;
-- `SBFolderBackgroundView` for opened folders.
+- closed folders: `SBFolderIconImageView`
+- opened folders: `SBFolderBackgroundView`
 
-No other library/category/search/controller class is referenced.
+All experimental App Library code is absent.
 
-## Settings
+## Settings icon correction
 
-The experimental extra switch has been removed from the settings UI.
+GlassFolders uses a real PreferenceBundle (`GlassFoldersPrefs`).
 
-## Icon packaging
+For a bundle-based PreferenceLoader entry, the icon is now specified as the
+bundle-relative resource name:
 
-The user-supplied artwork is packaged twice as static resources.
+`GlassFolders.png`
 
-PreferenceLoader:
+The same 1x/2x/3x PNG set is explicitly packaged inside
+`GlassFoldersPrefs.bundle`.
 
-- `GlassFolders/GlassFolders.plist`
-- `GlassFolders/GlassFolders.png`
-- `GlassFolders/GlassFolders@2x.png`
-- `GlassFolders/GlassFolders@3x.png`
+A second copy remains beside the PreferenceLoader plist for compatibility, but
+the entry no longer depends on an absolute `/Library/...` icon path.
 
-PreferenceBundle:
+## GitHub Actions
 
-- `GlassFoldersPrefs.bundle/GlassFolders.png`
-- `GlassFoldersPrefs.bundle/GlassFolders@2x.png`
-- `GlassFoldersPrefs.bundle/GlassFolders@3x.png`
-- `GlassFoldersPrefs.bundle/GlassFoldersLarge.png`
+This repository contains exactly one workflow:
 
-The final GitHub Actions verifier opens the real deb and confirms both copies
-exist before publishing the artifact.
+`.github/workflows/glassfolders-074-clean.yml`
 
-## Safety
+Its visible name is:
 
-- RootHide scheme;
-- arm64e;
-- SpringBoard-only main tweak injection;
-- no daemon;
-- no timer;
-- no polling;
-- no DisplayLink;
-- no gyro;
-- no continuous renderer;
-- no experimental library-page hooks.
+`GlassFolders 0.7.4 Beta1.1 CLEAN`
+
+It downloads the official Theos patched iOS 16.5 SDK release directly and
+verifies the SDK directory plus the patched Preferences framework before build.
+
+The final deb is unpacked and checked for:
+
+- arm64e tweak and PreferenceBundle binaries;
+- SpringBoard-only filter;
+- absence of all App Library/unsafe symbols;
+- PreferenceLoader icon files;
+- PreferenceBundle icon files;
+- bundle-relative `entry.icon`;
+- no maintainer scripts.
+
+Do not merge this ZIP on top of an old Beta2.x repository without deleting old
+workflow files first. The cleanest path is to replace the repository contents
+with this tree.

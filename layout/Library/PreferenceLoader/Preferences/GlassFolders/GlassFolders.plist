@@ -15,7 +15,7 @@
 		<key>label</key>
 		<string>GlassFolders</string>
 		<key>icon</key>
-		<string>/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png</string>
+		<string>GlassFolders.png</string>
 	</dict>
 </dict>
 </plist>

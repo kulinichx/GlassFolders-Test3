@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 1 — Folder Only / Icon Focus
+ * GlassFolders 0.7.4 Beta 1.1 — Clean Folder-Only Build
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
