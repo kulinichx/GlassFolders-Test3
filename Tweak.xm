@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 1.8 FIX2 — Neutral Wallpaper + Opened Overscan
+ * GlassFolders 0.7.4 Beta 1.8 FIX3 — Opened Corner/Top Continuity
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -17,6 +17,7 @@
  * Optical model:
  * - wallpaper-only chroma: no Liquid Glass body tint/brightness
  * - oversized opened-folder backdrop sampling before final rounded clipping
+ * - opened optical rail rendered slightly inside the final clip to avoid corner tangent notches
  * - stronger CABackdropLayer for wallpaper color / blur / saturation
  * - native App Library category-pod visual style layered into closed folders
  * - cached rounded-rect SDF lighting
@@ -1039,10 +1040,11 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
     /*
      * The opened panel uses broader light bands than the desktop icon.
-     * 1.5x is enough for the thin filament while avoiding a multi-megabyte
-     * 3x render for every large folder page.
+     * FIX3 raises the opened-panel lighting map to 2x.  The previous 1.5x
+     * map could quantize the one-pixel tangent where a rounded corner hands
+     * off to the horizontal rail, especially on a 3x display.
      */
-    CGFloat renderScale = MIN(UIScreen.mainScreen.scale, 1.50);
+    CGFloat renderScale = MIN(UIScreen.mainScreen.scale, 2.00);
 
     size_t pixelWidth =
         (size_t)MAX(2.0, floor(size.width * renderScale + 0.5));
@@ -1053,7 +1055,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
 
     NSString *cacheKey = [NSString stringWithFormat:
-        @"P-%@-%zux%zu-r%.2f-s%ld",
+        @"P3-%@-%zux%zu-r%.2f-s%ld",
         darkAppearance ? @"D" : @"L",
         pixelWidth,
         pixelHeight,
@@ -1099,6 +1101,29 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     CGFloat height = (CGFloat)pixelHeight;
     CGFloat radius = MAX(0.0, cornerRadius * renderScale);
     CGFloat e = GFSpecularResponse(strength);
+    CGFloat edgeDrive = GFEdgeResponse(strength);
+
+    /*
+     * FIX3: keep the white optical filament inside the final continuous
+     * corner clip instead of centering it exactly on the mathematical edge.
+     *
+     * The host view uses kCACornerCurveContinuous, while this cached lighting
+     * texture uses a rounded-rect distance field.  Centering the filament on
+     * the outer edge meant the host clip could shave a fraction of a pixel at
+     * the top-left/top and bottom/bottom-right tangencies.  An inset rail keeps
+     * the whole highlight inside both shapes without changing wallpaper color.
+     */
+    CGFloat opticalInset =
+        (0.72 + 0.18 * edgeDrive) * renderScale;
+
+    CGFloat opticalWidth =
+        MAX(2.0, width - 2.0 * opticalInset);
+
+    CGFloat opticalHeight =
+        MAX(2.0, height - 2.0 * opticalInset);
+
+    CGFloat opticalRadius =
+        MAX(0.0, radius - opticalInset);
 
     /*
      * Large surfaces should read "thicker" than the closed folder:
@@ -1146,13 +1171,22 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             CGFloat x = (CGFloat)px + 0.5;
             CGFloat y = (CGFloat)py + 0.5;
 
+            CGFloat opticalX = x - opticalInset;
+            CGFloat opticalY = y - opticalInset;
+
             CGFloat sdf =
                 GFRoundedRectSDF(
-                    x, y, width, height, radius
+                    opticalX, opticalY,
+                    opticalWidth, opticalHeight,
+                    opticalRadius
                 );
 
+            /*
+             * A small inward coverage bias prevents antialiasing from making
+             * the tangent pixel dimmer than the neighbouring arc/straight run.
+             */
             CGFloat edgeCoverage =
-                GFClamp01(0.5 - sdf / aaWidth);
+                GFClamp01(0.64 - sdf / aaWidth);
 
             if (edgeCoverage <= 0.001) {
                 continue;
@@ -1171,18 +1205,26 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
             CGFloat dx =
                 GFRoundedRectSDF(
-                    x + epsilon, y, width, height, radius
+                    opticalX + epsilon, opticalY,
+                    opticalWidth, opticalHeight,
+                    opticalRadius
                 ) -
                 GFRoundedRectSDF(
-                    x - epsilon, y, width, height, radius
+                    opticalX - epsilon, opticalY,
+                    opticalWidth, opticalHeight,
+                    opticalRadius
                 );
 
             CGFloat dy =
                 GFRoundedRectSDF(
-                    x, y + epsilon, width, height, radius
+                    opticalX, opticalY + epsilon,
+                    opticalWidth, opticalHeight,
+                    opticalRadius
                 ) -
                 GFRoundedRectSDF(
-                    x, y - epsilon, width, height, radius
+                    opticalX, opticalY - epsilon,
+                    opticalWidth, opticalHeight,
+                    opticalRadius
                 );
 
             CGFloat normalLength = hypot(dx, dy);
@@ -1238,9 +1280,6 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              * mask/gain so their brightness is continuous through the radius.
              * The large panel is broader/softer, not differently organized.
              */
-            CGFloat edgeDrive =
-                GFEdgeResponse(strength);
-
             CGFloat verticalEdge =
                 pow(fabs(nx), 2.32);
 
@@ -1371,6 +1410,31 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             CGFloat secondaryRailMask =
                 secondaryRailRaw *
                 secondaryEndpointGate;
+
+            /*
+             * FIX3 tangent overlap.  Even with one logical rail, the numerical
+             * normal changes family at the exact arc/straight tangent.  Give
+             * the two intended joins a short 3–5 pt overlap window so neither
+             * side can independently feather to zero.  This is white specular
+             * energy only; no chromatic tint is introduced.
+             */
+            CGFloat joinHalfWidth =
+                MAX(3.5 * renderScale, endpointRadius * 0.10);
+
+            CGFloat topLeftJoinDistance =
+                (x - endpointRadius) / MAX(1.0, joinHalfWidth);
+
+            CGFloat bottomRightJoinDistance =
+                (x - (width - endpointRadius)) /
+                MAX(1.0, joinHalfWidth);
+
+            CGFloat topLeftTopJoin =
+                exp(-(topLeftJoinDistance * topLeftJoinDistance) * 1.35) *
+                pow(topFacing, 0.35);
+
+            CGFloat bottomRightBottomJoin =
+                exp(-(bottomRightJoinDistance * bottomRightJoinDistance) * 1.35) *
+                pow(bottomFacing, 0.35);
 
             /*
              * Geometric ownership fixes the visible seam at the two intended
@@ -1544,6 +1608,16 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 filament * secondaryRailMask *
                     secondaryFilamentGain *
                     secondaryDirectionalMicro +
+
+                /*
+                 * Tiny core-width overlap at the two horizontal tangencies.
+                 * It fills the sub-pixel notch without creating a corner
+                 * hotspot because it uses the broader core, not a new filament.
+                 */
+                core * topLeftTopJoin *
+                    (0.004 + 0.022 * edgeDrive) +
+                core * bottomRightBottomJoin *
+                    (0.0035 + 0.019 * edgeDrive) +
 
                 filament * sideMiddleMask *
                     sideMiddleGain +
