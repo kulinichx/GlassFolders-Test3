@@ -1,4 +1,4 @@
-name: Build RootHide 0.7.3 App Library Beta2.1 Package Gate Fix.3 Runtime Fix
+name: Build RootHide 0.7.3 App Library Beta2.2 Opened Group Restore.3 Runtime Fix
 
 on:
   workflow_dispatch:
@@ -101,6 +101,13 @@ jobs:
           require_text '%init(' Tweak.xm 'Logos initialization'
           require_text 'SpringBoardHome.framework/SpringBoardHome' Tweak.xm 'SpringBoardHome explicit load'
           require_text 'AppLibraryPodsEnabled' Tweak.xm 'App Library preference key'
+          require_text '%group GFIconHooks' Tweak.xm 'closed-folder Logos group definition'
+          require_text '%init(GFIconHooks);' Tweak.xm 'closed-folder Logos group init'
+          require_text '%group GFOpenedPanelHooks' Tweak.xm 'opened-folder Logos group definition'
+          require_text '%hook SBFolderBackgroundView' Tweak.xm 'opened-folder Logos hook'
+          require_text '%init(GFOpenedPanelHooks);' Tweak.xm 'opened-folder Logos group init'
+          require_text '%group GFAppLibraryHooks' Tweak.xm 'App Library Logos group definition'
+          require_text '%init(GFAppLibraryHooks);' Tweak.xm 'App Library Logos group init'
           require_text 'SBHLibraryPodFolderView' Tweak.xm 'App Library pod container class'
           require_text 'SBHLibraryCategoryPodBackgroundView' Tweak.xm 'App Library category background class'
 
@@ -257,7 +264,7 @@ jobs:
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.3-Beta2.1-AppLibraryPod-DEB
+          name: GlassFolders-0.7.3-Beta2.2-AppLibraryPod-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
