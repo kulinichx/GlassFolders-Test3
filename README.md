@@ -1,56 +1,70 @@
-# GlassFolders 0.5.13 — Soft Optical Rim
+# GlassFolders 0.6.0 RC1 — Material Reset
 
-## Problem observed on device
+This release intentionally stops tuning "borders" and instead models the
+closed and opened folder as two material weights.
 
-0.5.12 still looked too "cut out":
-- the glass boundary was geometrically hard
-- the white rim was too dim to read as a highlight
+## Material model
 
-## Changes
+### Closed folder — clear-like
 
-### Backdrop edge sampling
+Goal:
+- highly translucent
+- wallpaper remains visually dominant
+- low blur
+- modest saturation preservation
+- almost no white tint
+- no explicit edge stroke
+- no rim mask
+- no diagonal specular stripe
 
-`gaussianBlur` now uses:
+A broad radial white surface-light field near the upper-left provides a small
+sense of depth without drawing a visible edge.
 
-`inputHardEdges = NO`
+### Opened folder — regular-like / light frost
 
-for both closed and opened glass surfaces.
+Goal:
+- visibly more material weight than the small closed icon
+- moderate blur for the larger surface
+- restrained saturation
+- small neutral-white tint
+- wallpaper color still passes through
+- no explicit border
 
-This allows the backdrop material to transition more naturally at the clipped
-edge instead of behaving like a rigid card boundary.
+The opened panel keeps using SpringBoard's own transition alpha and surrounding
+desktop blur/dim.
 
-### Closed folder rim
+## Why no drawn rim
 
-- width: 3.10pt
-- much lower effective opacity than a visible stroke
-- neutral white
-- strongest at upper-left
-- fades toward lower-right
-- static Gaussian blur radius: 1.25
+The previous experimental releases treated the glass boundary as a rendered
+stroke. On-device this repeatedly produced one of three artifacts:
 
-### Opened folder rim
+- neon outline
+- hard plastic-card edge
+- disappearing/uneven highlight
 
-- width: 3.60pt
-- even softer because the large panel already has stronger frosted blur
-- static Gaussian blur radius: 1.55
+RC1 removes the whole class of artifacts by deleting line-based edge effects.
 
-The rim is still static:
-- no animation
-- no timer
-- no DisplayLink
-- no motion sensor
+## Performance
 
-## Opened panel
+No:
+- daemon
+- Timer
+- DisplayLink
+- gyroscope
+- animated highlight
+- Metal shader
+- custom full-screen blur
+- custom transition animator
 
-The 0.5.12 "frosted transparent" calibration remains:
-- stronger blur than closed folders
-- low saturation boost
-- tiny neutral tint
-- wallpaper color still visible
+Static runtime cost:
+- one CABackdropLayer-based plate per visible closed folder
+- one broad static CAGradientLayer surface-light field
+- one opened backdrop panel while a folder is open
 
-## UX unchanged
+## UX retained
 
+- Clear / Liquid Glass
+- one strength slider
 - 5% magnetic detents
-- crisp rigid haptic ticks
-- magnetic settle on release
+- rigid haptic tick across detents
 - 应用并注销

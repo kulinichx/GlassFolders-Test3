@@ -109,24 +109,6 @@ static id GFCreateCAFilter(NSString *type) {
     return func(filterClass, selector, type);
 }
 
-static void GFApplySoftGaussianBlurToLayer(CALayer *layer,
-                                           CGFloat radius) {
-    if (!layer || radius <= 0.0) {
-        return;
-    }
-
-    id blur = GFCreateCAFilter(@"gaussianBlur");
-
-    if (!blur) {
-        return;
-    }
-
-    [blur setValue:@(radius) forKey:@"inputRadius"];
-    [blur setValue:@YES forKey:@"inputNormalizeEdges"];
-    [blur setValue:@NO forKey:@"inputHardEdges"];
-
-    [layer setValue:@[blur] forKey:@"filters"];
-}
 
 
 
@@ -134,8 +116,7 @@ static void GFApplySoftGaussianBlurToLayer(CALayer *layer,
 @interface GFBackdropGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
-@property (nonatomic, strong) CAGradientLayer *gfWhiteRimGlow;
-@property (nonatomic, strong) CAShapeLayer *gfWhiteRimMask;
+@property (nonatomic, strong) CAGradientLayer *gfSurfaceHighlight;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) NSInteger gfStyle;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
@@ -181,9 +162,9 @@ static void GFApplySoftGaussianBlurToLayer(CALayer *layer,
             CGFloat brightness;
 
             if (_gfStyle == 1) {
-                blurRadius = 3.2 + (9.2 * e);
-                saturation = 1.08 + (0.38 * e);
-                brightness = 0.003 + (0.010 * e);
+                blurRadius = 2.8 + (7.2 * e);
+                saturation = 1.04 + (0.22 * e);
+                brightness = 0.001 + (0.004 * e);
             } else {
                 blurRadius = 2.0 + (7.0 * e);
                 saturation = 1.05 + (0.30 * e);
@@ -243,7 +224,7 @@ static void GFApplySoftGaussianBlurToLayer(CALayer *layer,
 
         if (_gfStrength > 0.001) {
             tintAlpha = (_gfStyle == 1)
-                ? 0.003 + (0.014 * e)
+                ? 0.0015 + (0.007 * e)
                 : 0.018 * _gfStrength;
         }
 
@@ -308,36 +289,32 @@ static void GFApplySoftGaussianBlurToLayer(CALayer *layer,
              * The highlight itself is neutral white. Wallpaper color only
              * comes from the backdrop material underneath it.
              */
-            _gfWhiteRimGlow = [CAGradientLayer layer];
-            _gfWhiteRimGlow.startPoint = CGPointMake(0.00, 0.02);
-            _gfWhiteRimGlow.endPoint = CGPointMake(0.88, 0.78);
             /*
-             * Soft optical rim:
-             * upper-left is clearly brighter, but the layer itself is blurred
-             * so it reads as a soft glass catch-light rather than a stroke.
+             * RC material highlight:
+             * no stroke, no rim, no edge mask.
+             *
+             * This is a broad, low-contrast surface light field anchored
+             * outside/near the upper-left. It should read as light on glass,
+             * not as a drawn border.
              */
-            _gfWhiteRimGlow.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.54].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.30].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.11].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.030].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.004].CGColor
+            _gfSurfaceHighlight = [CAGradientLayer layer];
+
+            if (@available(iOS 12.0, *)) {
+                _gfSurfaceHighlight.type = kCAGradientLayerRadial;
+            }
+
+            _gfSurfaceHighlight.startPoint = CGPointMake(0.08, 0.06);
+            _gfSurfaceHighlight.endPoint = CGPointMake(0.78, 0.78);
+            _gfSurfaceHighlight.colors = @[
+                (id)[UIColor colorWithWhite:1.0 alpha:0.095].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.038].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.010].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.000].CGColor
             ];
-            _gfWhiteRimGlow.locations =
-                @[@0.00, @0.16, @0.40, @0.70, @1.00];
-            _gfWhiteRimGlow.opacity = 0.10 + (0.13 * e);
+            _gfSurfaceHighlight.locations = @[@0.00, @0.36, @0.66, @1.00];
+            _gfSurfaceHighlight.opacity = 0.72 + (0.16 * e);
 
-            GFApplySoftGaussianBlurToLayer(_gfWhiteRimGlow, 1.25);
-
-            _gfWhiteRimMask = [CAShapeLayer layer];
-            _gfWhiteRimMask.fillColor = UIColor.clearColor.CGColor;
-            _gfWhiteRimMask.strokeColor = UIColor.whiteColor.CGColor;
-            _gfWhiteRimMask.lineCap = kCALineCapRound;
-            _gfWhiteRimMask.lineJoin = kCALineJoinRound;
-
-            _gfWhiteRimGlow.mask = _gfWhiteRimMask;
-
-            [self.layer addSublayer:_gfWhiteRimGlow];
+            [self.layer addSublayer:_gfSurfaceHighlight];
         }
     }
 
@@ -363,34 +340,13 @@ static void GFApplySoftGaussianBlurToLayer(CALayer *layer,
         self.layer.cornerRadius = radius;
         self.layer.cornerCurve = kCACornerCurveContinuous;
     }
-    if (self.gfWhiteRimGlow && self.gfWhiteRimMask) {
+    if (self.gfSurfaceHighlight) {
         /*
-         * Both layers use the SAME continuous rounded-rectangle geometry.
-         * Nothing ends abruptly at 30% / 50%, so there is no artificial seam.
-         *
-         * The base outline is ~0.6pt and almost invisible.
-         * The brighter rim is ~1.6pt but remains soft because its actual
-         * brightness comes from a low-opacity white gradient.
+         * Slight overscan makes the radial field fade naturally before it
+         * reaches the hard clip boundary.
          */
-        /*
-         * Softer optical edge:
-         * wider than a hairline, but much lower opacity.
-         * The goal is a transition region, not a visible outline.
-         */
-        CGFloat rimWidth = 3.10;
-        CGFloat inset = rimWidth * 0.5 + 0.30;
-
-        CGRect pathRect = CGRectInset(self.bounds, inset, inset);
-        CGFloat pathRadius = MAX(0.0, radius - inset);
-
-        UIBezierPath *edgePath =
-            [UIBezierPath bezierPathWithRoundedRect:pathRect
-                                       cornerRadius:pathRadius];
-
-        self.gfWhiteRimGlow.frame = self.bounds;
-        self.gfWhiteRimMask.frame = self.bounds;
-        self.gfWhiteRimMask.path = edgePath.CGPath;
-        self.gfWhiteRimMask.lineWidth = rimWidth;
+        self.gfSurfaceHighlight.frame =
+            CGRectInset(self.bounds, -6.0, -6.0);
     }
 
 }
@@ -415,8 +371,7 @@ static void GFApplySoftGaussianBlurToLayer(CALayer *layer,
 @interface GFOpenedFolderGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
-@property (nonatomic, strong) CAGradientLayer *gfWhiteRimGlow;
-@property (nonatomic, strong) CAShapeLayer *gfWhiteRimMask;
+@property (nonatomic, strong) CAGradientLayer *gfSurfaceHighlight;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
 - (instancetype)initWithStrength:(CGFloat)strength;
@@ -457,9 +412,9 @@ static void GFApplySoftGaussianBlurToLayer(CALayer *layer,
              * Opened "frosted transparent" calibration:
              * visibly softer than the closed icon, but still transparent.
              */
-            CGFloat blurRadius = 7.0 + (14.0 * e);
-            CGFloat saturation = 1.02 + (0.18 * e);
-            CGFloat brightness = 0.001 + (0.006 * e);
+            CGFloat blurRadius = 7.5 + (13.0 * e);
+            CGFloat saturation = 1.00 + (0.12 * e);
+            CGFloat brightness = 0.002 + (0.006 * e);
 
             id saturate = GFCreateCAFilter(@"colorSaturate");
             id brighten = GFCreateCAFilter(@"colorBrightness");
@@ -505,7 +460,7 @@ static void GFApplySoftGaussianBlurToLayer(CALayer *layer,
          * Keep the opened folder neutral.
          * Wallpaper remains the color source.
          */
-        CGFloat tintAlpha = 0.010 + (0.024 * e);
+        CGFloat tintAlpha = 0.022 + (0.024 * e);
 
         if (_gfStrength > 0.001 && tintAlpha > 0.001) {
             _gfTintView = [[UIView alloc] initWithFrame:CGRectZero];
@@ -520,34 +475,31 @@ static void GFApplySoftGaussianBlurToLayer(CALayer *layer,
              * Same Apple-style white edge language as the closed folder,
              * slightly wider because this is a much larger surface.
              */
-            _gfWhiteRimGlow = [CAGradientLayer layer];
-            _gfWhiteRimGlow.startPoint = CGPointMake(0.00, 0.02);
-            _gfWhiteRimGlow.endPoint = CGPointMake(0.88, 0.78);
             /*
-             * Opened panel uses an even softer rim because the surface is
-             * larger and already reads as glass from the frosted backdrop.
+             * Large surface highlight:
+             * weaker than the closed icon because the frosted material itself
+             * already establishes depth.
+             *
+             * Again: no line, no border, no rim mask.
              */
-            _gfWhiteRimGlow.colors = @[
-                (id)[UIColor colorWithWhite:1.0 alpha:0.40].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.22].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.080].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.022].CGColor,
-                (id)[UIColor colorWithWhite:1.0 alpha:0.003].CGColor
+            _gfSurfaceHighlight = [CAGradientLayer layer];
+
+            if (@available(iOS 12.0, *)) {
+                _gfSurfaceHighlight.type = kCAGradientLayerRadial;
+            }
+
+            _gfSurfaceHighlight.startPoint = CGPointMake(0.08, 0.05);
+            _gfSurfaceHighlight.endPoint = CGPointMake(0.70, 0.72);
+            _gfSurfaceHighlight.colors = @[
+                (id)[UIColor colorWithWhite:1.0 alpha:0.070].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.026].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.006].CGColor,
+                (id)[UIColor colorWithWhite:1.0 alpha:0.000].CGColor
             ];
-            _gfWhiteRimGlow.locations =
-                @[@0.00, @0.16, @0.40, @0.70, @1.00];
-            _gfWhiteRimGlow.opacity = 0.075 + (0.105 * e);
+            _gfSurfaceHighlight.locations = @[@0.00, @0.34, @0.66, @1.00];
+            _gfSurfaceHighlight.opacity = 0.62 + (0.14 * e);
 
-            GFApplySoftGaussianBlurToLayer(_gfWhiteRimGlow, 1.55);
-
-            _gfWhiteRimMask = [CAShapeLayer layer];
-            _gfWhiteRimMask.fillColor = UIColor.clearColor.CGColor;
-            _gfWhiteRimMask.strokeColor = UIColor.whiteColor.CGColor;
-            _gfWhiteRimMask.lineCap = kCALineCapRound;
-            _gfWhiteRimMask.lineJoin = kCALineJoinRound;
-            _gfWhiteRimGlow.mask = _gfWhiteRimMask;
-
-            [self.layer addSublayer:_gfWhiteRimGlow];
+            [self.layer addSublayer:_gfSurfaceHighlight];
         }
     }
 
@@ -585,25 +537,9 @@ static void GFApplySoftGaussianBlurToLayer(CALayer *layer,
         self.layer.cornerCurve = kCACornerCurveContinuous;
     }
 
-    if (self.gfWhiteRimGlow && self.gfWhiteRimMask) {
-        /*
-         * Large panel edge is even softer than the closed icon.
-         * Wide enough to suggest glass thickness, dim enough to avoid a frame.
-         */
-        CGFloat rimWidth = 3.60;
-        CGFloat inset = rimWidth * 0.5 + 0.38;
-
-        CGRect pathRect = CGRectInset(self.bounds, inset, inset);
-        CGFloat pathRadius = MAX(0.0, radius - inset);
-
-        UIBezierPath *edgePath =
-            [UIBezierPath bezierPathWithRoundedRect:pathRect
-                                       cornerRadius:pathRadius];
-
-        self.gfWhiteRimGlow.frame = self.bounds;
-        self.gfWhiteRimMask.frame = self.bounds;
-        self.gfWhiteRimMask.path = edgePath.CGPath;
-        self.gfWhiteRimMask.lineWidth = rimWidth;
+    if (self.gfSurfaceHighlight) {
+        self.gfSurfaceHighlight.frame =
+            CGRectInset(self.bounds, -10.0, -10.0);
     }
 }
 
