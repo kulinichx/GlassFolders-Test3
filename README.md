@@ -1,60 +1,50 @@
-# GlassFolders 0.7.3 Beta 2.3 — Legacy PreferenceLoader Cleanup
+# GlassFolders 0.7.3 Beta 2.4 — Background Hosted Glass
 
-The SpringBoard runtime code is unchanged from Beta 2.2.
+Fixes the App Library card offset shown on-device.
 
-## What the Beta 2.2 log proved
+## Geometry correction
 
-The final dylib already contained all intended visual symbols:
+Beta 2.x inserted the custom glass into `SBHLibraryPodFolderView` and copied
+geometry from an inner background object into the pod's coordinate system.
 
-- `SBFolderIconImageView`
-- `SBFolderBackgroundView`
-- `SBHLibraryCategoryPodBackgroundView`
-- `SBHLibraryPodFolderView`
-- `_updateVisualStyle`
+The real App Library hierarchy has additional internal layout offsets, so the
+glass could be visibly shifted from the category card.
 
-The final deb also contained the nested PreferenceLoader plist and its 1x/2x/3x
-PNG icons.
+Beta 2.4 removes that cross-view geometry entirely.
 
-The verifier failed only because it incorrectly required an additional copy of
-those PNGs inside `GlassFoldersPrefs.bundle`.
+The glass is now a child of the real visual surface:
 
-## Real Settings-entry conflict
+`SBHLibraryCategoryPodBackgroundView`
 
-The final deb also contained an obsolete top-level file:
+with:
 
-`/Library/PreferenceLoader/Preferences/GlassFolders.plist`
+`glass.frame = backgroundView.bounds`
 
-at the same time as the corrected nested entry:
+No frame conversion is used.
 
-`/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist`
+`SBHLibraryPodFolderView` remains only a lifecycle/discovery bridge for
+lazily-created category backgrounds.
 
-That stale file is not in the current source tree; it can remain in a long-lived
-GitHub repository when newer ZIPs are overlaid without deleting old files.
+## Stock material
 
-Beta 2.3 explicitly removes the legacy top-level plist and old top-level icon
-files before every GitHub build.
+The system background host remains alive, preserving Apple's frame, radius,
+reuse and animation lifecycle.
 
-## Final package verification
+While enabled:
 
-The deb must contain:
+- host background colors are cleared;
+- stock material descendants are hidden;
+- one `GFPanelGlassView` fills the host bounds;
+- icons, labels, hit-testing and expansion remain untouched.
 
-- `GlassFolders/GlassFolders.plist`
-- `GlassFolders/GlassFoldersIcon.png`
-- `GlassFolders/GlassFoldersIcon@2x.png`
-- `GlassFolders/GlassFoldersIcon@3x.png`
+## Existing safeguards
 
-The deb must NOT contain:
-
-- `Preferences/GlassFolders.plist`
-
-The redundant PreferenceBundle icon requirement has been removed.
-
-## Runtime
-
-Unchanged from Beta 2.2:
+Retained:
 
 - closed Home Screen folder glass;
-- opened `SBFolderBackgroundView` glass;
-- App Library Pod-container glass;
+- opened folder glass;
+- PreferenceLoader nested icon packaging and final-deb verification;
 - RootHide arm64e;
-- SpringBoard-only injection.
+- SpringBoard-only injection;
+- no broad App Library controller/icon-list/search hooks;
+- no timer, polling, DisplayLink, gyro or continuous Metal rendering.
