@@ -1,1 +1,160 @@
+name: GlassFolders 0.7.4 Beta1 RootHide Build
 
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Workflow stamp
+        run: |
+          echo "GLASSFOLDERS 0.7.4 BETA1 - FOLDER ONLY"
+
+      - name: Install dependencies
+        run: |
+          brew install ldid dpkg make
+          echo "/opt/homebrew/opt/make/libexec/gnubin" >> "$GITHUB_PATH"
+
+      - name: Install RootHide Theos
+        run: |
+          git clone --recursive --depth=1 https://github.com/roothide/theos.git "$HOME/theos"
+          echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
+
+      - name: Install patched SDK
+        run: |
+          git clone --depth=1 https://github.com/roothide/Procursus-SDK.git /tmp/Procursus-SDK || true
+          SDK_FOUND="$(find /tmp/Procursus-SDK -type d -name '*.sdk' | head -n 1 || true)"
+          if [ -n "$SDK_FOUND" ]; then
+            mkdir -p "$THEOS/sdks"
+            cp -R "$SDK_FOUND" "$THEOS/sdks/"
+          fi
+
+      - name: Source sanity gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          grep -Fq '%group GFIconHooks' Tweak.xm
+          grep -Fq '%init(GFIconHooks);' Tweak.xm
+          grep -Fq 'SBFolderIconImageView' Tweak.xm
+
+          grep -Fq '%group GFOpenedPanelHooks' Tweak.xm
+          grep -Fq '%init(GFOpenedPanelHooks);' Tweak.xm
+          grep -Fq 'SBFolderBackgroundView' Tweak.xm
+
+          if grep -Eq 'SBHLibrary|AppLibraryPods|GFAppLibrary|SpringBoardHome\.framework|GFShouldUseAppLibraryPods|MSHookMessageEx' Tweak.xm; then
+            echo "ERROR: removed experimental system-page code is still present."
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import plistlib
+          with open("prefs/Resources/Root.plist", "rb") as f:
+              p = plistlib.load(f)
+          blob = repr(p)
+          for token in ("AppLibraryPodsEnabled", "App 资源库", "资源库大文件夹"):
+              if token in blob:
+                  raise SystemExit(f"Removed setting still present: {token}")
+          PY
+
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png
+
+          grep -Fq 'GlassFoldersPrefs_RESOURCE_FILES' prefs/Makefile
+
+          echo "Source sanity gate passed."
+
+      - name: Build RootHide package
+        run: |
+          make clean
+          make package FINALPACKAGE=1
+
+      - name: Locate package
+        id: package
+        shell: bash
+        run: |
+          DEB="$(find packages -type f -name '*.deb' | sort | tail -n 1)"
+          test -n "$DEB"
+          echo "deb=$DEB" >> "$GITHUB_OUTPUT"
+          echo "Built: $DEB"
+
+      - name: Verify final deb
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DEB="${{ steps.package.outputs.deb }}"
+          TMP="/tmp/glassfolders074b1"
+
+          rm -rf "$TMP"
+          mkdir -p "$TMP"
+          cd "$TMP"
+
+          ar x "$GITHUB_WORKSPACE/$DEB"
+          DATA="$(find . -maxdepth 1 -type f -name 'data.tar*' | head -n 1)"
+          test -n "$DATA"
+
+          mkdir root
+          tar -xf "$DATA" -C root
+
+          DYLIB="$(find root -type f -name 'GlassFolders.dylib' | head -n 1)"
+          test -n "$DYLIB"
+          strings "$DYLIB" > strings.txt
+
+          grep -Fq 'SBFolderIconImageView' strings.txt
+          grep -Fq 'SBFolderBackgroundView' strings.txt
+
+          if grep -Eq 'SBHLibrary|AppLibraryPods|GFAppLibrary|SpringBoardHome' strings.txt; then
+            echo "ERROR: removed experimental symbols leaked into dylib."
+            exit 1
+          fi
+
+          PL="$(find root -type d -path '*/Library/PreferenceLoader/Preferences/GlassFolders' | head -n 1)"
+          test -n "$PL"
+          test -f "$PL/GlassFolders.plist"
+          test -f "$PL/GlassFolders.png"
+          test -f "$PL/GlassFolders@2x.png"
+          test -f "$PL/GlassFolders@3x.png"
+
+          PB="$(find root -type d -path '*/Library/PreferenceBundles/GlassFoldersPrefs.bundle' | head -n 1)"
+          test -n "$PB"
+          test -f "$PB/GlassFolders.png"
+          test -f "$PB/GlassFolders@2x.png"
+          test -f "$PB/GlassFolders@3x.png"
+          test -f "$PB/GlassFoldersLarge.png"
+
+          python3 - "$PL/GlassFolders.plist" "$PB/Info.plist" <<'PY'
+          import plistlib, sys
+
+          with open(sys.argv[1], "rb") as f:
+              entry = plistlib.load(f)
+          expected = "/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png"
+          if entry["entry"]["icon"] != expected:
+              raise SystemExit("PreferenceLoader icon path mismatch")
+
+          with open(sys.argv[2], "rb") as f:
+              info = plistlib.load(f)
+          if info.get("CFBundleIconFile") != "GlassFolders":
+              raise SystemExit("PreferenceBundle icon metadata mismatch")
+
+          print("Icon package verification passed.")
+          PY
+
+          echo "Final deb verification passed."
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GlassFolders-0.7.4-Beta1-FolderOnly-DEB
+          path: ${{ steps.package.outputs.deb }}
