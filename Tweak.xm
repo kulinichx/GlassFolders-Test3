@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 2.3 — closed baseline exact restore + Clear optical pass + mirrored rail continuity
+ * GlassFolders 0.7.4 Beta 2.4 — Clear strength-as-blur + locked Liquid Glass baselines
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -165,6 +165,37 @@ static inline CGFloat GFTintResponse(CGFloat strength) {
 static inline CGFloat GFEdgeResponse(CGFloat strength) {
     CGFloat s = GFClamp01(strength);
     return 0.12 * s + 0.88 * pow(s, 1.80);
+}
+
+
+/*
+ * Clear has a different slider contract from Liquid Glass.
+ *
+ * In Clear, Glass Strength is primarily the LOCAL BLUR amount.  The white
+ * transmission/highlight system reaches its normal Clear appearance early
+ * and then stays almost constant, so raising the slider does not turn Clear
+ * into a brighter/whiter version of itself.
+ *
+ * 0%   -> no local Clear blur
+ * 25%  -> ~29% of the Clear blur ceiling
+ * 50%  -> ~54%
+ * 55%  -> ~58%
+ * 75%  -> ~77%
+ * 100% -> full Clear blur ceiling
+ */
+static inline CGFloat GFClearBlurResponse(CGFloat strength) {
+    return pow(GFClamp01(strength), 0.90);
+}
+
+
+/*
+ * Non-blur Clear optics are only softly gated by the first 15% of the slider.
+ * Above that point the slider is effectively a blur control.  The smootherstep
+ * avoids a visible pop when moving away from 0%.
+ */
+static inline CGFloat GFClearActivationResponse(CGFloat strength) {
+    CGFloat t = GFClamp01(strength / 0.15);
+    return t * t * (3.0 - 2.0 * t);
 }
 
 static inline CGFloat GFRoundedRectSDF(CGFloat x,
@@ -814,6 +845,8 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
 
         CGFloat materialResponse = GFMaterialResponse(_gfStrength);
         CGFloat tintResponse = GFTintResponse(_gfStrength);
+        CGFloat clearBlurResponse = GFClearBlurResponse(_gfStrength);
+        CGFloat clearActivation = GFClearActivationResponse(_gfStrength);
 
         if (_gfStrength > 0.001 && isBackdropLayer) {
             /*
@@ -829,8 +862,14 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
                 saturation = 1.08 + (0.20 * materialResponse);
                 brightness = 0.006 + (0.014 * materialResponse);
             } else {
-                blurRadius = 1.8 + (6.0 * materialResponse);
-                saturation = 1.05 + (0.24 * materialResponse);
+                /*
+                 * Clear closed-folder semantics match the opened panel: the
+                 * slider primarily changes blur.  8.40 * response preserves
+                 * the old accepted 55% closed-Clear blur (~4.9 pt) while
+                 * saturation settles early instead of climbing with strength.
+                 */
+                blurRadius = 8.40 * clearBlurResponse;
+                saturation = 1.120 + (0.055 * clearActivation);
                 brightness = 0.0;
             }
 
@@ -880,7 +919,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
             _gfFallbackBlurView.userInteractionEnabled = NO;
             _gfFallbackBlurView.alpha =
                 (_gfStyle == 1) ? MIN(0.86, 0.56 + 0.30 * materialResponse)
-                                : 0.55 * _gfStrength;
+                                : 0.30 * clearActivation;
 
             [self addSubview:_gfFallbackBlurView];
         }
@@ -896,7 +935,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
         if (_gfStrength > 0.001) {
             tintAlpha = (_gfStyle == 1)
                 ? 0.030 + (0.060 * tintResponse)
-                : 0.018 * _gfStrength;
+                : 0.010 * clearActivation;
         }
 
         if (tintAlpha > 0.001) {
@@ -1115,9 +1154,20 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     CGFloat width = (CGFloat)pixelWidth;
     CGFloat height = (CGFloat)pixelHeight;
     CGFloat radius = MAX(0.0, cornerRadius * renderScale);
-    CGFloat e = GFSpecularResponse(strength);
 
     BOOL clearStyle = (style == 0);
+    CGFloat clearActivation = clearStyle
+        ? GFClearActivationResponse(strength)
+        : 1.0;
+
+    /*
+     * Clear edge optics are intentionally almost strength-independent.
+     * 0.62 matches the old Clear look around the user's 55% baseline; after
+     * the first 15% only the blur continues to grow materially.
+     */
+    CGFloat e = clearStyle
+        ? (0.62 * clearActivation)
+        : GFSpecularResponse(strength);
 
     /*
      * Clear and Liquid Glass intentionally use different edge optics.
@@ -1300,8 +1350,9 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              * mask/gain so their brightness is continuous through the radius.
              * The large panel is broader/softer, not differently organized.
              */
-            CGFloat edgeDrive =
-                GFEdgeResponse(strength);
+            CGFloat edgeDrive = clearStyle
+                ? (0.36 * clearActivation)
+                : GFEdgeResponse(strength);
 
             CGFloat verticalEdge =
                 pow(fabs(nx), 2.32);
@@ -1344,7 +1395,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 );
 
             /*
-             * Beta 2.3 — symmetric continuous tangent rails.
+             * Beta 2.4 — locked symmetric continuous tangent rails.
              *
              * Do not splice a "corner mask" into a separate straight-edge
              * mask. The SDF normal is already unit length, so in the owned
@@ -1907,6 +1958,12 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     CGFloat tintResponse =
         GFTintResponse(self.gfStrength);
 
+    CGFloat clearBlurResponse =
+        GFClearBlurResponse(self.gfStrength);
+
+    CGFloat clearActivation =
+        GFClearActivationResponse(self.gfStrength);
+
     CALayer *materialLayer =
         self.gfBackdropSampleView.layer;
 
@@ -1930,32 +1987,31 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
         if (self.gfStyle == 0) {
             /*
-             * Clear reference target: a THIN backdrop sample, not no blur and
-             * not a weaker copy of Liquid Glass.  The panel applies only a
-             * shallow local Gaussian blur over SpringBoard's presentation, so
-             * wallpaper color regions stay recognizable instead of merging
-             * into a large milky patch.
+             * Clear reference target: a THIN wallpaper-owned material.
              *
-             * Dark mode uses a little more saturation/neutral brightness to
-             * keep the transparent sheet readable against dark wallpaper.
-             * Light mode backs both off to avoid a white acrylic card.  None
-             * of these filters introduces a hue.
+             * Beta2.4 gives the slider one dominant job in Clear: control the
+             * local Gaussian blur.  The surrounding neutral optics barely
+             * change after the first 15%, which prevents a high percentage
+             * from turning Clear into a milky/brighter pseudo-LiquidGlass.
+             *
+             * At the 55% baseline the local blur is ~2.45 pt in dark mode and
+             * ~2.22 pt in light mode.  Color still comes only from backdrop.
              */
             blurRadius = darkAppearance
-                ? (0.55 + 1.70 * materialResponse)
-                : (0.45 + 1.50 * materialResponse);
+                ? (4.20 * clearBlurResponse)
+                : (3.80 * clearBlurResponse);
 
             saturation = darkAppearance
-                ? (1.030 + 0.080 * materialResponse)
-                : (1.020 + 0.060 * materialResponse);
+                ? (1.045 + 0.020 * clearActivation)
+                : (1.030 + 0.015 * clearActivation);
 
             brightness = darkAppearance
-                ? (0.018 + 0.035 * materialResponse)
-                : (0.006 + 0.018 * materialResponse);
+                ? (0.026 + 0.008 * clearActivation)
+                : (0.010 + 0.006 * clearActivation);
 
             sampleAlpha = darkAppearance
-                ? (0.78 + 0.12 * materialResponse)
-                : (0.72 + 0.10 * materialResponse);
+                ? (0.80 + 0.04 * clearActivation)
+                : (0.75 + 0.04 * clearActivation);
         } else {
             /*
              * Liquid Glass: a thicker but not blackened backdrop.
@@ -2081,9 +2137,8 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              * used only when CABackdropLayer is unavailable, and at a low alpha
              * so it cannot become a milky system material card.
              */
-            self.gfFallbackBlurView.alpha = darkAppearance
-                ? MIN(0.32, 0.12 + 0.20 * materialResponse)
-                : MIN(0.26, 0.10 + 0.17 * materialResponse);
+            self.gfFallbackBlurView.alpha = clearActivation *
+                (darkAppearance ? 0.30 : 0.24);
         } else {
             self.gfFallbackBlurView.alpha = darkAppearance
                 ? MIN(0.48, 0.20 + 0.30 * materialResponse)
@@ -2109,16 +2164,16 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             /*
              * Clear body is not white and not colored. This is only a small
              * neutral transmission lift on top of the shallow wallpaper blur.
-             * At 55% it is ~2.8% white in dark appearance and ~1.4% in light
-             * appearance.  The lower light-mode value prevents bright
+             * Above the first 15% it settles near ~4.5% white in dark
+             * appearance and ~2.2% in light appearance.  The lower light-mode
+             * value prevents bright
              * wallpapers from turning the folder into a pale card.
              */
-            neutralLift = darkAppearance
-                ? (0.065 + 0.055 * tintResponse) * self.gfStrength
-                : (0.028 + 0.032 * tintResponse) * self.gfStrength;
+            neutralLift = clearActivation *
+                (darkAppearance ? 0.045 : 0.022);
 
             self.gfTintView.alpha =
-                MIN(darkAppearance ? 0.095 : 0.050, neutralLift);
+                MIN(darkAppearance ? 0.050 : 0.026, neutralLift);
         } else {
             /*
              * Liquid Glass needs a little more neutral transmission in dark
@@ -2142,9 +2197,8 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
      * neutral-white definition; light mode is intentionally quieter.
      */
     if (self.gfStyle == 0) {
-        self.gfOpticalLayer.opacity = darkAppearance
-            ? (0.76 + 0.06 * materialResponse)
-            : (0.62 + 0.05 * materialResponse);
+        self.gfOpticalLayer.opacity = clearActivation *
+            (darkAppearance ? 0.80 : 0.66);
     } else {
         self.gfOpticalLayer.opacity = darkAppearance
             ? 1.0
@@ -2162,11 +2216,10 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     CGFloat continuityAlpha;
 
     if (self.gfStyle == 0) {
-        continuityAlpha = darkAppearance
-            ? (0.022 + 0.028 * continuityEdge)
-            : (0.014 + 0.022 * continuityEdge);
+        continuityAlpha = clearActivation *
+            (darkAppearance ? 0.048 : 0.032);
         self.layer.borderWidth =
-            (self.gfStrength > 0.001) ? 0.45 : 0.0;
+            (clearActivation > 0.001) ? 0.45 : 0.0;
     } else {
         continuityAlpha = darkAppearance
             ? (0.025 + 0.040 * continuityEdge)

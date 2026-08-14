@@ -1,44 +1,50 @@
-# GlassFolders 0.7.4 Beta 2.3
+# GlassFolders 0.7.4 Beta 2.4
 
-Beta 2.3 is a controlled corrective pass with three locked targets. It does not resume App Library experimentation yet.
+Beta 2.4 is a controlled Clear-style tuning pass. The accepted Liquid Glass closed/open baselines remain locked; App Library experimentation is still deferred.
 
-## 1. Liquid Glass closed folder — exact accepted baseline restore
+## 1. Clear — Glass Strength primarily controls blur
 
-The closed-folder visual path is restored to the earlier on-device reference that was explicitly accepted as the lighter look. This is not another alpha approximation.
+Clear is treated as a thin wallpaper-owned material. It does not inject purple, blue, pink, orange, green, or any other hue. Chroma comes from the real wallpaper / desktop backdrop.
 
-The complete closed visual chain now matches that accepted implementation: closed optical lighting image, backdrop blur/saturation, neutral brightness lift, neutral-white transmission lift, passive `SBHLibraryCategoryPodBackgroundView` blend, and closed-folder layout behavior. No chromatic tint is added; wallpaper remains the color source.
+The Glass Strength slider now has one dominant job in Clear: local Gaussian blur. Neutral-white transmission, edge highlight and saturation establish the Clear appearance early and then stay nearly constant, so increasing strength does not simply make the panel whiter or brighter.
 
-At 55% strength, the restored Liquid Glass body includes roughly +1.3% neutral brightness and ~5.7% neutral-white transmission on top of the wallpaper-owned backdrop. Those neutral values are what the later versions accidentally removed, causing the closed folder to read too dark.
+Opened Clear blur curve:
 
-The detached App Library pod remains passive. `_updateVisualStyle` is not invoked.
+- 0%: 0 pt local blur
+- 25%: ~1.21 pt dark / ~1.09 pt light
+- 50%: ~2.25 pt dark / ~2.04 pt light
+- 55%: ~2.45 pt dark / ~2.22 pt light
+- 75%: ~3.24 pt dark / ~2.93 pt light
+- 100%: 4.20 pt dark / 3.80 pt light
 
-## 2. Clear opened folder — locked reference behavior
+At the 55% reference point, backdrop sampling stays high (~84% dark / ~79% light). Dark appearance uses a little more neutral brightness and white transmission so the thin glass remains legible over dark wallpaper; light appearance reduces that neutral energy to avoid a milky acrylic card. Neither mode changes hue.
 
-Clear is treated as its own optical material, not a weak Liquid Glass preset. Purple, blue, pink, orange, green, and every other hue come only from wallpaper / desktop backdrop.
+Closed Clear follows the same slider semantics: strength is blur-dominant while neutral optics settle early. The 55% closed-Clear blur remains essentially at its previous visual baseline (~4.9 pt), avoiding an unrelated closed-state appearance change.
 
-At 55% strength, the current target is approximately:
+## 2. Liquid Glass closed folder — locked accepted lighter baseline
 
-- Dark appearance: 1.43 pt local blur, 84% backdrop sample, +3.6% neutral brightness, ~4.9% neutral-white transmission.
-- Light appearance: 1.23 pt local blur, 77% backdrop sample, +1.5% neutral brightness, ~2.3% neutral-white transmission.
+The accepted lighter closed-folder implementation remains unchanged. It keeps the established backdrop blur/saturation, neutral brightness lift, neutral-white transmission lift, passive `SBHLibraryCategoryPodBackgroundView` blend and closed-folder optical lighting.
 
-Dark mode gets more neutral definition so Clear remains visible over dark wallpaper. Light mode reduces white energy to avoid an acrylic/milky card. No hue is injected in either mode.
+At 55% strength the Liquid Glass body still includes roughly +1.3% neutral brightness and ~5.7% neutral-white transmission. The passive App Library category pod is not actively styled; `_updateVisualStyle` is not invoked.
 
-## 3. Liquid Glass opened highlight continuity
+## 3. Liquid Glass opened highlight continuity — locked
 
-The directional specular is modeled as two mirrored continuous rails:
+The opened directional specular remains the established mirrored continuous-rail model:
 
 - top -> upper-left corner -> left-side fade
 - bottom -> lower-right corner -> right-side fade
 
-The horizontal-edge/corner tangent is never a fade endpoint. The reflection turns through the owned corner, loses only a small amount of energy by the side tangent, then fades over about 1.12 corner radii using a C2 smootherstep. The lower-right/right relation is the exact 180-degree mirror of the upper-left/left relation.
+The corner/horizontal-edge tangent is not a fade endpoint. Side fade occurs only after the reflection has turned through the corner. Geometry is identical in dark and light appearance; only neutral optical gain changes.
 
-The opened optical map remains cached at the established 1.5x render scale; no 2x/high-load experiment is reintroduced.
+The opened optical map remains cached at the established 1.5x render scale. No 2x/high-load experiment is used.
 
 ## Scope / stability
 
+- Clear slider is blur-dominant
+- no chromatic body tint in Clear or Liquid Glass
+- dark/light appearance uses separate neutral compensation
+- accepted Liquid Glass closed/open visual baselines are locked
 - no App Library controller hooks
 - no `_updateVisualStyle` activation
 - no daemon, timer, display link, gyro, or Metal render loop
-- no chromatic body tint in Clear or Liquid Glass
-- dark/light appearance changes material gain only; rail geometry remains identical
 - real App Library is not modified in this pass

@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.4 Beta 2.3</string>
+			<string>GlassFolders 0.7.4 Beta 2.4</string>
 			<key>footerText</key>
-			<string>Beta 2.3：Liquid Glass 关闭态不再“近似调浅”，而是恢复到此前真机确认满意版本的完整关闭视觉链；Clear 打开态按锁定参考图重做为浅模糊、高透过、壁纸取色的独立材质，并分别处理深色/浅色模式；Liquid Glass 打开态将“上→左上→左侧渐隐”与“下→右下→右侧渐隐”作为严格镜像的连续高光轨道处理。</string>
+			<string>Beta 2.4：锁定 Liquid Glass 已确认的关闭态浅色基线与打开态连续高光几何；Clear 的“玻璃强度”改为主要控制局部模糊程度，白色透光/高光在低强度区间柔和建立后基本保持稳定。Clear 不添加任何彩色 tint，颜色仍只来自壁纸，并继续区分深色/浅色模式。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -62,7 +62,7 @@
 			<key>label</key>
 			<string>玻璃强度</string>
 			<key>footerText</key>
-			<string>每 5% 一个档位。百分比同时控制打开与关闭文件夹的玻璃响应和白色镜面高光；Clear 与 Liquid Glass 使用不同曲线。建议先以 55% 作为基准，再按壁纸明暗微调。</string>
+			<string>每 5% 一个档位。Clear：强度主要控制打开与关闭文件夹的模糊程度，白色透光/高光只在低强度区间柔和建立，避免越调越白；Liquid Glass：强度继续控制综合玻璃响应。建议先以 55% 为基准。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
