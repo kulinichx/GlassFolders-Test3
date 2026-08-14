@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 2.6 — high-authority Clear blur + independent Liquid control
+ * GlassFolders 0.7.4 Beta 2.7 — balanced Clear luminance + locked blur/Liquid baselines
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -94,7 +94,7 @@ static void GFLoadPreferences(void) {
     GFStyle = GFReadInteger(CFSTR("Style"), 0);
 
     /*
-     * Beta 2.6 keeps the split-control migration contract: Clear and Liquid Glass keep independent strength
+     * Beta 2.7 keeps the split-control migration contract: Clear and Liquid Glass keep independent strength
      * values. Existing installs inherit the legacy GlassStrength value the
      * first time these new keys are absent, so upgrading does not silently
      * change the user's current appearance.
@@ -213,7 +213,7 @@ static inline CGFloat GFClearBlurResponse(CGFloat strength) {
 
 /*
  * Opened folders already sit over SpringBoard's full-screen blur, therefore
- * small 2–8 pt local kernels are visually swallowed by the host blur. Beta2.6
+ * small 2–8 pt local kernels are visually swallowed by the host blur. Beta2.7
  * makes ClearStrength an intentionally high-authority blur control while
  * keeping the material itself colorless and thin:
  *   0%   ->  0.0 pt
@@ -1442,7 +1442,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 );
 
             /*
-             * Beta 2.6 — locked symmetric continuous tangent rails.
+             * Beta 2.7 — locked symmetric continuous tangent rails.
              *
              * Do not splice a "corner mask" into a separate straight-edge
              * mask. The SDF normal is already unit length, so in the owned
@@ -2036,10 +2036,12 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             /*
              * Clear reference target: a THIN wallpaper-owned material.
              *
-             * Beta2.6 gives ClearStrength one dominant job: control the
-             * local Gaussian blur with a deliberately wide visible range.  The surrounding neutral optics barely
-             * change after the first 15%, which prevents a high percentage
-             * from turning Clear into a milky/brighter pseudo-LiquidGlass.
+             * Beta2.7 keeps ClearStrength blur-dominant and leaves the wide
+             * local Gaussian curve unchanged. Neutral optics still settle early;
+             * this pass raises neutral optical transmission in BOTH appearances:
+             * light mode receives the larger correction, while dark mode receives a
+             * deliberately smaller lift so the 40 pt reference blur stays luminous
+             * without turning into a milky card.
              *
              * At the 55% baseline the local blur is ~20.1 pt in both appearances;
              * at 100% it reaches 40 pt.  Clear is intentionally NOT constrained
@@ -2057,11 +2059,11 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
             saturation = darkAppearance
                 ? (1.045 + 0.020 * clearActivation)
-                : (1.030 + 0.015 * clearActivation);
+                : (1.045 + 0.015 * clearActivation);
 
             brightness = darkAppearance
-                ? (0.026 + 0.008 * clearActivation)
-                : (0.010 + 0.006 * clearActivation);
+                ? (0.033 + 0.008 * clearActivation)
+                : (0.024 + 0.008 * clearActivation);
 
             /*
              * Keep most of the filtered backdrop visible. The previous pass blended
@@ -2228,16 +2230,16 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             /*
              * Clear body is not white and not colored. This is only a small
              * neutral transmission lift on top of the shallow wallpaper blur.
-             * Above the first 15% it settles near ~4.5% white in dark
-             * appearance and ~2.2% in light appearance.  The lower light-mode
-             * value prevents bright
-             * wallpapers from turning the folder into a pale card.
+             * Above the first 15% it settles near ~5.1% white in dark
+             * appearance and ~3.5% in light appearance. Beta2.7 gives dark mode
+             * a smaller additional neutral lift than light mode so both remain
+             * luminous without adding hue or turning into a white card.
              */
             neutralLift = clearActivation *
-                (darkAppearance ? 0.045 : 0.022);
+                (darkAppearance ? 0.051 : 0.035);
 
             self.gfTintView.alpha =
-                MIN(darkAppearance ? 0.050 : 0.026, neutralLift);
+                MIN(darkAppearance ? 0.054 : 0.038, neutralLift);
         } else {
             /*
              * Liquid Glass needs a little more neutral transmission in dark
@@ -2262,7 +2264,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
      */
     if (self.gfStyle == 0) {
         self.gfOpticalLayer.opacity = clearActivation *
-            (darkAppearance ? 0.80 : 0.66);
+            (darkAppearance ? 0.82 : 0.70);
     } else {
         self.gfOpticalLayer.opacity = darkAppearance
             ? 1.0

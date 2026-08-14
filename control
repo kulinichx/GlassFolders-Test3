@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.4~beta2.6
+Version: 0.7.4~beta2.7
 Architecture: iphoneos-arm64e
-Description: Beta 2.6 keeps Liquid Glass baselines locked and makes the independent Clear strength a high-authority blur control for opened folders: low values stay light, while the middle/high range expands very strongly up to a 40 pt opened-panel ceiling over SpringBoard's existing blur. Wallpaper remains the only chroma source; dark/light mode only changes neutral compensation.
+Description: Beta 2.7 keeps the 40 pt independent Clear blur curve and all Liquid Glass baselines locked, while calibrating Clear neutral brightness/transmission separately for light and dark appearance. Light gets the larger correction; dark gets a smaller lift. Wallpaper remains the only chroma source; no chromatic tint is added.
 Maintainer: kulinich
 Author: kulinich
 Section: Tweaks
