@@ -1,4 +1,4 @@
-name: GlassFolders Beta2.3.2 RootHide Build
+name: GlassFolders Beta2.4 RootHide Build
 
 on:
   workflow_dispatch:
@@ -18,8 +18,8 @@ jobs:
     steps:
       - name: Beta2.3.1 workflow stamp
         run: |
-          echo "BETA2.3.2 WORKFLOW ACTIVE"
-          echo "Expected verifier temp dir: /tmp/gf-beta232-verify"
+          echo "BETA2.4 WORKFLOW ACTIVE"
+          echo "Expected verifier temp dir: /tmp/gf-beta24-verify"
 
       - name: Checkout project
         uses: actions/checkout@v4
@@ -82,8 +82,8 @@ jobs:
           }
 
           echo "Checking active workflow stamp..."
-          require_text 'BETA2.3.2 WORKFLOW ACTIVE' .github/workflows/build.yml 'Beta2.3.2 workflow stamp'
-          require_text '/tmp/gf-beta232-verify' .github/workflows/build.yml 'Beta2.3.2 verifier path'
+          require_text 'BETA2.4 WORKFLOW ACTIVE' .github/workflows/build.yml 'Beta2.4 workflow stamp'
+          require_text '/tmp/gf-beta24-verify' .github/workflows/build.yml 'Beta2.4 verifier path'
 
           echo "Checking framework imports..."
           require_text '#import <UIKit/UIKit.h>' Tweak.xm 'UIKit import'
@@ -207,7 +207,7 @@ jobs:
           set -euo pipefail
 
           DEB="${{ steps.package.outputs.deb }}"
-          TMP="/tmp/gf-beta232-verify"
+          TMP="/tmp/gf-beta24-verify"
 
           rm -rf "$TMP"
           mkdir -p "$TMP/root"
@@ -247,7 +247,7 @@ jobs:
             fi
           done
 
-          echo "=== Beta2.3.2 verify single nested PreferenceLoader entry and icons ==="
+          echo "=== Beta2.4 verify single nested PreferenceLoader entry and icons ==="
 
           PLIST="$(find "$TMP/root" -type f -path '*/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist' | head -n 1)"
           ICON1="$(find "$TMP/root" -type f -path '*/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon.png' | head -n 1)"
@@ -284,7 +284,7 @@ jobs:
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.3-Beta2.3.2-AppLibraryPod-DEB
+          name: GlassFolders-0.7.3-Beta2.4-AppLibraryBackgroundHost-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
