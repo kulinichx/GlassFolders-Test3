@@ -1,4 +1,4 @@
-name: Build RootHide 0.7.2 Closed Edge Beta5
+name: Build RootHide 0.7.3 App Library Beta1
 
 on:
   workflow_dispatch:
@@ -69,9 +69,9 @@ jobs:
           grep -Fq '#import <dispatch/dispatch.h>' Tweak.xm
           grep -Fq '#import <math.h>' Tweak.xm
 
-          echo "Rejecting dangerous opened-folder paths..."
-          if grep -Eq 'SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView' Tweak.xm; then
-            echo "ERROR: forbidden folder transition/controller hook found."
+          echo "Rejecting dangerous folder/controller paths..."
+          if grep -Eq 'SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView|SBHLibraryViewController|SBHLibraryPodFolderController|_SBHLibraryPodIconView|_SBHLibraryPodIconListView' Tweak.xm; then
+            echo "ERROR: forbidden folder/App-Library controller or icon-list path found."
             exit 1
           fi
 
@@ -80,6 +80,9 @@ jobs:
           grep -Fq '%init(GFIconHooks)' Tweak.xm
           grep -Fq 'SBFolderBackgroundView' Tweak.xm
           grep -Fq '%init(GFOpenedPanelHooks)' Tweak.xm
+          grep -Fq 'SBHLibraryCategoryPodBackgroundView' Tweak.xm
+          grep -Fq '%init(GFAppLibraryHooks)' Tweak.xm
+          grep -Fq 'AppLibraryPodsEnabled' Tweak.xm
 
           echo "Source sanity gate passed."
 
@@ -172,22 +175,23 @@ jobs:
           STRINGS_FILE="$TMP/GlassFolders.strings"
           strings "$DYLIB" > "$STRINGS_FILE"
 
-          echo "Reject dangerous private paths:"
-          if grep -E 'SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView' "$STRINGS_FILE"; then
-            echo "ERROR: dangerous opened-folder path leaked into build."
+          echo "Reject dangerous private/controller paths:"
+          if grep -E 'SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView|SBHLibraryViewController|SBHLibraryPodFolderController|_SBHLibraryPodIconView|_SBHLibraryPodIconListView' "$STRINGS_FILE"; then
+            echo "ERROR: dangerous folder/App-Library path leaked into build."
             exit 1
           fi
 
           echo "Require intended visual background hooks:"
           grep -Fq 'SBFolderIconImageView' "$STRINGS_FILE"
           grep -Fq 'SBFolderBackgroundView' "$STRINGS_FILE"
+          grep -Fq 'SBHLibraryCategoryPodBackgroundView' "$STRINGS_FILE"
 
-          echo "Narrow opened-panel boundary verified."
+          echo "Narrow visual-surface boundary verified."
 
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.2-Beta5-ClosedEdge-DEB
+          name: GlassFolders-0.7.3-Beta1-AppLibrary-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
