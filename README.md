@@ -1,4 +1,4 @@
-# GlassFolders 0.7.3 Beta 1.3 — Runtime App Library Fix
+# GlassFolders 0.7.3 Beta 1.3.1 — Runtime App Library Fix
 
 This build addresses the repeated "App Library option enabled but visually
 nothing changes" result.
@@ -58,3 +58,13 @@ Unchanged:
 - SpringBoard-only injection.
 
 No daemon, timer, DisplayLink, gyroscope, or continuous Metal renderer.
+
+
+## Beta 1.3.1 build-gate correction
+
+The runtime tweak source is unchanged from Beta 1.3.
+
+The GitHub Actions source gate no longer relies on silent `grep` + `set -e`
+checks for Logos implementation details. It now prints the exact missing item,
+checks only essential imports/runtime entry points, and leaves the stronger
+post-build dylib safety gate in place.
