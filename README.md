@@ -1,54 +1,51 @@
-# GlassFolders 0.7.4 Beta 1.1 — CLEAN
+# GlassFolders 0.7.4 Beta 1.2 — Forced Theos SDK
 
-This is a clean folder-only repository build.
+Folder-only safety branch. No App Library code.
+
+## Why this workflow exists
+
+A GitHub log showed Theos building from `/Users/runner/theos`, even though the
+previous clean workflow installed Theos under the repository workspace. That
+proves an older `build.yml` was still being executed.
+
+This clean repository intentionally uses the historical workflow filename:
+
+`.github/workflows/build.yml`
+
+so replacing that file overwrites the old workflow.
+
+## SDK handling
+
+The workflow downloads the official Theos patched
+`iPhoneOS16.5.sdk.tar.xz`, extracts it, searches for the actual extracted
+`iPhoneOS16.5.sdk`, and normalizes it to the exact path:
+
+`$THEOS/sdks/iPhoneOS16.5.sdk`
+
+Before compilation it verifies the exact directory again.
+
+Both make commands explicitly receive:
+
+`THEOS="$THEOS"`
+
+so a stale runner environment cannot redirect Make to `/Users/runner/theos`.
 
 ## Runtime
 
-Only the previously stable SpringBoard visual paths remain:
+Only:
 
-- closed folders: `SBFolderIconImageView`
-- opened folders: `SBFolderBackgroundView`
+- `SBFolderIconImageView`
+- `SBFolderBackgroundView`
 
-All experimental App Library code is absent.
+No App Library code or runtime loader exists.
 
-## Settings icon correction
+## Settings icon
 
-GlassFolders uses a real PreferenceBundle (`GlassFoldersPrefs`).
+PreferenceLoader entry:
 
-For a bundle-based PreferenceLoader entry, the icon is now specified as the
-bundle-relative resource name:
+`icon = GlassFolders.png`
 
-`GlassFolders.png`
-
-The same 1x/2x/3x PNG set is explicitly packaged inside
+with matching 1x/2x/3x resources both next to the entry plist and inside
 `GlassFoldersPrefs.bundle`.
 
-A second copy remains beside the PreferenceLoader plist for compatibility, but
-the entry no longer depends on an absolute `/Library/...` icon path.
-
-## GitHub Actions
-
-This repository contains exactly one workflow:
-
-`.github/workflows/glassfolders-074-clean.yml`
-
-Its visible name is:
-
-`GlassFolders 0.7.4 Beta1.1 CLEAN`
-
-It downloads the official Theos patched iOS 16.5 SDK release directly and
-verifies the SDK directory plus the patched Preferences framework before build.
-
-The final deb is unpacked and checked for:
-
-- arm64e tweak and PreferenceBundle binaries;
-- SpringBoard-only filter;
-- absence of all App Library/unsafe symbols;
-- PreferenceLoader icon files;
-- PreferenceBundle icon files;
-- bundle-relative `entry.icon`;
-- no maintainer scripts.
-
-Do not merge this ZIP on top of an old Beta2.x repository without deleting old
-workflow files first. The cleanest path is to replace the repository contents
-with this tree.
+The final deb verifier checks the actual packaged files.

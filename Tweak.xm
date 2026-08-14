@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 1.1 — Clean Folder-Only Build
+ * GlassFolders 0.7.4 Beta 1.2 — Forced Theos SDK
  *
  * Scope:
  * - stable closed SpringBoard folder icon path

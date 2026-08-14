@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.4~beta1.1
+Version: 0.7.4~beta1.2
 Architecture: iphoneos-arm64e
-Description: Clean folder-only RootHide build. All App Library experiments are removed; uses only stable closed/open folder hooks and a bundle-relative PreferenceLoader icon with verified packaged PNG resources.
+Description: Folder-only RootHide build. Forces make to use the workflow-local RootHide Theos tree and verifies the patched iOS 16.5 SDK at the exact path before compiling; retains deterministic settings icon packaging.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks
