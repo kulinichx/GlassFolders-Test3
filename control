@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.3~beta2.2
+Version: 0.7.3~beta2.3
 Architecture: iphoneos-arm64e
-Description: Restores the stable GFOpenedPanelHooks Logos group accidentally removed during the Beta2 App Library rewrite; retains Pod-container App Library glass and explicit settings-icon packaging.
+Description: Beta2 runtime unchanged; removes stale top-level PreferenceLoader entries before build and validates the actual nested Settings entry plus 1x/2x/3x icons in the final deb.
 Maintainer: Local Test Build
 Author: Local Test Build
 Section: Tweaks

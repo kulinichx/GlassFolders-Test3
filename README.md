@@ -1,63 +1,60 @@
-# GlassFolders 0.7.3 Beta 2.2 — Opened Group Restore
+# GlassFolders 0.7.3 Beta 2.3 — Legacy PreferenceLoader Cleanup
 
-This fixes the Logos preprocessing failure shown by GitHub Actions:
+The SpringBoard runtime code is unchanged from Beta 2.2.
 
-`%init for an undefined %group GFOpenedPanelHooks`
+## What the Beta 2.2 log proved
 
-## Root cause
+The final dylib already contained all intended visual symbols:
 
-During the Beta 2 App Library rewrite, the source replacement range started at
-the old App Library helper section and extended too far. That accidentally
-removed the already-stable `GFOpenedPanelHooks` group, while `%ctor` still
-contained:
-
-`%init(GFOpenedPanelHooks);`
-
-Logos therefore stopped during preprocessing before Clang compilation.
-
-## Beta 2.2 fix
-
-The complete opened-folder group is restored byte-for-byte from the previously
-working Beta 1.4.1 source:
-
+- `SBFolderIconImageView`
 - `SBFolderBackgroundView`
-- `didAddSubview:`
-- `didMoveToWindow`
-- `layoutSubviews`
-- `setBackgroundColor:`
-- `traitCollectionDidChange:`
+- `SBHLibraryCategoryPodBackgroundView`
+- `SBHLibraryPodFolderView`
+- `_updateVisualStyle`
 
-The Beta 2 App Library Pod-container code remains in place after that group.
+The final deb also contained the nested PreferenceLoader plist and its 1x/2x/3x
+PNG icons.
 
-## Build guard
+The verifier failed only because it incorrectly required an additional copy of
+those PNGs inside `GlassFoldersPrefs.bundle`.
 
-The GitHub source sanity gate now explicitly requires both the `%group`
-definition and `%init` call for:
+## Real Settings-entry conflict
 
-- `GFIconHooks`
-- `GFOpenedPanelHooks`
-- `GFAppLibraryHooks`
+The final deb also contained an obsolete top-level file:
 
-This catches the exact class of source-structure error before Logos preprocessing.
+`/Library/PreferenceLoader/Preferences/GlassFolders.plist`
 
-## Settings icon
+at the same time as the corrected nested entry:
 
-The Beta 2.1 packaging correction remains:
+`/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist`
 
-- PreferenceLoader nested plist + 1x/2x/3x PNG files;
-- PreferenceBundle 1x/2x/3x/large PNG resources explicitly declared with
-  `GlassFoldersPrefs_RESOURCE_FILES`;
-- final `.deb` verification checks the actual packaged files.
+That stale file is not in the current source tree; it can remain in a long-lived
+GitHub repository when newer ZIPs are overlaid without deleting old files.
 
-## Runtime scope
+Beta 2.3 explicitly removes the legacy top-level plist and old top-level icon
+files before every GitHub build.
 
-- closed folder: `SBFolderIconImageView`;
-- opened folder: `SBFolderBackgroundView`;
-- App Library pod container: `SBHLibraryPodFolderView`;
-- App Library card background reference:
-  `SBHLibraryCategoryPodBackgroundView`;
-- SpringBoard-only injection;
-- RootHide arm64e.
+## Final package verification
 
-No daemon, timer, polling loop, DisplayLink, gyroscope, broad App Library
-controller hook, or continuous Metal renderer.
+The deb must contain:
+
+- `GlassFolders/GlassFolders.plist`
+- `GlassFolders/GlassFoldersIcon.png`
+- `GlassFolders/GlassFoldersIcon@2x.png`
+- `GlassFolders/GlassFoldersIcon@3x.png`
+
+The deb must NOT contain:
+
+- `Preferences/GlassFolders.plist`
+
+The redundant PreferenceBundle icon requirement has been removed.
+
+## Runtime
+
+Unchanged from Beta 2.2:
+
+- closed Home Screen folder glass;
+- opened `SBFolderBackgroundView` glass;
+- App Library Pod-container glass;
+- RootHide arm64e;
+- SpringBoard-only injection.
