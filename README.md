@@ -1,61 +1,57 @@
-# GlassFolders 0.7.2 Beta 4 — Apple Edge Intensity
+# GlassFolders 0.7.2 Beta 5 — Closed Edge Intensity
 
-Beta 4 is an edge-lighting calibration based on the 75% on-device result and
-the brighter system reference.
+Beta 5 fixes the percentage response of the Home Screen / closed folder.
 
-## Problem fixed
+## Root cause
 
-Beta 3 had two issues:
+Beta 4's aggressive percentage-driven edge curve was applied to the opened
+panel, while the small closed folder still used the older `s^0.8` specular
+mapping with large fixed gains.
 
-1. left/right straight edges were too prominent;
-2. 55% -> 75% -> 100% did not change edge brightness enough.
+That is why an on-device closed-folder screenshot at 100% looked very similar
+to 75%.
 
-The cause was that several optical gains contained large constant terms. The
-slider therefore changed the material more than the visible edge reflection.
+## Beta 5 closed-folder response
 
-## New edge-strength response
+The closed folder now uses the dedicated `GFEdgeResponse()` curve too.
 
-Beta 4 introduces a dedicated edge curve:
+Approximate edge drive:
 
-`edge = 0.12*s + 0.88*pow(s, 1.80)`
-
-Approximate response:
-
-- 25% -> 0.10
-- 50% -> 0.29
-- 55% -> 0.35
-- 75% -> 0.62
+- 25% -> ~0.10
+- 50% -> ~0.29
+- 55% -> ~0.35
+- 75% -> ~0.62
 - 100% -> 1.00
 
-High percentages now have substantially more authority over the specular edge.
+The optical peak itself is also percentage-dependent, so the high end cannot
+be flattened by a fixed alpha clamp.
 
-## Light distribution
+## Luminance distribution
 
-Brightness budget is intentionally non-uniform:
+The 100% screenshot also showed too much light on the straight left/right
+sides. Beta 5 reallocates the brightness budget:
 
-- top rail: strong;
-- bottom rail: strong but slightly below top;
-- top-left rounded corner: strongest connected highlight;
-- bottom-right rounded corner: strong connected highlight;
-- left/right straight sides: reduced by roughly one third to one half;
-- far-side secondary rim: attenuated on vertical straight sides.
+- top: strong;
+- bottom: strong, slightly below top;
+- top-left rounded corner: strongest;
+- bottom-right rounded corner: strong;
+- straight left/right sides: deliberately quieter;
+- far-side secondary rim: favors bottom and bottom-right over straight right.
 
-A low-level perimeter filament remains so the glass never looks broken.
+The corner bridge comes from the rounded-rect SDF surface normal; it is not a
+painted `CAShapeLayer` stroke.
 
-## Material
+## Material and stability
 
-Blur, saturation, tint, dark/light adaptation, and the runtime architecture are
-unchanged from Beta 3. This isolates the edge-lighting change.
+Material blur/tint curves are unchanged. The opened-panel Beta 4 logic is also
+retained.
 
-## Stability boundary
-
-Still unchanged:
+Runtime boundary remains:
 
 - closed folder: `SBFolderIconImageView`;
 - opened panel: `SBFolderBackgroundView`;
-- no parent folder container hook;
-- no page-background factory hook;
-- no transition-alpha hook;
-- no outside wallpaper-background hook.
+- no parent folder-container/factory/transition-alpha hooks;
+- SpringBoard-only injection;
+- RootHide arm64e.
 
-No daemon, timer, DisplayLink, gyroscope, or continuous Metal rendering.
+No daemon, timer, DisplayLink, gyroscope, or continuous Metal renderer.

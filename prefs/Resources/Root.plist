@@ -10,7 +10,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.2 Apple Edge Beta 4</string>
+			<string>GlassFolders 0.7.2 Closed Edge Beta 5</string>
 			<key>footerText</key>
 			<string>桌面保持稳定光学玻璃；Liquid Glass 打开文件夹改为浅色、半透明、轻磨砂圆角面板，并自动适配系统深色/浅色模式。</string>
 		</dict>
@@ -62,7 +62,7 @@
 			<key>label</key>
 			<string>玻璃强度</string>
 			<key>footerText</key>
-			<string>每 5% 一个档位。55% 为日常档；75% 起边缘高光明显增强；100% 接近强烈清爽的系统玻璃反射。左右直边保持克制，亮度集中在上下边与左上/右下圆角。</string>
+			<string>每 5% 一个档位。关闭与打开状态现在都由百分比直接驱动边缘高光：55% 克制、75% 明显、100% 强烈；亮度重点集中在上下边以及左上/右下圆角。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -88,7 +88,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>边缘亮度现在直接受百分比驱动：高百分比重点加强顶部、底部以及左上/右下圆角连接，不再平均抬亮整圈边框。</string>
+			<string>关闭文件夹也已使用独立高光强度曲线：左右直边降低，顶部/底部提高，左上/右下圆角随百分比获得最强增益。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

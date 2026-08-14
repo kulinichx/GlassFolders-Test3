@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.2 Beta 4 — Apple Edge Intensity
+ * GlassFolders 0.7.2 Beta 5 — Closed Edge Intensity
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -239,28 +239,59 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
     CGFloat width = (CGFloat)pixelWidth;
     CGFloat height = (CGFloat)pixelHeight;
     CGFloat radius = MAX(0.0, cornerRadius * renderScale);
-    CGFloat e = GFSpecularResponse(strength);
-
-    /* Upper-left: filament -> core -> soft shoulder. */
-    CGFloat shoulderWidth = (4.4 + 1.4 * e) * renderScale;
-    CGFloat coreWidth = (0.82 + 0.24 * e) * renderScale;
-    CGFloat filamentWidth = (0.42 + 0.10 * e) * renderScale;
-
-    CGFloat highlightShoulderGain = 0.042 + 0.012 * e;
-    CGFloat highlightCoreGain = 0.145 + 0.040 * e;
-    CGFloat highlightFilamentGain = 0.235 + 0.060 * e;
 
     /*
-     * Right/bottom Alook-style secondary rim.
-     * Bright rim stays at the edge; darker shoulder begins farther inside.
+     * Beta5: the desktop folder now uses the SAME dedicated percentage
+     * response as the opened panel. This is the important correction:
+     * 75% and 100% must no longer collapse into nearly the same appearance.
      */
-    CGFloat baseEdgeGain = 0.018 + 0.006 * e;
-    CGFloat secondaryRimWidth = (0.62 + 0.12 * e) * renderScale;
-    CGFloat secondaryRimGain = 0.118 + 0.030 * e;
+    CGFloat edgeDrive = GFEdgeResponse(strength);
 
-    CGFloat shadowCenter = (2.20 + 0.40 * e) * renderScale;
-    CGFloat shadowWidth = (1.60 + 0.30 * e) * renderScale;
-    CGFloat shadowGain = 0.010 + 0.003 * e;
+    /* Geometry changes only a little; luminance changes strongly. */
+    CGFloat shoulderWidth =
+        (4.1 + 1.0 * edgeDrive) * renderScale;
+
+    CGFloat coreWidth =
+        (0.78 + 0.20 * edgeDrive) * renderScale;
+
+    CGFloat filamentWidth =
+        (0.43 + 0.10 * edgeDrive) * renderScale;
+
+    /*
+     * Directional upper-left light. Fixed terms are deliberately small;
+     * percentage owns most of the brightness budget.
+     */
+    CGFloat highlightShoulderGain =
+        0.012 + 0.050 * edgeDrive;
+
+    CGFloat highlightCoreGain =
+        0.030 + 0.180 * edgeDrive;
+
+    CGFloat highlightFilamentGain =
+        0.045 + 0.310 * edgeDrive;
+
+    /*
+     * Far-side rim remains, but vertical straight edges will be attenuated
+     * below. Bottom and bottom-right are allowed to stay bright.
+     */
+    CGFloat secondaryRimWidth =
+        (0.58 + 0.12 * edgeDrive) * renderScale;
+
+    CGFloat secondaryRimGain =
+        0.022 + 0.150 * edgeDrive;
+
+    /*
+     * Dark thickness starts inside the white edge. Its growth is restrained
+     * so 100% gets brighter, not merely darker/thicker.
+     */
+    CGFloat shadowCenter =
+        (2.15 + 0.30 * edgeDrive) * renderScale;
+
+    CGFloat shadowWidth =
+        (1.55 + 0.22 * edgeDrive) * renderScale;
+
+    CGFloat shadowGain =
+        0.006 + 0.008 * edgeDrive;
 
     const CGFloat invSqrt2 = 0.70710678118;
     CGFloat lightX = -invSqrt2;
@@ -320,25 +351,140 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                     CGFloat filament = exp(-pow(filamentRatio, 2.65));
                     CGFloat secondaryFilament = exp(-pow(secondaryRatio, 2.35));
 
+                    /*
+                     * Surface-axis redistribution.
+                     *
+                     * horizontalEdge = top/bottom
+                     * verticalEdge   = left/right
+                     *
+                     * The 100% screenshot showed that straight left/right
+                     * sides were already strong while TL/BR corners were not.
+                     * Therefore straight vertical sides now receive much less
+                     * luminance than top/bottom and the selected corners.
+                     */
+                    CGFloat horizontalEdge =
+                        pow(fabs(ny), 2.00);
+
+                    CGFloat verticalEdge =
+                        pow(fabs(nx), 2.00);
+
+                    CGFloat topFacing =
+                        MAX(0.0, -ny);
+
+                    CGFloat bottomFacing =
+                        MAX(0.0, ny);
+
+                    /*
+                     * Very low continuous floor: enough to preserve the shape
+                     * without producing a uniform white rounded rectangle.
+                     */
+                    CGFloat perimeterFloor =
+                        0.0035 + 0.0055 * edgeDrive;
+
+                    CGFloat horizontalRailGain =
+                        0.010 + 0.125 * edgeDrive;
+
+                    CGFloat verticalRailGain =
+                        0.003 + 0.032 * edgeDrive;
+
+                    CGFloat topRail =
+                        horizontalEdge *
+                        topFacing *
+                        horizontalRailGain;
+
+                    CGFloat bottomRail =
+                        horizontalEdge *
+                        bottomFacing *
+                        (0.008 + 0.105 * edgeDrive);
+
+                    CGFloat sideRail =
+                        verticalEdge *
+                        verticalRailGain;
+
+                    /*
+                     * Top-left + bottom-right rounded-corner bridge.
+                     * nx*ny > 0 selects precisely those two diagonal corners.
+                     * Broad exponent keeps the highlight connected through
+                     * the radius instead of forming an isolated hot pixel.
+                     */
+                    CGFloat pairedCorner =
+                        GFClamp01(
+                            2.20 * MAX(0.0, nx * ny)
+                        );
+
+                    CGFloat cornerBridge =
+                        pow(pairedCorner, 0.88);
+
+                    CGFloat cornerFilamentGain =
+                        0.020 + 0.340 * edgeDrive;
+
+                    CGFloat cornerCoreGain =
+                        0.008 + 0.100 * edgeDrive;
+
+                    /*
+                     * Directional key light is attenuated on pure vertical
+                     * sides, but remains strong on top and rounded corners.
+                     */
+                    CGFloat keyAxisWeight =
+                        0.30 +
+                        0.48 * horizontalEdge +
+                        0.22 * cornerBridge;
+
+                    /*
+                     * The secondary far-side rim keeps bottom/bottom-right
+                     * crisp while cutting the straight right edge.
+                     */
+                    CGFloat secondaryAxisWeight =
+                        0.24 +
+                        0.60 * horizontalEdge +
+                        0.16 * cornerBridge;
+
                     CGFloat white =
-                        filament * baseEdgeGain +
-                        shoulder * highlightShoulderGain * pow(facing, 1.35) +
-                        core * highlightCoreGain * pow(facing, 1.50) +
-                        filament * highlightFilamentGain * pow(facing, 1.70) +
-                        secondaryFilament * secondaryRimGain * pow(opposite, 1.30);
+                        filament * perimeterFloor +
+                        filament * topRail +
+                        filament * bottomRail +
+                        filament * sideRail +
+                        filament * cornerBridge * cornerFilamentGain +
+                        core * cornerBridge * cornerCoreGain +
+                        shoulder * highlightShoulderGain *
+                            pow(facing, 1.35) * keyAxisWeight +
+                        core * highlightCoreGain *
+                            pow(facing, 1.50) * keyAxisWeight +
+                        filament * highlightFilamentGain *
+                            pow(facing, 1.70) * keyAxisWeight +
+                        secondaryFilament * secondaryRimGain *
+                            pow(opposite, 1.30) * secondaryAxisWeight;
 
                     CGFloat shadowOffset =
-                        (insideDepth - shadowCenter) / MAX(0.001, shadowWidth);
+                        (insideDepth - shadowCenter) /
+                        MAX(0.001, shadowWidth);
+
                     CGFloat shadowBand =
                         exp(-(shadowOffset * shadowOffset * 1.20));
+
                     CGFloat dark =
-                        shadowBand * shadowGain * pow(opposite, 1.20);
+                        shadowBand *
+                        shadowGain *
+                        pow(opposite, 1.20) *
+                        secondaryAxisWeight;
 
                     signedLight += white - dark;
                 }
             }
 
-            signedLight = MIN(0.300, MAX(-0.055, signedLight));
+            /*
+             * High percentages are intentionally allowed a much brighter
+             * optical peak. The clamp itself now participates in the slider
+             * response instead of capping 75% and 100% at the same ceiling.
+             */
+            CGFloat closedEdgePeak =
+                0.105 + 0.365 * edgeDrive;
+
+            signedLight =
+                MIN(
+                    closedEdgePeak,
+                    MAX(-0.045, signedLight)
+                );
             CGFloat alpha = fabs(signedLight) * edgeCoverage;
             if (alpha < 0.001) continue;
 
