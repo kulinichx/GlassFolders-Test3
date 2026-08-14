@@ -1,74 +1,63 @@
-# GlassFolders 0.7.0 Beta 2 — Crisp Specular
+# GlassFolders 0.7.0 Beta 3 — Balanced Optical Edge
 
-Beta 2 keeps the SDF optical-lighting architecture from Beta 1, but corrects
-the "everything looks blurry" problem observed on-device.
+Beta 3 keeps the SDF lighting architecture and focuses on the two device
+observations from Beta 2:
 
-## Reference interpretation
+1. the right/bottom edge from an earlier build looked good and should not vanish
+2. the opened panel showed tiny white artifacts around its four corners
 
-The supplied glass-style UI and third-party icon references share the same
-edge structure:
+## Closed folder
 
-1. a thin, readable white specular filament
-2. a slightly wider supporting reflection/core
-3. a broad, low-contrast soft shoulder
-4. a weak lower-right dark falloff
+### Directional upper-left light
 
-The important point is that the crisp highlight and the soft transition coexist.
-A single blurred stroke cannot reproduce this reliably.
+Still uses:
+- narrow specular filament
+- supporting core
+- wide soft shoulder
 
-## Beta 2 changes
+This creates the stronger upper-left reflection.
 
-### Backdrop silhouette
+### Faint full-perimeter edge definition
 
-`gaussianBlur.inputHardEdges` is restored to `YES`.
+A new very-low-gain `baseEdge` is derived from the narrow SDF filament profile
+but does not depend on the light direction.
 
-The folder shape itself should stay crisp. Softness now comes from the optical
-lighting profile INSIDE the edge rather than from letting backdrop blur bleed
-across the clipping boundary.
+Its job is only to preserve the subtle right/bottom glass edge seen in the
+supplied RootHide and Alook references.
 
-### Closed-folder blur
+It is intentionally much weaker than the upper-left directional highlight.
 
-Closed Liquid Glass blur is reduced.
+## Opened folder
 
-Wallpaper/detail should remain more visible, avoiding the flat "purple fuzzy
-card" appearance.
+### Material
 
-### Higher-resolution closed lighting
+Adjusted toward the supplied Apple opened-folder reference:
 
-Closed-folder SDF maps now render up to the device's 3x scale.
+- slightly less blur
+- slightly brighter backdrop
+- a little more neutral white frost
+- wallpaper color still passes through
 
-This is important for a sub-point specular filament on Retina displays.
+### Corner artifact fix
 
-### Three-zone optical edge
+Two protections are now used:
 
-Beta 1:
-- core
-- shoulder
+1. SDF texture boundary uses sub-pixel coverage instead of a binary cutoff
+2. `GFOpenedFolderGlassView` gets a dedicated rounded `CAShapeLayer` mask
 
-Beta 2:
-- filament
-- core
-- shoulder
+The mask is inset by less than half a point and uses a slightly safer radius,
+so backdrop filters and lighting texture cannot leak into the four extreme
+corners.
 
-The filament is narrow and directional.
-The shoulder remains wide and low-contrast.
+### Opened optical edge
 
-### No full white border
+The opened panel keeps:
+- wider soft shoulder
+- softer core
+- weaker/narrower filament
+- extremely faint full-perimeter definition
 
-The filament intensity is multiplied by a stronger light-facing term, so it
-appears primarily on upper-left-facing edges and corners.
-
-It is not a uniform white rounded-rectangle outline.
-
-## Opened panel
-
-The RC3 panel-host fix remains.
-
-Opened glass still:
-- attaches only to the real rounded folder panel
-- never falls back to full-screen custom glass
-- keeps a more frosted material than closed folders
-- uses the same three-zone optical law at lower contrast
+It should read as a frosted glass panel, not a white outlined card.
 
 ## Performance
 
@@ -77,8 +66,16 @@ Still no:
 - Timer
 - DisplayLink
 - gyroscope
-- per-frame Metal render loop
+- per-frame Metal renderer
 - animated gradient
 
-Lighting maps are generated only when size/radius/5% strength/open-state changes
-and are cached in NSCache.
+Optical maps are generated on size/radius/5%-strength/open-state changes and
+cached in `NSCache`.
+
+## Opened panel safety
+
+The RC3 host detection remains:
+
+- glass attaches only to the actual rounded folder panel
+- no full-screen custom fallback
+- unresolved panel => keep stock SpringBoard background

@@ -256,15 +256,15 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
      *   hard white stroke  <->  completely invisible blur.
      */
     CGFloat shoulderPoints = opened
-        ? (9.5 + 3.4 * e)
+        ? (11.0 + 3.8 * e)
         : (4.4 + 2.0 * e);
 
     CGFloat corePoints = opened
-        ? (1.65 + 0.55 * e)
+        ? (1.85 + 0.55 * e)
         : (0.95 + 0.28 * e);
 
     CGFloat filamentPoints = opened
-        ? (0.72 + 0.16 * e)
+        ? (0.56 + 0.12 * e)
         : (0.38 + 0.12 * e);
 
     CGFloat shoulderWidth = shoulderPoints * renderScale;
@@ -280,15 +280,28 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
         : (0.125 + 0.028 * e);
 
     CGFloat highlightFilamentGain = opened
-        ? (0.120 + 0.025 * e)
+        ? (0.070 + 0.015 * e)
         : (0.205 + 0.045 * e);
 
+    /*
+     * Faint neutral edge definition independent of light direction.
+     *
+     * Closed folders use this to preserve the subtle right/bottom edge seen
+     * in the supplied RootHide/Alook references.
+     *
+     * Opened folders keep it much weaker so the large panel never develops
+     * bright corner dots or a painted frame.
+     */
+    CGFloat baseEdgeGain = opened
+        ? (0.008 + 0.003 * e)
+        : (0.024 + 0.007 * e);
+
     CGFloat shadowShoulderGain = opened
-        ? (0.014 + 0.006 * e)
+        ? (0.012 + 0.005 * e)
         : (0.018 + 0.007 * e);
 
     CGFloat shadowCoreGain = opened
-        ? (0.022 + 0.007 * e)
+        ? (0.018 + 0.006 * e)
         : (0.028 + 0.009 * e);
 
     /*
@@ -311,13 +324,22 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                 );
 
             /*
-             * Lighting exists only inside the rounded glass surface.
+             * Smooth coverage around the mathematical rounded-rect boundary.
+             *
+             * Beta2 used a binary inside/outside cutoff. At large opened-panel
+             * corners, a few high-contrast pixels could survive as tiny white
+             * corner artifacts. A sub-pixel coverage ramp removes that without
+             * blurring the actual optical highlight.
              */
-            if (sdf > 0.0) {
+            CGFloat aaWidth = MAX(0.85, renderScale * 0.72);
+            CGFloat edgeCoverage =
+                GFClamp01(0.5 - sdf / aaWidth);
+
+            if (edgeCoverage <= 0.001) {
                 continue;
             }
 
-            CGFloat insideDepth = -sdf;
+            CGFloat insideDepth = MAX(0.0, -sdf);
 
             /*
              * Extremely weak whole-surface diagonal bias.
@@ -417,7 +439,17 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                     CGFloat shadowFacing =
                         pow(opposite, opened ? 1.22 : 1.34);
 
+                    /*
+                     * baseEdge is deliberately tied to the narrow filament
+                     * profile. It gives the unlit right/bottom sides a thin,
+                     * low-contrast glass edge while the directional light adds
+                     * the stronger upper-left reflection.
+                     */
+                    CGFloat baseEdge =
+                        filament * baseEdgeGain;
+
                     CGFloat white =
+                        baseEdge +
                         shoulder * highlightShoulderGain * shoulderFacing +
                         core * highlightCoreGain * coreFacing +
                         filament * highlightFilamentGain * filamentFacing;
@@ -451,7 +483,8 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                     MAX(-negativeCap, signedLight)
                 );
 
-            CGFloat alpha = fabs(signedLight);
+            CGFloat alpha =
+                fabs(signedLight) * edgeCoverage;
 
             if (alpha < 0.001) {
                 continue;
@@ -742,6 +775,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
 @property (nonatomic, strong) CALayer *gfOpticalLightingLayer;
+@property (nonatomic, strong) CAShapeLayer *gfCornerMask;
 @property (nonatomic, assign) CGSize gfLightingSize;
 @property (nonatomic, assign) CGFloat gfLightingRadius;
 @property (nonatomic, assign) CGFloat gfStrength;
@@ -767,6 +801,18 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
         self.userInteractionEnabled = NO;
         self.clipsToBounds = YES;
         self.layer.masksToBounds = YES;
+        self.layer.allowsEdgeAntialiasing = YES;
+
+        /*
+         * Dedicated rounded shape mask.
+         * This is intentionally separate from cornerRadius/masksToBounds:
+         * the mask guarantees that backdrop filters and the optical texture
+         * cannot leave tiny bright pixels at the four panel corners.
+         */
+        _gfCornerMask = [CAShapeLayer layer];
+        _gfCornerMask.fillColor = UIColor.whiteColor.CGColor;
+        _gfCornerMask.contentsScale = UIScreen.mainScreen.scale;
+        self.layer.mask = _gfCornerMask;
 
         BOOL isBackdropLayer =
             [NSStringFromClass(self.layer.class) containsString:@"Backdrop"];
@@ -784,9 +830,9 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
              * Opened "frosted transparent" calibration:
              * visibly softer than the closed icon, but still transparent.
              */
-            CGFloat blurRadius = 5.8 + (10.5 * e);
-            CGFloat saturation = 1.00 + (0.10 * e);
-            CGFloat brightness = 0.004 + (0.008 * e);
+            CGFloat blurRadius = 4.8 + (8.2 * e);
+            CGFloat saturation = 1.00 + (0.075 * e);
+            CGFloat brightness = 0.010 + (0.010 * e);
 
             id saturate = GFCreateCAFilter(@"colorSaturate");
             id brighten = GFCreateCAFilter(@"colorBrightness");
@@ -832,7 +878,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
          * Keep the opened folder neutral.
          * Wallpaper remains the color source.
          */
-        CGFloat tintAlpha = 0.030 + (0.028 * e);
+        CGFloat tintAlpha = 0.042 + (0.030 * e);
 
         if (_gfStrength > 0.001 && tintAlpha > 0.001) {
             _gfTintView = [[UIView alloc] initWithFrame:CGRectZero];
@@ -885,6 +931,26 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
     if (radius > 0.0) {
         self.layer.cornerRadius = radius;
         self.layer.cornerCurve = kCACornerCurveContinuous;
+    }
+
+    if (self.gfCornerMask) {
+        /*
+         * Tiny inset + slightly larger radius trims the extreme corner pixels
+         * without visibly shrinking the panel.
+         */
+        CGFloat maskInset = 0.42;
+        CGRect maskRect =
+            CGRectInset(self.bounds, maskInset, maskInset);
+
+        CGFloat maskRadius =
+            MAX(0.0, radius + 0.85 - maskInset);
+
+        UIBezierPath *maskPath =
+            [UIBezierPath bezierPathWithRoundedRect:maskRect
+                                       cornerRadius:maskRadius];
+
+        self.gfCornerMask.frame = self.bounds;
+        self.gfCornerMask.path = maskPath.CGPath;
     }
 
     if (self.gfOpticalLightingLayer) {
