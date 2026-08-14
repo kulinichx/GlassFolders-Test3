@@ -1,59 +1,40 @@
-# GlassFolders 0.7.3 Beta 1.4 — Exact App Library Hook
+# GlassFolders 0.7.3 Beta 1.4.1 — Logos Init Fix
 
-Two focused corrections.
+This is a build-only correction over Beta 1.4.
 
-## 1. App Library large category cards
+## What failed
 
-The small nested folder-like element inside an App Library category was already
-receiving the normal `SBFolderIconImageView` glass. That did not prove the
-App-Library-specific hook was working.
+Beta 1.4 declared the App Library hook group correctly, but initialized it with
+a dynamic class-substitution form.
 
-Beta 1.4 removes the runtime class scan and targets the dedicated category
-background class directly:
+The build environment rejected that form at Logos preprocessing time with:
 
-`SBHLibraryCategoryPodBackgroundView`
+`%init for an undefined %group GFAppLibraryHooks`
 
-Startup sequence:
+## Beta 1.4.1
+
+The runtime flow is now deliberately simple:
 
 1. explicitly load SpringBoardHome;
-2. resolve `SBHLibraryCategoryPodBackgroundView`;
-3. allow one leading-underscore alias only;
-4. initialize the Logos group against that exact class.
+2. check for `SBHLibraryCategoryPodBackgroundView`;
+3. call `%init(GFAppLibraryHooks);`.
 
-No `SBHLibraryPodFolderView`, App Library controller, icon-list, search
-controller, or navigation hook is added.
+No runtime class scanning, no MSHookMessageEx path, and no class-token
+substitution is used.
 
-The category-background object is visual-only, so its stock material children
-can be suppressed without touching category icons.
+## Settings icon
 
-## 2. Settings icon
+The Beta 1.4 PreferenceLoader correction is retained: the `icon` key remains
+inside the `entry` dictionary and the 1x/2x/3x assets remain packaged.
 
-The PreferenceLoader plist previously stored `icon` at the plist root.
-
-PreferenceLoader builds the Settings row from the `entry` dictionary, therefore
-the root-level key was ignored.
-
-Beta 1.4 moves:
-
-`icon = GlassFoldersIcon.png`
-
-inside `entry`.
-
-The image is also present in `GlassFoldersPrefs.bundle` with 1x/2x/3x variants,
-so no hard-coded RootHide jbroot filesystem path is needed.
-
-## Existing behavior
+## Runtime scope
 
 Unchanged:
 
-- closed Home Screen folder glass;
-- opened folder glass;
-- edge percentage calibration;
-- App Library switch;
-- dark/light adaptation;
-- static icon artwork;
-- RootHide arm64e;
-- SpringBoard-only injection.
+- closed folder: `SBFolderIconImageView`;
+- opened folder: `SBFolderBackgroundView`;
+- App Library category card: `SBHLibraryCategoryPodBackgroundView`;
+- SpringBoard-only injection;
+- RootHide arm64e.
 
-No daemon, timer, polling loop, DisplayLink, gyroscope, or continuous Metal
-renderer.
+No daemon, timer, polling, DisplayLink, or continuous Metal rendering.

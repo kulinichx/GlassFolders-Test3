@@ -7,7 +7,7 @@
 #import <dlfcn.h>
 
 /*
- * GlassFolders 0.7.3 Beta 1.4 — Exact App Library Hook
+ * GlassFolders 0.7.3 Beta 1.4.1 — Logos Init Fix
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -2107,24 +2107,17 @@ static void GFUpdateAppLibraryCategoryBackground(
             RTLD_LAZY | RTLD_LOCAL
         );
 
-        Class appLibraryBackgroundClass =
-            objc_getClass(
+        /*
+         * Use standard Logos group initialization.
+         *
+         * SpringBoardHome has already been loaded above, so if the exact
+         * category-background class exists, Logos can resolve the class by
+         * its normal hook token. No class substitution is needed here.
+         */
+        if (objc_getClass(
                 "SBHLibraryCategoryPodBackgroundView"
-            );
-
-        if (!appLibraryBackgroundClass) {
-            appLibraryBackgroundClass =
-                objc_getClass(
-                    "_SBHLibraryCategoryPodBackgroundView"
-                );
-        }
-
-        if (appLibraryBackgroundClass) {
-            %init(
-                GFAppLibraryHooks,
-                SBHLibraryCategoryPodBackgroundView =
-                    appLibraryBackgroundClass
-            );
+            )) {
+            %init(GFAppLibraryHooks);
         }
     }
 }
