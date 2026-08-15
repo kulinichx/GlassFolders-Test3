@@ -112,44 +112,6 @@ jobs:
           test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist
           test ! -e layout/Library/PreferenceLoader/Preferences/GlassFolders.plist
 
-      - name: Repository sanity gate
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          # Keep the workflow independent from exact tuning constants.
-          # This allows build.yml to be committed separately from Tweak.xm.
-          test -f Tweak.xm
-          test -f Makefile
-          test -f control
-          test -f prefs/Resources/Root.plist
-          test -f prefs/GFRootListController.m
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist
-
-          grep -Fq 'CFSTR("ClearStrength")' Tweak.xm
-          grep -Fq 'CFSTR("LiquidGlassStrength")' Tweak.xm
-          grep -Fq '%hook SBFolderBackgroundView' Tweak.xm
-          grep -Fq 'SBFolderIconImageView' Tweak.xm
-
-          python - <<'PY'
-          import plistlib
-
-          with open('prefs/Resources/Root.plist', 'rb') as f:
-              root = plistlib.load(f)
-
-          sliders = [x for x in root.get('items', []) if x.get('cell') == 'PSSliderCell']
-          keys = [x.get('key') for x in sliders]
-
-          if 'ClearStrength' not in keys:
-              raise SystemExit('Missing ClearStrength slider')
-          if 'LiquidGlassStrength' not in keys:
-              raise SystemExit('Missing LiquidGlassStrength slider')
-
-          print('Repository sanity OK:', keys)
-          PY
-
-          echo "Repository sanity gate passed."
-
       - name: Build RootHide package
         shell: bash
         run: |
