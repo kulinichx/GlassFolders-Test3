@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.4 Beta 3.2</string>
+			<string>GlassFolders 0.7.4 Beta 3.3</string>
 			<key>footerText</key>
-			<string>Beta 3.2 保持 Beta 3.1 的 Clear / Liquid Glass 参数不变，新增独立的 App 资源库玻璃。资源库外层分类卡片使用真实壁纸 backdrop；资源库内部的小文件夹/小聚合区明确排除普通文件夹效果，恢复苹果原生透明表现。</string>
+			<string>Beta 3.3 不改 Clear / Liquid Glass 光学参数。资源库改为由 SBLibraryViewController 页面生命周期主动扫描真实分类背景，不再只依赖 SBHLibraryCategoryPodBackgroundView 在 tweak 初始化时已经加载。资源库内部 mini-folder/cluster 继续排除普通文件夹效果。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -118,7 +118,7 @@
 			<key>label</key>
 			<string>App 资源库</string>
 			<key>footerText</key>
-			<string>独立控制 App Library 外层分类卡片，不影响普通桌面文件夹。开启后只处理 SBHLibraryCategoryPodBackgroundView；分类卡片内部的小文件夹/小聚合区继续使用苹果原生透明背景。</string>
+			<string>独立控制 App Library 外层分类卡片。Beta 3.3 从资源库页面控制器进入并扫描真实 category background，因此即使 SpringBoardHome 的具体背景类稍晚加载也能关联；内部的小文件夹/小聚合区继续保持苹果原生透明。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

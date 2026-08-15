@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 3.2 — App Library Glass separation pass
+ * GlassFolders 0.7.4 Beta 3.3 — App Library controller-link pass
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -817,6 +817,7 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
 static char kGFInternalAppLibraryPodVisualKey;
 static char kGFAppLibraryOverlayAssociationKey;
 static char kGFAppLibraryOriginalAlphaKey;
+static char kGFAppLibraryRootMarkerKey;
 
 static BOOL GFIsInternalAppLibraryPodVisual(UIView *view) {
     NSNumber *marker = objc_getAssociatedObject(
@@ -1197,8 +1198,22 @@ static BOOL GFViewIsInsideAppLibrary(UIView *view) {
     UIResponder *node = view;
 
     for (NSInteger depth = 0;
-         node && depth < 20;
+         node && depth < 28;
          depth++) {
+
+        if ([node isKindOfClass:[UIView class]]) {
+            UIView *v = (UIView *)node;
+
+            NSNumber *rootMarker =
+                objc_getAssociatedObject(
+                    v,
+                    &kGFAppLibraryRootMarkerKey
+                );
+
+            if (rootMarker.boolValue) {
+                return YES;
+            }
+        }
 
         NSString *className =
             NSStringFromClass(node.class);
@@ -1229,8 +1244,134 @@ static BOOL GFViewIsInsideAppLibrary(UIView *view) {
 }
 
 
+/*
+ * Beta 3.3 no longer depends on the category-background class already being
+ * hookable during tweak construction.
+ *
+ * SBLibraryViewController is the page-level App Library controller. Every
+ * time the page lays out, walk only that controller's hierarchy and locate
+ * category background candidates there.
+ */
+static BOOL GFLooksLikeRealAppLibraryCategoryBackground(UIView *view) {
+    if (!view || GFIsInternalAppLibraryPodVisual(view)) {
+        return NO;
+    }
+
+    Class exactClass =
+        NSClassFromString(
+            @"SBHLibraryCategoryPodBackgroundView"
+        );
+
+    if (exactClass &&
+        [view isKindOfClass:exactClass]) {
+        return YES;
+    }
+
+    NSString *name =
+        NSStringFromClass(view.class);
+
+    BOOL categoryBackgroundName =
+        ([name containsString:@"Library"] &&
+         [name containsString:@"Category"] &&
+         [name containsString:@"Background"]);
+
+    BOOL podBackgroundName =
+        ([name containsString:@"CategoryPod"] &&
+         [name containsString:@"Background"]);
+
+    return categoryBackgroundName ||
+           podBackgroundName;
+}
+
+
+static void GFRefreshAppLibraryDescendants(UIView *view) {
+    if (!view) return;
+
+    if (GFLooksLikeRealAppLibraryCategoryBackground(view)) {
+        GFUpdateRealAppLibraryPod(view);
+    }
+
+    NSArray<UIView *> *children =
+        [view.subviews copy];
+
+    for (UIView *child in children) {
+        GFRefreshAppLibraryDescendants(child);
+    }
+}
+
+
+static void GFRefreshAppLibraryController(
+    UIViewController *controller
+) {
+    if (!controller.isViewLoaded) {
+        return;
+    }
+
+    UIView *root = controller.view;
+    if (!root) {
+        return;
+    }
+
+    objc_setAssociatedObject(
+        root,
+        &kGFAppLibraryRootMarkerKey,
+        @YES,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+
+    GFRefreshAppLibraryDescendants(root);
+}
+
+
 @interface SBHLibraryCategoryPodBackgroundView : UIView
 @end
+
+@interface SBLibraryViewController : UIViewController
+@end
+
+%group GFAppLibraryControllerHooks
+
+%hook SBLibraryViewController
+
+- (void)viewWillAppear:(BOOL)animated {
+    %orig(animated);
+    GFRefreshAppLibraryController(self);
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    %orig(animated);
+    GFRefreshAppLibraryController(self);
+
+    /*
+     * Some category pods are recycled/attached immediately after the first
+     * appearance callback. One next-runloop refresh catches that path without
+     * polling or globally hooking UIView.
+     */
+    __weak UIViewController *weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIViewController *strongSelf = weakSelf;
+        if (strongSelf) {
+            GFRefreshAppLibraryController(strongSelf);
+        }
+    });
+}
+
+- (void)viewDidLayoutSubviews {
+    %orig;
+    GFRefreshAppLibraryController(self);
+}
+
+- (void)traitCollectionDidChange:
+    (UITraitCollection *)previousTraitCollection {
+
+    %orig(previousTraitCollection);
+    GFRefreshAppLibraryController(self);
+}
+
+%end
+
+%end
+
 
 %group GFAppLibraryHooks
 
@@ -3252,6 +3393,20 @@ static void GFUpdateOpenedFolderBackground(
             %init(GFOpenedPanelHooks);
         }
 
+        /*
+         * App Library page hook is the authoritative Beta 3.3 link.
+         * SBLibraryViewController belongs to SpringBoard and is present on
+         * systems that provide App Library.
+         */
+        if (objc_getClass("SBLibraryViewController")) {
+            %init(GFAppLibraryControllerHooks);
+        }
+
+        /*
+         * Exact category-background hook remains only as a fast path when
+         * that private SpringBoardHome class is already loaded here.
+         * Controller traversal above does not depend on this succeeding.
+         */
         if (objc_getClass("SBHLibraryCategoryPodBackgroundView")) {
             %init(GFAppLibraryHooks);
         }
