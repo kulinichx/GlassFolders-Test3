@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.4 Beta 3.3</string>
+			<string>GlassFolders 0.7.4 Beta 3.6</string>
 			<key>footerText</key>
-			<string>Beta 3.3 不改 Clear / Liquid Glass 光学参数。资源库改为由 SBLibraryViewController 页面生命周期主动扫描真实分类背景，不再只依赖 SBHLibraryCategoryPodBackgroundView 在 tweak 初始化时已经加载。资源库内部 mini-folder/cluster 继续排除普通文件夹效果。</string>
+			<string>Beta 3.6 保留已经验证成功的 App Library 命中逻辑，不再开放资源库百分比强度。资源库改为 Clear / Liquid Glass 两套固定材质和各自三个预设；搜索框与分类卡片自动使用同一套材质。普通文件夹 Clear / Liquid Glass 不变。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -118,7 +118,7 @@
 			<key>label</key>
 			<string>App 资源库</string>
 			<key>footerText</key>
-			<string>独立控制 App Library 外层分类卡片。Beta 3.3 从资源库页面控制器进入并扫描真实 category background，因此即使 SpringBoardHome 的具体背景类稍晚加载也能关联；内部的小文件夹/小聚合区继续保持苹果原生透明。</string>
+			<string>资源库使用固定材质档位，不再使用百分比。Clear 参考明亮磨砂的 Apple App Library；Liquid Glass 参考更透明、低白雾、细边高光的玻璃效果。搜索框和分类卡片跟随同一资源库样式；内部 mini-folder/cluster 保持苹果原生透明。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -134,29 +134,79 @@
 		</dict>
 		<dict>
 			<key>cell</key>
-			<string>PSSliderCell</string>
-			<key>cellClass</key>
-			<string>GFPercentSliderCell</string>
+			<string>PSSegmentCell</string>
 			<key>label</key>
-			<string></string>
+			<string>资源库样式</string>
 			<key>key</key>
-			<string>AppLibraryGlassStrength</string>
+			<string>AppLibraryStyle</string>
 			<key>default</key>
-			<integer>55</integer>
+			<integer>0</integer>
 			<key>defaults</key>
 			<string>com.local.glassfolders</string>
-			<key>min</key>
+			<key>validTitles</key>
+			<array>
+				<string>Clear</string>
+				<string>Liquid Glass</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<integer>0</integer>
+				<integer>1</integer>
+			</array>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSegmentCell</string>
+			<key>label</key>
+			<string>Clear 预设</string>
+			<key>key</key>
+			<string>AppLibraryClearPreset</string>
+			<key>default</key>
 			<integer>0</integer>
-			<key>max</key>
-			<integer>100</integer>
-			<key>showValue</key>
-			<false/>
+			<key>defaults</key>
+			<string>com.local.glassfolders</string>
+			<key>validTitles</key>
+			<array>
+				<string>Apple Bright</string>
+				<string>Balanced</string>
+				<string>Soft</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<integer>0</integer>
+				<integer>1</integer>
+				<integer>2</integer>
+			</array>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSegmentCell</string>
+			<key>label</key>
+			<string>Liquid Glass 预设</string>
+			<key>key</key>
+			<string>AppLibraryLiquidPreset</string>
+			<key>default</key>
+			<integer>0</integer>
+			<key>defaults</key>
+			<string>com.local.glassfolders</string>
+			<key>validTitles</key>
+			<array>
+				<string>Crystal</string>
+				<string>Balanced</string>
+				<string>Deep</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<integer>0</integer>
+				<integer>1</integer>
+				<integer>2</integer>
+			</array>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>Beta 3.1 的普通文件夹 Clear / Liquid Glass 光学参数在 Beta 3.2 中保持不变。Beta 3.2 只新增资源库独立路径：外层分类卡片可选玻璃化，内部 mini folder/cluster 明确跳过普通文件夹 hook。</string>
+			<string>Beta 3.6 只重构 App 资源库材质控制：固定 Clear / Liquid Glass 预设，不再使用资源库百分比滑杆。普通文件夹的 Clear / Liquid Glass 强度和光学参数保持不变。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 3.5 — App Library search-container link pass
+ * GlassFolders 0.7.4 Beta 3.6 — App Library fixed-material presets
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -38,8 +38,23 @@ static CGFloat GFClearStrength = 0.0;        // 0.0 ... 1.0, Clear blur authorit
 static CGFloat GFLiquidGlassStrength = 0.0;  // 0.0 ... 1.0, Liquid composite authority
 static CGFloat GFGlassStrength = 0.0;        // active style strength for existing rendering paths
 
-// Beta 3.2: App Library is intentionally independent from normal folders.
+// App Library remains intentionally independent from normal folders.
 static BOOL GFAppLibraryGlassEnabled = NO;
+
+// Beta 3.6 fixed material model:
+// 0 = Clear, 1 = Liquid Glass
+static NSInteger GFAppLibraryStyle = 0;
+
+// Clear: 0 Apple Bright, 1 Balanced, 2 Soft
+static NSInteger GFAppLibraryClearPreset = 0;
+
+// Liquid Glass: 0 Crystal, 1 Balanced, 2 Deep
+static NSInteger GFAppLibraryLiquidPreset = 0;
+
+/*
+ * Kept only for source/backward compatibility with Beta 3.2–3.5 installs.
+ * Beta 3.6 no longer exposes or uses an App Library percentage slider.
+ */
 static CGFloat GFAppLibraryGlassStrength = 0.55;
 
 static BOOL GFReadBool(CFStringRef key, BOOL fallback) {
@@ -116,8 +131,35 @@ static void GFLoadPreferences(void) {
     GFAppLibraryGlassEnabled =
         GFReadBool(CFSTR("AppLibraryGlassEnabled"), NO);
 
+    GFAppLibraryStyle =
+        GFReadInteger(CFSTR("AppLibraryStyle"), 0);
+
+    GFAppLibraryClearPreset =
+        GFReadInteger(CFSTR("AppLibraryClearPreset"), 0);
+
+    GFAppLibraryLiquidPreset =
+        GFReadInteger(CFSTR("AppLibraryLiquidPreset"), 0);
+
+    /*
+     * Read the legacy key only so old preferences remain harmless.
+     * It no longer controls the Beta 3.6 resource-library material.
+     */
     GFAppLibraryGlassStrength =
         GFReadPercent(CFSTR("AppLibraryGlassStrength"), 55.0);
+
+    if (GFAppLibraryStyle < 0 || GFAppLibraryStyle > 1) {
+        GFAppLibraryStyle = 0;
+    }
+
+    if (GFAppLibraryClearPreset < 0 ||
+        GFAppLibraryClearPreset > 2) {
+        GFAppLibraryClearPreset = 0;
+    }
+
+    if (GFAppLibraryLiquidPreset < 0 ||
+        GFAppLibraryLiquidPreset > 2) {
+        GFAppLibraryLiquidPreset = 0;
+    }
 
     if (GFStyle < 0 || GFStyle > 1) {
         GFStyle = 0;
@@ -920,6 +962,163 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
 }
 
 
+#pragma mark - Beta 3.6 App Library Fixed Material Recipes
+
+typedef struct {
+    CGFloat blur;
+    CGFloat saturation;
+    CGFloat brightness;
+    CGFloat tintAlpha;
+    CGFloat borderWidth;
+    CGFloat borderAlpha;
+    CGFloat nativePodAlpha;
+    CGFloat nativeSearchAlpha;
+} GFAppLibraryMaterialRecipe;
+
+
+static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
+    BOOL searchVariant,
+    BOOL dark
+) {
+    GFAppLibraryMaterialRecipe r = {
+        8.0, 1.10, 0.010, 0.020,
+        0.34, 0.14, 0.22, 0.08
+    };
+
+    if (GFAppLibraryStyle == 0) {
+        /*
+         * CLEAR
+         *
+         * The reference is intentionally bright and luminous. Unlike normal
+         * Clear folder strength, these are fixed design presets so the whole
+         * App Library remains visually coherent.
+         */
+        switch (GFAppLibraryClearPreset) {
+            case 1: // Balanced
+                if (dark) {
+                    r = (GFAppLibraryMaterialRecipe){
+                        9.4, 1.10, 0.022, 0.040,
+                        0.34, 0.130, 0.25, 0.08
+                    };
+                } else {
+                    r = (GFAppLibraryMaterialRecipe){
+                        9.2, 1.13, 0.038, 0.052,
+                        0.34, 0.155, 0.25, 0.07
+                    };
+                }
+                break;
+
+            case 2: // Soft
+                if (dark) {
+                    r = (GFAppLibraryMaterialRecipe){
+                        11.8, 1.07, 0.018, 0.052,
+                        0.32, 0.115, 0.28, 0.09
+                    };
+                } else {
+                    r = (GFAppLibraryMaterialRecipe){
+                        12.6, 1.08, 0.030, 0.068,
+                        0.32, 0.140, 0.28, 0.08
+                    };
+                }
+                break;
+
+            case 0:
+            default: // Apple Bright
+                if (dark) {
+                    r = (GFAppLibraryMaterialRecipe){
+                        10.0, 1.12, 0.032, 0.050,
+                        0.36, 0.145, 0.24, 0.07
+                    };
+                } else {
+                    r = (GFAppLibraryMaterialRecipe){
+                        10.8, 1.15, 0.058, 0.076,
+                        0.36, 0.175, 0.24, 0.06
+                    };
+                }
+                break;
+        }
+
+        /*
+         * Search is an interactive control, so lift it only a tiny amount.
+         * Beta 3.5 was deliberately much brighter and looked disconnected.
+         */
+        if (searchVariant) {
+            r.blur += 0.8;
+            r.saturation += dark ? 0.010 : 0.015;
+            r.brightness += dark ? 0.004 : 0.006;
+            r.tintAlpha += dark ? 0.004 : 0.006;
+            r.borderWidth += 0.04;
+            r.borderAlpha += 0.018;
+            r.nativeSearchAlpha = MAX(0.04, r.nativeSearchAlpha - 0.01);
+        }
+    } else {
+        /*
+         * LIQUID GLASS
+         *
+         * Lower blur and body tint. Wallpaper transmission stays strong and
+         * the object is identified mainly by the thin optical edge/native
+         * shading, matching the transparent Liquid Glass reference.
+         */
+        switch (GFAppLibraryLiquidPreset) {
+            case 1: // Balanced
+                if (dark) {
+                    r = (GFAppLibraryMaterialRecipe){
+                        7.8, 1.15, 0.010, 0.018,
+                        0.38, 0.145, 0.20, 0.07
+                    };
+                } else {
+                    r = (GFAppLibraryMaterialRecipe){
+                        7.4, 1.20, 0.014, 0.016,
+                        0.38, 0.170, 0.20, 0.06
+                    };
+                }
+                break;
+
+            case 2: // Deep
+                if (dark) {
+                    r = (GFAppLibraryMaterialRecipe){
+                        9.6, 1.09, 0.002, 0.024,
+                        0.40, 0.155, 0.26, 0.09
+                    };
+                } else {
+                    r = (GFAppLibraryMaterialRecipe){
+                        9.2, 1.12, 0.004, 0.022,
+                        0.40, 0.175, 0.26, 0.08
+                    };
+                }
+                break;
+
+            case 0:
+            default: // Crystal
+                if (dark) {
+                    r = (GFAppLibraryMaterialRecipe){
+                        6.0, 1.20, 0.014, 0.012,
+                        0.42, 0.175, 0.16, 0.05
+                    };
+                } else {
+                    r = (GFAppLibraryMaterialRecipe){
+                        5.6, 1.27, 0.020, 0.010,
+                        0.42, 0.205, 0.16, 0.04
+                    };
+                }
+                break;
+        }
+
+        if (searchVariant) {
+            r.blur += 0.6;
+            r.saturation += dark ? 0.010 : 0.015;
+            r.brightness += 0.003;
+            r.tintAlpha += 0.003;
+            r.borderWidth += 0.04;
+            r.borderAlpha += 0.020;
+            r.nativeSearchAlpha = MAX(0.03, r.nativeSearchAlpha - 0.01);
+        }
+    }
+
+    return r;
+}
+
+
 #pragma mark - Beta 3.2 App Library Glass
 
 @interface GFAppLibraryGlassView : UIView
@@ -968,57 +1167,20 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
 }
 
 - (void)gfRefreshMaterial {
-    CGFloat strength = GFClamp01(self.gfStrength);
-    CGFloat material = GFMaterialResponse(strength);
-    CGFloat tint = GFTintResponse(strength);
     BOOL dark = GFUsesDarkAppearance(self);
 
     BOOL isBackdropLayer =
         [NSStringFromClass(self.layer.class) containsString:@"Backdrop"];
 
-    /*
-     * Reference target:
-     * - real wallpaper owns the color
-     * - category cards remain visually distinct from the page
-     * - no opaque pink/white slab
-     * - medium blur, small luminance lift, restrained neutral tint
-     */
-    CGFloat blurRadius = 0.0;
-    CGFloat saturation = 1.0;
-    CGFloat brightness = 0.0;
+    GFAppLibraryMaterialRecipe recipe =
+        GFAppLibraryRecipe(
+            self.gfSearchVariant,
+            dark
+        );
 
-    if (self.gfSearchVariant) {
-        /*
-         * The reference App Library search pill is a little more luminous
-         * than the category cards, but still wallpaper-owned.
-         */
-        blurRadius = dark
-            ? (6.0 + 7.4 * material)
-            : (5.4 + 7.2 * material);
-
-        saturation = dark
-            ? (1.09 + 0.15 * material)
-            : (1.12 + 0.20 * material);
-
-        brightness = dark
-            ? (0.010 + 0.018 * material)
-            : (0.016 + 0.020 * material);
-    } else {
-        /*
-         * Beta 3.3 category-card recipe — intentionally unchanged.
-         */
-        blurRadius = dark
-            ? (5.0 + 7.0 * material)
-            : (4.2 + 6.6 * material);
-
-        saturation = dark
-            ? (1.08 + 0.14 * material)
-            : (1.10 + 0.18 * material);
-
-        brightness = dark
-            ? (0.006 + 0.014 * material)
-            : (0.004 + 0.012 * material);
-    }
+    CGFloat blurRadius = recipe.blur;
+    CGFloat saturation = recipe.saturation;
+    CGFloat brightness = recipe.brightness;
 
     if (isBackdropLayer) {
         id saturate = GFCreateCAFilter(@"colorSaturate");
@@ -1048,34 +1210,16 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
         [self.layer setValue:@1.0 forKey:@"scale"];
     }
 
-    /*
-     * Keep the body thin. The native pod remains above us at low opacity and
-     * contributes Apple's own material texture/shape.
-     */
-    if (self.gfSearchVariant) {
-        self.gfTintView.alpha = dark
-            ? (0.014 + 0.024 * tint)
-            : (0.012 + 0.026 * tint);
+    self.gfTintView.alpha =
+        recipe.tintAlpha;
 
-        self.layer.borderWidth = 0.42;
-        self.layer.borderColor =
-            [UIColor colorWithWhite:1.0
-                              alpha:(dark ? 0.135 : 0.180)]
-                .CGColor;
-    } else {
-        /*
-         * Beta 3.3 category-card body — intentionally unchanged.
-         */
-        self.gfTintView.alpha = dark
-            ? (0.010 + 0.020 * tint)
-            : (0.006 + 0.016 * tint);
+    self.layer.borderWidth =
+        recipe.borderWidth;
 
-        self.layer.borderWidth = 0.34;
-        self.layer.borderColor =
-            [UIColor colorWithWhite:1.0
-                              alpha:(dark ? 0.105 : 0.145)]
-                .CGColor;
-    }
+    self.layer.borderColor =
+        [UIColor colorWithWhite:1.0
+                          alpha:recipe.borderAlpha]
+            .CGColor;
 }
 
 - (void)layoutSubviews {
@@ -1180,8 +1324,7 @@ static void GFUpdateRealAppLibraryPod(UIView *pod) {
     if (!overlay) {
         overlay =
             [[GFAppLibraryGlassView alloc]
-                initWithStrength:
-                    GFAppLibraryGlassStrength];
+                initWithStrength:1.0];
 
         GFSetAppLibraryOverlayForPod(
             pod,
@@ -1219,14 +1362,15 @@ static void GFUpdateRealAppLibraryPod(UIView *pod) {
      * of SBHLibraryCategoryPodBackgroundView.
      */
     BOOL dark = GFUsesDarkAppearance(pod);
-    CGFloat material =
-        GFMaterialResponse(
-            GFAppLibraryGlassStrength
+
+    GFAppLibraryMaterialRecipe recipe =
+        GFAppLibraryRecipe(
+            NO,
+            dark
         );
 
-    pod.alpha = dark
-        ? (0.24 + 0.16 * material)
-        : (0.16 + 0.13 * material);
+    pod.alpha =
+        recipe.nativePodAlpha;
 }
 
 
@@ -1738,7 +1882,14 @@ static void GFSetNativeSearchBackgroundsDimmed(
                  * internal shading still participates, but remove the dark
                  * opaque slab that was visible in Beta 3.3.
                  */
-                child.alpha = 0.10;
+                GFAppLibraryMaterialRecipe searchRecipe =
+                    GFAppLibraryRecipe(
+                        YES,
+                        GFUsesDarkAppearance(view)
+                    );
+
+                child.alpha =
+                    searchRecipe.nativeSearchAlpha;
             } else if (original) {
                 child.alpha = original.doubleValue;
 
@@ -1871,12 +2022,10 @@ static void GFUpdateAppLibrarySearchView(
     if (!overlay) {
         overlay =
             [[GFAppLibraryGlassView alloc]
-                initWithStrength:
-                    GFAppLibraryGlassStrength];
+                initWithStrength:1.0];
 
         overlay.gfSearchVariant = YES;
-        overlay.gfStrength =
-            GFAppLibraryGlassStrength;
+        overlay.gfStrength = 1.0;
         [overlay gfRefreshMaterial];
 
         objc_setAssociatedObject(
@@ -1890,8 +2039,7 @@ static void GFUpdateAppLibrarySearchView(
                          atIndex:0];
     } else {
         overlay.gfSearchVariant = YES;
-        overlay.gfStrength =
-            GFAppLibraryGlassStrength;
+        overlay.gfStrength = 1.0;
         [overlay gfRefreshMaterial];
 
         if (overlay.superview != candidate) {

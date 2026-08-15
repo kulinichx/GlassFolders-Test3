@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.4~beta3.3
+Version: 0.7.4~beta3.6
 Architecture: iphoneos-arm64e
-Description: Beta 3.3 keeps Beta 3.1/3.2 optical tuning and fixes App Library attachment by driving category-card discovery from SBLibraryViewController instead of relying only on SBHLibraryCategoryPodBackgroundView being loaded during tweak construction. App Library mini-folder clusters remain excluded from normal folder glass.
+Description: Beta 3.6 keeps the verified App Library controller/search attachment and replaces the App Library percentage slider with fixed Clear and Liquid Glass material presets. Clear defaults to Apple Bright; Liquid Glass defaults to Crystal. Normal folder Clear/Liquid tuning is unchanged.
 Maintainer: kulinich
 Author: kulinich
 Section: Tweaks

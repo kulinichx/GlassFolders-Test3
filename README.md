@@ -1,43 +1,58 @@
-# GlassFolders 0.7.4 Beta 3.3
+# GlassFolders 0.7.4 Beta 3.6
 
-Beta 3.3 is an App Library attachment fix.
+Beta 3.6 keeps the verified Beta 3.5 App Library attachment and changes only
+the App Library material model.
 
-## What was wrong in Beta 3.2
+## Why fixed presets
 
-Beta 3.2 only initialized the exact `SBHLibraryCategoryPodBackgroundView`
-hook when that private class was already available during tweak construction.
-On the tested device the App Library remained stock, which means that path
-was not a reliable lifecycle entry.
+App Library fills most of the screen and contains many category cards plus the
+top search control. A free 0–100 material percentage can easily make these
+surfaces inconsistent, so Beta 3.6 removes the App Library strength slider.
 
-## Beta 3.3 strategy
+Normal folder Clear and Liquid Glass percentage controls are unchanged.
 
-The authoritative entry is now the page-level:
+## App Library style
 
-`SBLibraryViewController`
+### Clear
 
-When App Library appears or lays out, GlassFolders:
+Default: **Apple Bright**
 
-1. marks the controller root as an App Library hierarchy
-2. recursively scans only that hierarchy
-3. finds the exact category background class when available
-4. also accepts Library/Category/Background private-class naming variants
-5. applies the independent App Library Glass material
-6. keeps mini-folder/cluster views excluded from normal Clear/Liquid Glass
+- Apple Bright — bright, luminous, clean frosted App Library reference
+- Balanced — less white/luminance, more wallpaper-owned
+- Soft — more blur and softer separation
 
-The exact `SBHLibraryCategoryPodBackgroundView` hook is retained only as an
-optional fast path.
+### Liquid Glass
+
+Default: **Crystal**
+
+- Crystal — low blur/body tint, strong wallpaper transmission, thin optical edge
+- Balanced — slightly more material body
+- Deep — more blur/native material and a denser glass feel
+
+The top search pill uses the same selected material as category cards, with only
+a small interaction lift. It no longer receives the large brightness difference
+used in Beta 3.5.
+
+## App Library hierarchy
+
+Unchanged:
+
+- outer category cards -> App Library material
+- top search pill -> same App Library material
+- mini-folder / mini-cluster inside category cards -> Apple native transparent
+- normal desktop/opened folders -> existing independent Clear / Liquid Glass
 
 ## Preferences
 
-- `AppLibraryGlassEnabled` — default OFF
-- `AppLibraryGlassStrength` — default 55
-- use **应用并注销** after changing these settings
+- `AppLibraryGlassEnabled`
+- `AppLibraryStyle`
+- `AppLibraryClearPreset`
+- `AppLibraryLiquidPreset`
 
-## Existing folder tuning
+The old `AppLibraryGlassStrength` preference is ignored by the Beta 3.6 visual
+model and is no longer exposed in Settings.
 
-Clear and Liquid Glass optical constants are unchanged from Beta 3.1/3.2.
+## Version
 
-## Version / build
-
-- package version: `0.7.4~beta3.3`
-- artifact: `GlassFolders-0.7.4-Beta3.3-DEB`
+- package: `0.7.4~beta3.6`
+- artifact: `GlassFolders-0.7.4-Beta3.6-DEB`
