@@ -1,6 +1,6 @@
-# GlassFolders 0.7.4 Beta 2.9
+# GlassFolders 0.7.4 Beta 3.0
 
-Beta 2.9 changes only the Clear contract. Liquid Glass stays on the accepted Beta 2.8 baselines.
+Beta 3.0 changes only the Clear contract. Liquid Glass stays on the accepted Beta 2.8 baselines.
 
 ## 1. Independent controls
 
