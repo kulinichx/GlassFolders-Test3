@@ -60,12 +60,13 @@ jobs:
           fi
           test -d "$SDK_EXACT"
 
-      - name: Normalize obsolete PreferenceLoader leftovers
+      - name: Preserve PreferenceLoader entry and clean old icons
         shell: bash
         run: |
           set -euo pipefail
+          # Required on clean devices so GlassFolders appears in Settings.
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders.plist
           rm -f \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders.plist \
             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png \
             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png \
             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png \
@@ -121,15 +122,28 @@ jobs:
           PREFBIN="$(find root -type f -path '*GlassFoldersPrefs.bundle/GlassFoldersPrefs' | head -n 1)"
           FILTER="$(find root -type f -path '*MobileSubstrate/DynamicLibraries/GlassFolders.plist' | head -n 1)"
           ROOT_PLIST="$(find root -type f -path '*GlassFoldersPrefs.bundle/Root.plist' | head -n 1)"
+          PREF_ENTRY="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders.plist' | head -n 1)"
           EN_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/en.lproj/Root.strings' | head -n 1)"
           ZH_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/zh-Hans.lproj/Root.strings' | head -n 1)"
 
           test -n "$DYLIB" -a -n "$PREFBIN" -a -n "$FILTER" -a -n "$ROOT_PLIST"
-          test -n "$EN_STRINGS" -a -n "$ZH_STRINGS"
+          test -n "$PREF_ENTRY" -a -n "$EN_STRINGS" -a -n "$ZH_STRINGS"
 
           file "$DYLIB" | grep -qi 'arm64e'
           file "$PREFBIN" | grep -qi 'arm64e'
           grep -q 'com.apple.springboard' "$FILTER"
+
+          python3 - "$PREF_ENTRY" <<'PY'
+          import plistlib, sys
+          with open(sys.argv[1], "rb") as f:
+              p = plistlib.load(f)
+          e = p["entry"]
+          assert e["cell"] == "PSLinkCell"
+          assert e["label"] == "GlassFolders"
+          assert e["isController"] is True
+          assert e["bundle"] == "GlassFoldersPrefs"
+          print("PreferenceLoader entry verified.")
+          PY
 
           python3 - "$ROOT_PLIST" <<'PY'
           import plistlib, sys
@@ -209,12 +223,13 @@ jobs:
           fi
           test -d "$SDK_EXACT"
 
-      - name: Normalize obsolete PreferenceLoader leftovers
+      - name: Preserve PreferenceLoader entry and clean old icons
         shell: bash
         run: |
           set -euo pipefail
+          # Required on clean devices so GlassFolders appears in Settings.
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders.plist
           rm -f \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders.plist \
             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png \
             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png \
             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png \
@@ -273,11 +288,12 @@ jobs:
           PREFBIN="$(find root -type f -path '*GlassFoldersPrefs.bundle/GlassFoldersPrefs' | head -n 1)"
           FILTER="$(find root -type f -path '*MobileSubstrate/DynamicLibraries/GlassFolders.plist' | head -n 1)"
           ROOT_PLIST="$(find root -type f -path '*GlassFoldersPrefs.bundle/Root.plist' | head -n 1)"
+          PREF_ENTRY="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders.plist' | head -n 1)"
           EN_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/en.lproj/Root.strings' | head -n 1)"
           ZH_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/zh-Hans.lproj/Root.strings' | head -n 1)"
 
           test -n "$DYLIB" -a -n "$PREFBIN" -a -n "$FILTER" -a -n "$ROOT_PLIST"
-          test -n "$EN_STRINGS" -a -n "$ZH_STRINGS"
+          test -n "$PREF_ENTRY" -a -n "$EN_STRINGS" -a -n "$ZH_STRINGS"
 
           file "$DYLIB" | grep -qi 'arm64'
           file "$PREFBIN" | grep -qi 'arm64'
@@ -288,6 +304,18 @@ jobs:
             echo "ERROR: package does not look like a standard rootless package."
             exit 1
           fi
+
+          python3 - "$PREF_ENTRY" <<'PY'
+          import plistlib, sys
+          with open(sys.argv[1], "rb") as f:
+              p = plistlib.load(f)
+          e = p["entry"]
+          assert e["cell"] == "PSLinkCell"
+          assert e["label"] == "GlassFolders"
+          assert e["isController"] is True
+          assert e["bundle"] == "GlassFoldersPrefs"
+          print("PreferenceLoader entry verified.")
+          PY
 
           python3 - "$ROOT_PLIST" <<'PY'
           import plistlib, sys
