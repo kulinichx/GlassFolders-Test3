@@ -1,0 +1,16 @@
+/* GlassFolders 1.0.0 — 简体中文 */
+
+"Folders" = "文件夹";
+"App Library" = "资源库";
+"Folder Style" = "文件夹样式";
+"Clear Strength" = "Clear 强度";
+"Liquid Glass Strength" = "Liquid Glass 强度";
+"App Library Style" = "资源库样式";
+"Follow Folder" = "跟随文件夹";
+"Apply & Respring" = "应用并注销";
+"About" = "关于";
+"Developer" = "作者";
+
+"Keeps the material clear while adding blur and depth." = "保持通透，向上增加模糊与层次。";
+"Increases glass structure, highlights, and blur." = "向上增强玻璃结构、高光与模糊。";
+"Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material." = "文件夹与资源库可独立开启。“跟随文件夹”只同步 Clear / Liquid Glass 样式；资源库使用已调好的固定玻璃效果。";

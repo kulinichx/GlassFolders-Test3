@@ -1,9 +1,11 @@
-Package: com.local.glassfolderstest3
+Package: com.kulinich.glassfolders
 Name: GlassFolders
-Version: 0.7.4~beta4.6
+Version: 1.0.0
 Architecture: iphoneos-arm64e
-Description: Beta 4.6 finalizes the settings layout with independent Folder and App Library toggles, a compact Folder style/strength section, and one App Library style selector. App Library preset controls are removed from the UI and locked internally to the accepted Clear Apple Bright and Liquid Glass Crystal baselines. Existing visual optics are unchanged.
+Description: Bring refined Clear and Liquid Glass materials to iOS folders and App Library, with independent controls, light/dark appearance tuning, and a clean bilingual Settings experience.
 Maintainer: kulinich
 Author: kulinich
 Section: Tweaks
 Depends: mobilesubstrate, preferenceloader, firmware (>= 16.0)
+Conflicts: com.local.glassfolderstest3
+Replaces: com.local.glassfolderstest3

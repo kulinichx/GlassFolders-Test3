@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 4.6 — settings cleanup and independent toggles
+ * GlassFolders 1.0.0 — commercial release candidate
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -30,7 +30,7 @@
  * No daemon / DisplayLink / Timer / gyroscope / Metal render loop.
  */
 
-static CFStringRef const GFPreferencesDomain = CFSTR("com.local.glassfolders");
+static CFStringRef const GFPreferencesDomain = CFSTR("com.kulinich.glassfolders");
 
 static BOOL GFEnabled = YES;  // Folder glass only; legacy preference key: Enabled
 static NSInteger GFStyle = 0;          // 0 Clear, 1 Liquid Glass

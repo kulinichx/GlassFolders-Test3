@@ -1,0 +1,16 @@
+/* GlassFolders 1.0.0 — English */
+
+"Folders" = "Folders";
+"App Library" = "App Library";
+"Folder Style" = "Folder Style";
+"Clear Strength" = "Clear Strength";
+"Liquid Glass Strength" = "Liquid Glass Strength";
+"App Library Style" = "App Library Style";
+"Follow Folder" = "Follow Folder";
+"Apply & Respring" = "Apply & Respring";
+"About" = "About";
+"Developer" = "Developer";
+
+"Keeps the material clear while adding blur and depth." = "Keeps the material clear while adding blur and depth.";
+"Increases glass structure, highlights, and blur." = "Increases glass structure, highlights, and blur.";
+"Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material." = "Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material.";

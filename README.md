@@ -1,55 +1,75 @@
-# GlassFolders 0.7.4 Beta 4.6
+# GlassFolders 1.0.0
 
-Beta 4.6 is the **Settings Cleanup** pass.
+A refined glass-material tweak for iOS folders and App Library.
 
-## Final settings layout
+## Features
 
-At the top of the page there are two independent master switches:
+- Clear and Liquid Glass folder styles
+- Independent Folder and App Library switches
+- Adjustable Clear and Liquid Glass strength for folders
+- App Library: Follow Folder / Clear / Liquid Glass
+- Matched App Library category cards and search field
+- Tuned light and dark appearance
+- English and Simplified Chinese Settings
+- RootHide arm64e and standard rootless arm64 build workflows
 
-- 文件夹
-- 资源库
+## App Library
 
-Disabling folder glass no longer disables App Library glass.
+App Library uses fixed, carefully tuned materials rather than exposing engineering presets:
 
-### Folder
+- Clear uses the accepted Apple Bright baseline
+- Liquid Glass uses the accepted Crystal baseline
+- Follow Folder syncs the style family while preserving App Library-specific tuning
 
-Folder controls stay simple:
+## Localization
 
-- Clear / Liquid Glass
-- Clear strength
-- Liquid Glass strength
+- English (`en`)
+- Simplified Chinese (`zh-Hans`)
 
-The strength descriptions are intentionally short.
+Product/material names **GlassFolders**, **Clear**, and **Liquid Glass** remain unchanged in both languages.
 
-### App Library
+## Package
 
-Only one public style selector remains:
+- Identifier: `com.kulinich.glassfolders`
+- Version: `1.0.0`
+- iOS: `16.0+`
+- Section: Tweaks
 
-- 跟随文件夹
-- Clear
-- Liquid Glass
+The previous test package `com.local.glassfolderstest3` is declared as conflicting/replaced to prevent both builds from installing over the same files.
 
-The old Clear/Liquid preset pickers are removed from Settings.
+## Release note
 
-Internally the accepted fixed presets are locked:
+The 1.0.0 commercial candidate locks the visual baseline from the validated Beta 4.6 code. No optical formulas were retuned during productization.
 
-- Clear = Apple Bright
-- Liquid Glass = Crystal
+---
 
-“跟随文件夹” follows only the normal folder style family. App Library keeps
-its own accepted card/search material recipes.
+# GlassFolders 1.0.0 中文说明
 
-## Visual baseline
+为 iOS 文件夹与 App 资源库提供精细调校的 Clear / Liquid Glass 玻璃材质。
 
-Beta 4.6 does **not** retune the visual effects:
+## 功能
 
-- light App Library = Beta 4.2 baseline
-- dark App Library = Beta 4.3 baseline
-- search/card unification = Beta 4.4 baseline
-- follow-folder behavior = Beta 4.5
-- desktop Clear / Liquid Glass optics = unchanged
+- 文件夹 Clear / Liquid Glass 两种样式
+- 文件夹与资源库独立开关
+- 文件夹 Clear / Liquid Glass 独立强度
+- 资源库：跟随文件夹 / Clear / Liquid Glass
+- 资源库分类卡片与搜索框统一材质
+- 浅色、深色模式分别优化
+- 英文 / 简体中文双语设置页
+- RootHide arm64e 与标准 rootless arm64 构建流程
 
-## Version
+## 资源库
 
-- package: `0.7.4~beta4.6`
-- artifact: `GlassFolders-0.7.4-Beta4.6-DEB`
+资源库不再暴露工程调试预设，而是固定使用已经确认的效果：
+
+- Clear：Apple Bright 基线
+- Liquid Glass：Crystal 基线
+- 跟随文件夹：同步 Clear / Liquid Glass 样式，但保留资源库专属材质参数
+
+## 正式包信息
+
+- Package ID：`com.kulinich.glassfolders`
+- Version：`1.0.0`
+- iOS：`16.0+`
+
+1.0.0 商业候选版只做产品化整理，不重新调整已经确认的视觉参数。

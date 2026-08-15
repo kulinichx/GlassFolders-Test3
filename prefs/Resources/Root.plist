@@ -10,37 +10,37 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.4 Beta 4.6</string>
+			<string>GlassFolders 1.0.0</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>
-			<string>文件夹</string>
+			<string>Folders</string>
 			<key>key</key>
 			<string>Enabled</string>
 			<key>default</key>
 			<true/>
 			<key>defaults</key>
-			<string>com.local.glassfolders</string>
+			<string>com.kulinich.glassfolders</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>
-			<string>资源库</string>
+			<string>App Library</string>
 			<key>key</key>
 			<string>AppLibraryGlassEnabled</string>
 			<key>default</key>
 			<false/>
 			<key>defaults</key>
-			<string>com.local.glassfolders</string>
+			<string>com.kulinich.glassfolders</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>文件夹样式</string>
+			<string>Folder Style</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -52,7 +52,7 @@
 			<key>default</key>
 			<integer>0</integer>
 			<key>defaults</key>
-			<string>com.local.glassfolders</string>
+			<string>com.kulinich.glassfolders</string>
 			<key>validTitles</key>
 			<array>
 				<string>Clear</string>
@@ -68,9 +68,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>Clear 强度</string>
+			<string>Clear Strength</string>
 			<key>footerText</key>
-			<string>保持通透，向上增加模糊与层次。</string>
+			<string>Keeps the material clear while adding blur and depth.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -84,7 +84,7 @@
 			<key>default</key>
 			<integer>55</integer>
 			<key>defaults</key>
-			<string>com.local.glassfolders</string>
+			<string>com.kulinich.glassfolders</string>
 			<key>min</key>
 			<integer>0</integer>
 			<key>max</key>
@@ -96,9 +96,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>Liquid Glass 强度</string>
+			<string>Liquid Glass Strength</string>
 			<key>footerText</key>
-			<string>向上增强玻璃结构、高光与模糊。</string>
+			<string>Increases glass structure, highlights, and blur.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -112,7 +112,7 @@
 			<key>default</key>
 			<integer>55</integer>
 			<key>defaults</key>
-			<string>com.local.glassfolders</string>
+			<string>com.kulinich.glassfolders</string>
 			<key>min</key>
 			<integer>0</integer>
 			<key>max</key>
@@ -124,7 +124,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>资源库样式</string>
+			<string>App Library Style</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -136,10 +136,10 @@
 			<key>default</key>
 			<integer>0</integer>
 			<key>defaults</key>
-			<string>com.local.glassfolders</string>
+			<string>com.kulinich.glassfolders</string>
 			<key>validTitles</key>
 			<array>
-				<string>跟随文件夹</string>
+				<string>Follow Folder</string>
 				<string>Clear</string>
 				<string>Liquid Glass</string>
 			</array>
@@ -154,13 +154,13 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>文件夹与资源库可独立开启。“跟随文件夹”只同步 Clear / Liquid Glass 样式；资源库使用已调好的固定玻璃效果。</string>
+			<string>Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSButtonCell</string>
 			<key>label</key>
-			<string>应用并注销</string>
+			<string>Apply &amp; Respring</string>
 			<key>action</key>
 			<string>respring</string>
 		</dict>
@@ -168,13 +168,13 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>关于</string>
+			<string>About</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSTitleValueCell</string>
 			<key>label</key>
-			<string>作者</string>
+			<string>Developer</string>
 			<key>get</key>
 			<string>authorValue:</string>
 		</dict>
