@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 4.4 — App Library search material unification
+ * GlassFolders 0.7.4 Beta 4.5 — App Library follow-folder integration
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -41,9 +41,13 @@ static CGFloat GFGlassStrength = 0.0;        // active style strength for existi
 // App Library remains intentionally independent from normal folders.
 static BOOL GFAppLibraryGlassEnabled = NO;
 
-// Beta 3.6 fixed material model:
+// Legacy Beta 3.6–4.4 value, retained for compatibility:
 // 0 = Clear, 1 = Liquid Glass
 static NSInteger GFAppLibraryStyle = 0;
+
+// Beta 4.5 public selector:
+// 0 = Follow Folder, 1 = Clear, 2 = Liquid Glass
+static NSInteger GFAppLibraryStyleMode = 0;
 
 // Clear: 0 Apple Bright, 1 Balanced, 2 Soft
 static NSInteger GFAppLibraryClearPreset = 0;
@@ -134,6 +138,9 @@ static void GFLoadPreferences(void) {
     GFAppLibraryStyle =
         GFReadInteger(CFSTR("AppLibraryStyle"), 0);
 
+    GFAppLibraryStyleMode =
+        GFReadInteger(CFSTR("AppLibraryStyleMode"), 0);
+
     GFAppLibraryClearPreset =
         GFReadInteger(CFSTR("AppLibraryClearPreset"), 0);
 
@@ -149,6 +156,11 @@ static void GFLoadPreferences(void) {
 
     if (GFAppLibraryStyle < 0 || GFAppLibraryStyle > 1) {
         GFAppLibraryStyle = 0;
+    }
+
+    if (GFAppLibraryStyleMode < 0 ||
+        GFAppLibraryStyleMode > 2) {
+        GFAppLibraryStyleMode = 0;
     }
 
     if (GFAppLibraryClearPreset < 0 ||
@@ -976,6 +988,29 @@ typedef struct {
 } GFAppLibraryMaterialRecipe;
 
 
+static NSInteger GFResolvedAppLibraryStyle(void) {
+    /*
+     * Beta 4.5:
+     * 0 Follow Folder -> use normal folder GFStyle
+     * 1 Clear         -> force Clear
+     * 2 Liquid Glass  -> force Liquid Glass
+     *
+     * GFStyle already uses 0 = Clear, 1 = Liquid Glass.
+     */
+    switch (GFAppLibraryStyleMode) {
+        case 1:
+            return 0;
+
+        case 2:
+            return 1;
+
+        case 0:
+        default:
+            return (GFStyle == 1) ? 1 : 0;
+    }
+}
+
+
 static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
     BOOL searchVariant,
     BOOL dark
@@ -985,7 +1020,9 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
         0.34, 0.14, 0.22, 0.08
     };
 
-    if (GFAppLibraryStyle == 0) {
+    NSInteger resolvedStyle = GFResolvedAppLibraryStyle();
+
+    if (resolvedStyle == 0) {
         /*
          * CLEAR
          *
@@ -1258,7 +1295,7 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
             .CGColor;
 
     BOOL liquid =
-        (GFAppLibraryStyle == 1);
+        (GFResolvedAppLibraryStyle() == 1);
 
     CGFloat bloomAlpha = 0.0;
     CGFloat rimAlpha = 0.0;
@@ -1376,7 +1413,7 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
     }
 
     BOOL liquid =
-        (GFAppLibraryStyle == 1);
+        (GFResolvedAppLibraryStyle() == 1);
 
     /*
      * Broad corner luminosity. It occupies AREA, not an edge strip.
