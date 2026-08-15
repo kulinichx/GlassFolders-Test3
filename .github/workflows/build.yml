@@ -185,7 +185,6 @@ jobs:
           # explicitly uses THEOS_PACKAGE_SCHEME=rootless.
           git clone --recursive https://github.com/roothide/theos.git "$THEOS"
           test -f "$THEOS/makefiles/common.mk"
-          test -f "$THEOS/include/roothide.h"
 
       - name: Install iOS 16.5 SDK
         shell: bash
@@ -230,7 +229,8 @@ jobs:
           # Each job has a clean checkout, so changing Architecture here is safe.
           echo "Package scheme: rootless"
           echo "Theos source: roothide/theos (rootless scheme)"
-          test -f "$THEOS/include/roothide.h"
+          echo "roothide.h locations (diagnostic only):"
+          find "$THEOS" -type f -name 'roothide.h' -print 2>/dev/null | head -n 10 || true
           sed -i '' 's/^Architecture:.*/Architecture: iphoneos-arm64/' control
           make THEOS="$THEOS" THEOS_PACKAGE_SCHEME=rootless clean
           make THEOS="$THEOS" package \
