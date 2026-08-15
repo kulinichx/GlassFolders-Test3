@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 3.3 — App Library controller-link pass
+ * GlassFolders 0.7.4 Beta 3.5 — App Library search-container link pass
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -819,6 +819,11 @@ static char kGFAppLibraryOverlayAssociationKey;
 static char kGFAppLibraryOriginalAlphaKey;
 static char kGFAppLibraryRootMarkerKey;
 
+// Beta 3.4: App Library search field shares the App Library glass setting.
+static char kGFAppLibrarySearchOverlayAssociationKey;
+static char kGFAppLibrarySearchOriginalBackgroundColorKey;
+static char kGFAppLibrarySearchNativeBackgroundAlphaKey;
+
 static BOOL GFIsInternalAppLibraryPodVisual(UIView *view) {
     NSNumber *marker = objc_getAssociatedObject(
         view,
@@ -921,6 +926,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
+@property (nonatomic, assign) BOOL gfSearchVariant;
 - (instancetype)initWithStrength:(CGFloat)strength;
 - (void)setPreferredRadius:(CGFloat)radius;
 - (void)gfRefreshMaterial;
@@ -977,17 +983,42 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
      * - no opaque pink/white slab
      * - medium blur, small luminance lift, restrained neutral tint
      */
-    CGFloat blurRadius = dark
-        ? (5.0 + 7.0 * material)
-        : (4.2 + 6.6 * material);
+    CGFloat blurRadius = 0.0;
+    CGFloat saturation = 1.0;
+    CGFloat brightness = 0.0;
 
-    CGFloat saturation = dark
-        ? (1.08 + 0.14 * material)
-        : (1.10 + 0.18 * material);
+    if (self.gfSearchVariant) {
+        /*
+         * The reference App Library search pill is a little more luminous
+         * than the category cards, but still wallpaper-owned.
+         */
+        blurRadius = dark
+            ? (6.0 + 7.4 * material)
+            : (5.4 + 7.2 * material);
 
-    CGFloat brightness = dark
-        ? (0.006 + 0.014 * material)
-        : (0.004 + 0.012 * material);
+        saturation = dark
+            ? (1.09 + 0.15 * material)
+            : (1.12 + 0.20 * material);
+
+        brightness = dark
+            ? (0.010 + 0.018 * material)
+            : (0.016 + 0.020 * material);
+    } else {
+        /*
+         * Beta 3.3 category-card recipe — intentionally unchanged.
+         */
+        blurRadius = dark
+            ? (5.0 + 7.0 * material)
+            : (4.2 + 6.6 * material);
+
+        saturation = dark
+            ? (1.08 + 0.14 * material)
+            : (1.10 + 0.18 * material);
+
+        brightness = dark
+            ? (0.006 + 0.014 * material)
+            : (0.004 + 0.012 * material);
+    }
 
     if (isBackdropLayer) {
         id saturate = GFCreateCAFilter(@"colorSaturate");
@@ -1021,15 +1052,30 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
      * Keep the body thin. The native pod remains above us at low opacity and
      * contributes Apple's own material texture/shape.
      */
-    self.gfTintView.alpha = dark
-        ? (0.010 + 0.020 * tint)
-        : (0.006 + 0.016 * tint);
+    if (self.gfSearchVariant) {
+        self.gfTintView.alpha = dark
+            ? (0.014 + 0.024 * tint)
+            : (0.012 + 0.026 * tint);
 
-    self.layer.borderWidth = 0.34;
-    self.layer.borderColor =
-        [UIColor colorWithWhite:1.0
-                          alpha:(dark ? 0.105 : 0.145)]
-            .CGColor;
+        self.layer.borderWidth = 0.42;
+        self.layer.borderColor =
+            [UIColor colorWithWhite:1.0
+                              alpha:(dark ? 0.135 : 0.180)]
+                .CGColor;
+    } else {
+        /*
+         * Beta 3.3 category-card body — intentionally unchanged.
+         */
+        self.gfTintView.alpha = dark
+            ? (0.010 + 0.020 * tint)
+            : (0.006 + 0.016 * tint);
+
+        self.layer.borderWidth = 0.34;
+        self.layer.borderColor =
+            [UIColor colorWithWhite:1.0
+                              alpha:(dark ? 0.105 : 0.145)]
+                .CGColor;
+    }
 }
 
 - (void)layoutSubviews {
@@ -1184,6 +1230,696 @@ static void GFUpdateRealAppLibraryPod(UIView *pod) {
 }
 
 
+
+#pragma mark - Beta 3.5 App Library Search Glass
+
+/*
+ * Beta 3.4 required the candidate itself to look like a Search class.
+ * On the tested SpringBoard the visible pill is a private wrapper, so the
+ * category cards were hit but the search pill was never selected.
+ *
+ * Beta 3.5 resolves the search UI in two stages:
+ *
+ * 1) locate a real UITextField / UISearchTextField / UISearchBar descendant,
+ *    then walk UP to the wide rounded pill container;
+ * 2) if that UIKit input is hidden behind private wrappers, fall back to the
+ *    unique wide + shallow + rounded view near the top of SBLibraryViewController.
+ */
+
+static BOOL GFAppLibrarySearchGeometryMatches(
+    UIView *view,
+    UIView *root
+) {
+    if (!view ||
+        !root ||
+        view == root ||
+        view.hidden ||
+        view.alpha <= 0.01) {
+        return NO;
+    }
+
+    CGRect rect =
+        [view convertRect:view.bounds
+                   toView:root];
+
+    CGFloat rootWidth =
+        CGRectGetWidth(root.bounds);
+    CGFloat rootHeight =
+        CGRectGetHeight(root.bounds);
+
+    CGFloat width =
+        CGRectGetWidth(rect);
+    CGFloat height =
+        CGRectGetHeight(rect);
+
+    if (rootWidth <= 1.0 ||
+        rootHeight <= 1.0 ||
+        width <= 1.0 ||
+        height <= 1.0) {
+        return NO;
+    }
+
+    /*
+     * Intentionally broad enough for iPhone display-scale/layout variants.
+     * The real App Library pill occupies roughly 65–92% of the page width,
+     * is shallow, and lives in the first quarter of the page.
+     */
+    BOOL wideEnough =
+        width >= rootWidth * 0.52 &&
+        width <= rootWidth * 0.98;
+
+    BOOL shallowEnough =
+        height >= 34.0 &&
+        height <= 104.0;
+
+    BOOL nearTop =
+        CGRectGetMinY(rect) >= -12.0 &&
+        CGRectGetMidY(rect) <= rootHeight * 0.28;
+
+    BOOL pillAspect =
+        width / MAX(height, 1.0) >= 3.2;
+
+    return wideEnough &&
+           shallowEnough &&
+           nearTop &&
+           pillAspect;
+}
+
+
+static BOOL GFIsUIKitSearchInputView(
+    UIView *view
+) {
+    if (!view) return NO;
+
+    if ([view isKindOfClass:[UISearchBar class]] ||
+        [view isKindOfClass:[UITextField class]]) {
+        return YES;
+    }
+
+    Class searchTextFieldClass =
+        NSClassFromString(@"UISearchTextField");
+
+    if (searchTextFieldClass &&
+        [view isKindOfClass:searchTextFieldClass]) {
+        return YES;
+    }
+
+    return NO;
+}
+
+
+static BOOL GFClassNameLooksSearchRelated(
+    UIView *view
+) {
+    if (!view) return NO;
+
+    NSString *name =
+        NSStringFromClass(view.class);
+
+    NSArray<NSString *> *tokens = @[
+        @"Search",
+        @"Spotlight",
+        @"Query"
+    ];
+
+    for (NSString *token in tokens) {
+        if ([name rangeOfString:token
+                        options:NSCaseInsensitiveSearch].location
+                != NSNotFound) {
+            return YES;
+        }
+    }
+
+    return NO;
+}
+
+
+static void GFFindBestAppLibrarySearchInput(
+    UIView *view,
+    UIView *root,
+    UIView **bestView,
+    CGFloat *bestScore
+) {
+    if (!view ||
+        !root ||
+        !bestView ||
+        !bestScore) {
+        return;
+    }
+
+    if (view != root &&
+        !view.hidden &&
+        view.alpha > 0.01) {
+
+        CGFloat score = -CGFLOAT_MAX;
+
+        if (GFIsUIKitSearchInputView(view)) {
+            score = 200.0;
+        } else if (GFClassNameLooksSearchRelated(view)) {
+            score = 100.0;
+        }
+
+        if (score > -CGFLOAT_MAX / 2.0) {
+            CGRect rect =
+                [view convertRect:view.bounds
+                           toView:root];
+
+            CGFloat rootHeight =
+                MAX(
+                    CGRectGetHeight(root.bounds),
+                    1.0
+                );
+
+            /*
+             * Prefer actual visible search inputs near the top.
+             * Width is intentionally NOT required here; the real text field
+             * can be narrower than its outer glass pill.
+             */
+            if (CGRectGetMidY(rect) <=
+                    rootHeight * 0.30 &&
+                CGRectGetHeight(rect) >= 20.0 &&
+                CGRectGetHeight(rect) <= 110.0) {
+
+                if ([view isKindOfClass:[UITextField class]]) {
+                    score += 60.0;
+                }
+
+                if ([view isKindOfClass:[UISearchBar class]]) {
+                    score += 30.0;
+                }
+
+                score +=
+                    MIN(
+                        25.0,
+                        CGRectGetWidth(rect) * 0.04
+                    );
+
+                if (score > *bestScore) {
+                    *bestScore = score;
+                    *bestView = view;
+                }
+            }
+        }
+    }
+
+    for (UIView *child in [view.subviews copy]) {
+        GFFindBestAppLibrarySearchInput(
+            child,
+            root,
+            bestView,
+            bestScore
+        );
+    }
+}
+
+
+static CGFloat GFAppLibrarySearchContainerScore(
+    UIView *view,
+    UIView *root
+) {
+    if (!GFAppLibrarySearchGeometryMatches(
+            view,
+            root
+        )) {
+        return -CGFLOAT_MAX;
+    }
+
+    if ([view isKindOfClass:[UILabel class]] ||
+        [view isKindOfClass:[UIImageView class]] ||
+        [view isKindOfClass:[UIButton class]] ||
+        [view isKindOfClass:[UIWindow class]]) {
+        return -CGFLOAT_MAX;
+    }
+
+    CGRect rect =
+        [view convertRect:view.bounds
+                   toView:root];
+
+    CGFloat rootWidth =
+        MAX(
+            CGRectGetWidth(root.bounds),
+            1.0
+        );
+
+    CGFloat rootHeight =
+        MAX(
+            CGRectGetHeight(root.bounds),
+            1.0
+        );
+
+    CGFloat width =
+        CGRectGetWidth(rect);
+
+    CGFloat height =
+        MAX(
+            CGRectGetHeight(rect),
+            1.0
+        );
+
+    CGFloat radius =
+        view.layer.cornerRadius;
+
+    CGFloat score = 0.0;
+
+    /*
+     * Geometry dominates the fallback: very wide, close to the top, and
+     * pill-shaped. This avoids requiring any particular private class name.
+     */
+    score +=
+        70.0 *
+        MIN(
+            1.0,
+            width / rootWidth
+        );
+
+    score -=
+        24.0 *
+        (CGRectGetMidY(rect) /
+         rootHeight);
+
+    CGFloat expectedHeight = 56.0;
+    score -=
+        MIN(
+            20.0,
+            fabs(height - expectedHeight) * 0.25
+        );
+
+    if (radius >= height * 0.30) {
+        score += 24.0;
+    } else if (radius >= height * 0.18) {
+        score += 12.0;
+    }
+
+    if (view.clipsToBounds ||
+        view.layer.masksToBounds) {
+        score += 6.0;
+    }
+
+    if (GFClassNameLooksSearchRelated(view)) {
+        score += 35.0;
+    }
+
+    NSString *name =
+        NSStringFromClass(view.class);
+
+    NSArray<NSString *> *materialTokens = @[
+        @"Platter",
+        @"Pill",
+        @"Material",
+        @"Backdrop",
+        @"Background"
+    ];
+
+    for (NSString *token in materialTokens) {
+        if ([name rangeOfString:token
+                        options:NSCaseInsensitiveSearch].location
+                != NSNotFound) {
+            score += 8.0;
+            break;
+        }
+    }
+
+    return score;
+}
+
+
+static UIView *GFResolveAppLibrarySearchContainerFromInput(
+    UIView *input,
+    UIView *root
+) {
+    if (!input || !root) {
+        return nil;
+    }
+
+    UIView *best = nil;
+    CGFloat bestScore = -CGFLOAT_MAX;
+
+    UIView *node = input;
+
+    /*
+     * Start at the input and climb only a few wrappers. This is the key
+     * Beta 3.5 fix: the visible pill can be a private parent whose own class
+     * name contains no "Search" token at all.
+     */
+    for (NSInteger depth = 0;
+         node &&
+         node != root &&
+         depth < 9;
+         depth++) {
+
+        CGFloat score =
+            GFAppLibrarySearchContainerScore(
+                node,
+                root
+            );
+
+        if (score > bestScore) {
+            bestScore = score;
+            best = node;
+        }
+
+        node = node.superview;
+    }
+
+    return best;
+}
+
+
+static void GFFindGeometrySearchContainer(
+    UIView *view,
+    UIView *root,
+    UIView **bestView,
+    CGFloat *bestScore
+) {
+    if (!view ||
+        !root ||
+        !bestView ||
+        !bestScore) {
+        return;
+    }
+
+    if (view != root) {
+        CGFloat score =
+            GFAppLibrarySearchContainerScore(
+                view,
+                root
+            );
+
+        if (score > *bestScore) {
+            *bestScore = score;
+            *bestView = view;
+        }
+    }
+
+    for (UIView *child in [view.subviews copy]) {
+        GFFindGeometrySearchContainer(
+            child,
+            root,
+            bestView,
+            bestScore
+        );
+    }
+}
+
+
+static UIView *GFFindAppLibrarySearchContainer(
+    UIView *root
+) {
+    if (!root) return nil;
+
+    UIView *input = nil;
+    CGFloat inputScore = -CGFLOAT_MAX;
+
+    GFFindBestAppLibrarySearchInput(
+        root,
+        root,
+        &input,
+        &inputScore
+    );
+
+    UIView *fromInput =
+        GFResolveAppLibrarySearchContainerFromInput(
+            input,
+            root
+        );
+
+    if (fromInput) {
+        return fromInput;
+    }
+
+    /*
+     * Last-resort geometry fallback.
+     *
+     * This intentionally does NOT require Search/UISearch* class names.
+     * It runs only inside the already-confirmed SBLibraryViewController root.
+     */
+    UIView *geometryCandidate = nil;
+    CGFloat geometryScore = -CGFLOAT_MAX;
+
+    GFFindGeometrySearchContainer(
+        root,
+        root,
+        &geometryCandidate,
+        &geometryScore
+    );
+
+    /*
+     * Reject weak geometry matches rather than touching a random header.
+     */
+    if (geometryScore < 42.0) {
+        return nil;
+    }
+
+    return geometryCandidate;
+}
+
+
+static BOOL GFLooksLikeNativeSearchBackgroundView(
+    UIView *view
+) {
+    if (!view ||
+        [view isKindOfClass:[GFAppLibraryGlassView class]]) {
+        return NO;
+    }
+
+    NSString *name =
+        NSStringFromClass(view.class);
+
+    NSArray<NSString *> *tokens = @[
+        @"Background",
+        @"Backdrop",
+        @"Material",
+        @"Platter",
+        @"Pill"
+    ];
+
+    for (NSString *token in tokens) {
+        if ([name rangeOfString:token
+                        options:NSCaseInsensitiveSearch].location
+                != NSNotFound) {
+            return YES;
+        }
+    }
+
+    return NO;
+}
+
+
+static void GFSetNativeSearchBackgroundsDimmed(
+    UIView *view,
+    BOOL dimmed
+) {
+    if (!view) return;
+
+    for (UIView *child in [view.subviews copy]) {
+        if ([child isKindOfClass:[GFAppLibraryGlassView class]]) {
+            continue;
+        }
+
+        if (GFLooksLikeNativeSearchBackgroundView(child)) {
+            NSNumber *original =
+                objc_getAssociatedObject(
+                    child,
+                    &kGFAppLibrarySearchNativeBackgroundAlphaKey
+                );
+
+            if (dimmed) {
+                if (!original) {
+                    objc_setAssociatedObject(
+                        child,
+                        &kGFAppLibrarySearchNativeBackgroundAlphaKey,
+                        @(child.alpha),
+                        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                    );
+                }
+
+                /*
+                 * Keep a trace of Apple's original search material so its
+                 * internal shading still participates, but remove the dark
+                 * opaque slab that was visible in Beta 3.3.
+                 */
+                child.alpha = 0.10;
+            } else if (original) {
+                child.alpha = original.doubleValue;
+
+                objc_setAssociatedObject(
+                    child,
+                    &kGFAppLibrarySearchNativeBackgroundAlphaKey,
+                    nil,
+                    OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                );
+            }
+        }
+
+        GFSetNativeSearchBackgroundsDimmed(
+            child,
+            dimmed
+        );
+    }
+}
+
+
+static GFAppLibraryGlassView *GFAppLibrarySearchOverlay(
+    UIView *searchView
+) {
+    return (GFAppLibraryGlassView *)
+        objc_getAssociatedObject(
+            searchView,
+            &kGFAppLibrarySearchOverlayAssociationKey
+        );
+}
+
+
+static void GFRestoreAppLibrarySearchView(
+    UIView *searchView
+) {
+    if (!searchView) return;
+
+    GFAppLibraryGlassView *overlay =
+        GFAppLibrarySearchOverlay(searchView);
+
+    if (overlay) {
+        [overlay removeFromSuperview];
+
+        objc_setAssociatedObject(
+            searchView,
+            &kGFAppLibrarySearchOverlayAssociationKey,
+            nil,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+
+    id originalBackground =
+        objc_getAssociatedObject(
+            searchView,
+            &kGFAppLibrarySearchOriginalBackgroundColorKey
+        );
+
+    if (originalBackground) {
+        searchView.backgroundColor =
+            (originalBackground == [NSNull null])
+                ? nil
+                : (UIColor *)originalBackground;
+
+        objc_setAssociatedObject(
+            searchView,
+            &kGFAppLibrarySearchOriginalBackgroundColorKey,
+            nil,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+
+    GFSetNativeSearchBackgroundsDimmed(
+        searchView,
+        NO
+    );
+}
+
+
+static void GFUpdateAppLibrarySearchView(
+    UIView *root
+) {
+    if (!root) return;
+
+    UIView *candidate =
+        GFFindAppLibrarySearchContainer(
+            root
+        );
+
+    if (!candidate) {
+        return;
+    }
+
+    BOOL enabled =
+        GFEnabled &&
+        GFAppLibraryGlassEnabled;
+
+    if (!enabled) {
+        GFRestoreAppLibrarySearchView(candidate);
+        return;
+    }
+
+    id savedBackground =
+        objc_getAssociatedObject(
+            candidate,
+            &kGFAppLibrarySearchOriginalBackgroundColorKey
+        );
+
+    if (!savedBackground) {
+        UIColor *originalColor =
+            candidate.backgroundColor;
+
+        objc_setAssociatedObject(
+            candidate,
+            &kGFAppLibrarySearchOriginalBackgroundColorKey,
+            originalColor ?: (id)[NSNull null],
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+
+    candidate.backgroundColor =
+        UIColor.clearColor;
+
+    GFSetNativeSearchBackgroundsDimmed(
+        candidate,
+        YES
+    );
+
+    GFAppLibraryGlassView *overlay =
+        GFAppLibrarySearchOverlay(candidate);
+
+    if (!overlay) {
+        overlay =
+            [[GFAppLibraryGlassView alloc]
+                initWithStrength:
+                    GFAppLibraryGlassStrength];
+
+        overlay.gfSearchVariant = YES;
+        overlay.gfStrength =
+            GFAppLibraryGlassStrength;
+        [overlay gfRefreshMaterial];
+
+        objc_setAssociatedObject(
+            candidate,
+            &kGFAppLibrarySearchOverlayAssociationKey,
+            overlay,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+
+        [candidate insertSubview:overlay
+                         atIndex:0];
+    } else {
+        overlay.gfSearchVariant = YES;
+        overlay.gfStrength =
+            GFAppLibraryGlassStrength;
+        [overlay gfRefreshMaterial];
+
+        if (overlay.superview != candidate) {
+            [overlay removeFromSuperview];
+            [candidate insertSubview:overlay
+                             atIndex:0];
+        } else {
+            [candidate sendSubviewToBack:overlay];
+        }
+    }
+
+    overlay.frame = candidate.bounds;
+    overlay.autoresizingMask =
+        UIViewAutoresizingFlexibleWidth |
+        UIViewAutoresizingFlexibleHeight;
+
+    CGFloat radius =
+        candidate.layer.cornerRadius;
+
+    if (radius <= 0.0) {
+        radius =
+            CGRectGetHeight(candidate.bounds) * 0.50;
+    }
+
+    [overlay setPreferredRadius:radius];
+}
+
+
 /*
  * Normal folder icons and App Library mini-clusters both pass through
  * SBFolderIconImageView. The old all-or-nothing hook therefore painted our
@@ -1320,6 +2056,12 @@ static void GFRefreshAppLibraryController(
     );
 
     GFRefreshAppLibraryDescendants(root);
+
+    /*
+     * Beta 3.4: the top App Library search pill shares the same independent
+     * App Library glass switch/strength as the category cards.
+     */
+    GFUpdateAppLibrarySearchView(root);
 }
 
 
@@ -1354,6 +2096,24 @@ static void GFRefreshAppLibraryController(
             GFRefreshAppLibraryController(strongSelf);
         }
     });
+
+    /*
+     * The search wrapper can be attached one layout phase later than category
+     * pods. A single short delayed refresh is cheap and avoids a global hook.
+     */
+    dispatch_after(
+        dispatch_time(
+            DISPATCH_TIME_NOW,
+            (int64_t)(0.18 * NSEC_PER_SEC)
+        ),
+        dispatch_get_main_queue(),
+        ^{
+            UIViewController *strongSelf = weakSelf;
+            if (strongSelf) {
+                GFRefreshAppLibraryController(strongSelf);
+            }
+        }
+    );
 }
 
 - (void)viewDidLayoutSubviews {
