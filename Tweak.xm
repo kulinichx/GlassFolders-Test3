@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 3.9 — Shared desktop/App Library material
+ * GlassFolders 0.7.4 Beta 4.0 — App Library optical balance
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -1128,20 +1128,20 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
             case 1: // Balanced
                 referenceStrength = 0.72;
                 compactBlurScale = 1.18;
-                nativePodAlpha = 0.14;
+                nativePodAlpha = 0.12;
                 break;
 
             case 2: // Deep
                 referenceStrength = 0.78;
                 compactBlurScale = 1.72;
-                nativePodAlpha = 0.21;
+                nativePodAlpha = 0.19;
                 break;
 
             case 0:
             default: // Crystal = desktop high-strength Liquid language
                 referenceStrength = 0.95;
                 compactBlurScale = 0.96;
-                nativePodAlpha = 0.10;
+                nativePodAlpha = 0.075;
                 break;
         }
 
@@ -1191,12 +1191,12 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
          * App-Library outline.
          */
         r.borderWidth = dark
-            ? 0.34
-            : 0.26;
+            ? 0.30
+            : 0.20;
 
         r.borderAlpha = dark
-            ? (0.025 + 0.040 * edge)
-            : (0.006 + 0.010 * edge);
+            ? (0.020 + 0.032 * edge)
+            : (0.004 + 0.007 * edge);
 
         r.nativePodAlpha =
             nativePodAlpha;
@@ -1220,20 +1220,28 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
          * Compact CAGradient representation of the same desktop rail energy.
          * No full perimeter / no inner ring.
          */
+        /*
+         * Beta 4.0 optical balance:
+         * keep desktop edge authority, but stop rendering it as a bright
+         * horizontal "cap". The narrow top event is reduced by ~28% and a
+         * wider/softer upper-left bloom carries the glass presence.
+         */
         r.topSpecularAlpha =
             MIN(
-                dark ? 0.34 : 0.38,
-                primaryFilament * 0.92
+                dark ? 0.26 : 0.28,
+                primaryFilament * 0.66
             );
 
         r.upperLeftBloomAlpha =
-            r.topSpecularAlpha *
-            0.78;
+            MIN(
+                dark ? 0.25 : 0.29,
+                primaryFilament * 0.72
+            );
 
         r.lowerLeftGlintAlpha =
             MIN(
-                dark ? 0.17 : 0.15,
-                lowerLeftTransition * 1.35
+                dark ? 0.15 : 0.13,
+                lowerLeftTransition * 1.18
             );
     }
 
@@ -1250,9 +1258,9 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
             r.tintAlpha + (dark ? 0.002 : 0.002)
         );
 
-        r.topSpecularAlpha *= 1.04;
-        r.upperLeftBloomAlpha *= 0.96;
-        r.lowerLeftGlintAlpha *= 0.82;
+        r.topSpecularAlpha *= 0.92;
+        r.upperLeftBloomAlpha *= 0.98;
+        r.lowerLeftGlintAlpha *= 0.78;
 
         r.nativeSearchAlpha =
             MAX(
@@ -1415,31 +1423,35 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
         (id)[UIColor colorWithWhite:1.0
                               alpha:0.0].CGColor,
         (id)[UIColor colorWithWhite:1.0
-                              alpha:topAlpha * 0.74].CGColor,
+                              alpha:topAlpha * 0.58].CGColor,
         (id)[UIColor colorWithWhite:1.0
                               alpha:topAlpha].CGColor,
         (id)[UIColor colorWithWhite:1.0
-                              alpha:topAlpha * 0.48].CGColor,
+                              alpha:topAlpha * 0.34].CGColor,
+        (id)[UIColor colorWithWhite:1.0
+                              alpha:topAlpha * 0.08].CGColor,
         (id)[UIColor colorWithWhite:1.0
                               alpha:0.0].CGColor
     ];
 
     self.gfTopSpecularLayer.locations =
-        @[@0.00, @0.10, @0.38, @0.72, @1.00];
+        @[@0.00, @0.08, @0.27, @0.52, @0.76, @1.00];
 
     self.gfUpperLeftBloomLayer.colors = @[
         (id)[UIColor colorWithWhite:1.0
-                              alpha:bloomAlpha].CGColor,
+                              alpha:bloomAlpha * 0.82].CGColor,
         (id)[UIColor colorWithWhite:1.0
-                              alpha:bloomAlpha * 0.48].CGColor,
+                              alpha:bloomAlpha * 0.50].CGColor,
         (id)[UIColor colorWithWhite:1.0
-                              alpha:bloomAlpha * 0.12].CGColor,
+                              alpha:bloomAlpha * 0.20].CGColor,
+        (id)[UIColor colorWithWhite:1.0
+                              alpha:bloomAlpha * 0.05].CGColor,
         (id)[UIColor colorWithWhite:1.0
                               alpha:0.0].CGColor
     ];
 
     self.gfUpperLeftBloomLayer.locations =
-        @[@0.00, @0.30, @0.62, @1.00];
+        @[@0.00, @0.24, @0.50, @0.74, @1.00];
 
     self.gfLowerLeftGlintLayer.colors = @[
         (id)[UIColor colorWithWhite:1.0
@@ -1485,21 +1497,35 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
      *
      * None of these layers traces the whole perimeter.
      */
-    CGFloat topHeight =
-        MIN(
-            9.0,
-            MAX(4.4, radius * 0.26)
+    BOOL liquid =
+        (GFAppLibraryStyle == 1);
+
+    CGFloat topHeight = liquid
+        ? MIN(
+            7.2,
+            MAX(3.8, radius * 0.21)
+        )
+        : MIN(
+            8.6,
+            MAX(4.2, radius * 0.24)
         );
+
+    CGFloat boundsWidth =
+        CGRectGetWidth(bounds);
+
+    CGFloat topWidth = liquid
+        ? boundsWidth * (self.gfSearchVariant ? 0.64 : 0.70)
+        : boundsWidth * (self.gfSearchVariant ? 0.78 : 0.84);
+
+    CGFloat topX = liquid
+        ? boundsWidth * 0.045
+        : boundsWidth * 0.035;
 
     self.gfTopSpecularLayer.frame =
         CGRectMake(
-            MAX(2.0, radius * 0.08),
+            topX,
             0.35,
-            MAX(
-                0.0,
-                CGRectGetWidth(bounds) -
-                MAX(4.0, radius * 0.16)
-            ),
+            MAX(0.0, topWidth),
             topHeight
         );
 
@@ -1509,16 +1535,19 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
     CGFloat bloomSize =
         MIN(
             MIN(
-                CGRectGetWidth(bounds) * 0.48,
-                CGRectGetHeight(bounds) * 0.48
+                CGRectGetWidth(bounds) * (liquid ? 0.52 : 0.46),
+                CGRectGetHeight(bounds) * (liquid ? 0.52 : 0.46)
             ),
-            MAX(48.0, radius * 2.35)
+            MAX(
+                liquid ? 56.0 : 48.0,
+                radius * (liquid ? 2.65 : 2.30)
+            )
         );
 
     self.gfUpperLeftBloomLayer.frame =
         CGRectMake(
-            0.0,
-            0.0,
+            -MAX(0.0, radius * 0.08),
+            -MAX(0.0, radius * 0.05),
             bloomSize,
             bloomSize
         );
@@ -1535,14 +1564,20 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
      */
     CGFloat glintWidth =
         MIN(
-            CGRectGetWidth(bounds) * 0.30,
-            MAX(46.0, radius * 1.90)
+            CGRectGetWidth(bounds) * (liquid ? 0.24 : 0.27),
+            MAX(
+                liquid ? 38.0 : 42.0,
+                radius * (liquid ? 1.55 : 1.72)
+            )
         );
 
     CGFloat glintHeight =
         MIN(
-            5.5,
-            MAX(3.0, radius * 0.145)
+            liquid ? 4.4 : 5.0,
+            MAX(
+                liquid ? 2.5 : 2.8,
+                radius * (liquid ? 0.115 : 0.130)
+            )
         );
 
     self.gfLowerLeftGlintLayer.frame =
