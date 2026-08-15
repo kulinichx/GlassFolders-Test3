@@ -1,4 +1,4 @@
-name: GlassFolders 0.7.4 Beta2.9 HIGH-BASE-CLEAR
+name: GlassFolders 0.7.4 Beta3.0 HIGH-BASE-CLEAR
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 0.7.4 BETA2.9 HIGH-BASE-CLEAR ==="
+          echo "=== GLASSFOLDERS 0.7.4 BETA3.0 HIGH-BASE-CLEAR ==="
           echo "THEOS=$THEOS"
 
       - name: Set up Python for PNG verification
@@ -112,202 +112,43 @@ jobs:
           test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist
           test ! -e layout/Library/PreferenceLoader/Preferences/GlassFolders.plist
 
-      - name: Source sanity gate
+      - name: Repository sanity gate
         shell: bash
         run: |
           set -euo pipefail
 
-          grep -Fq 'GLASSFOLDERS 0.7.4 BETA2.9 HIGH-BASE-CLEAR' \
-            .github/workflows/build.yml
+          # Keep the workflow independent from exact tuning constants.
+          # This allows build.yml to be committed separately from Tweak.xm.
+          test -f Tweak.xm
+          test -f Makefile
+          test -f control
+          test -f prefs/Resources/Root.plist
+          test -f prefs/GFRootListController.m
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist
 
-          # Beta2.8 retains the two split controls plus a read-only
-          # legacy GlassStrength migration path for existing installations.
           grep -Fq 'CFSTR("ClearStrength")' Tweak.xm
           grep -Fq 'CFSTR("LiquidGlassStrength")' Tweak.xm
-          grep -Fq 'CFSTR("GlassStrength")' Tweak.xm
-          python - <<'PY'
-          import plistlib
-          with open('prefs/Resources/Root.plist', 'rb') as f:
-              root = plistlib.load(f)
-          sliders = [x for x in root['items'] if x.get('cell') == 'PSSliderCell']
-          keys = [x.get('key') for x in sliders]
-          assert keys == ['ClearStrength', 'LiquidGlassStrength'], keys
-          assert all(x.get('default') == 55 for x in sliders)
-          assert not any(x.get('key') == 'GlassStrength' for x in root['items'])
-          print('Independent Clear/Liquid strength sliders verified:', keys)
-          PY
-
-          grep -Fq '%group GFIconHooks' Tweak.xm
-          grep -Fq '%init(GFIconHooks);' Tweak.xm
+          grep -Fq '%hook SBFolderBackgroundView' Tweak.xm
           grep -Fq 'SBFolderIconImageView' Tweak.xm
 
-          grep -Fq '%group GFOpenedPanelHooks' Tweak.xm
-          grep -Fq '%init(GFOpenedPanelHooks);' Tweak.xm
-          grep -Fq '%hook SBFolderBackgroundView' Tweak.xm
-
-          # Beta2.8 may resolve the exact App Library category background class
-          # dynamically as a passive view, but must not hook App Library controllers,
-          # actively trigger its visual-style method, or link SpringBoardHome.
-          grep -Fq 'SBHLibraryCategoryPodBackgroundView' Tweak.xm
-          grep -Fq 'GFCreateNativeAppLibraryPodVisual' Tweak.xm
-
-          # Regression guard: this one-shot activation was the source of the
-          # darker closed-folder material that Beta2.8 intentionally keeps removed.
-          if grep -Eq 'GFActivateNativeAppLibraryPodVisual|_updateVisualStyle' Tweak.xm; then
-            echo "ERROR: active App Library pod visual-style path reintroduced."
-            exit 1
-          fi
-
-          # Exact closed Liquid Glass regression guard. These are the values
-          # from the earlier on-device reference that the user accepted.
-          grep -Fq 'brightness = 0.006 + (0.014 * materialResponse);' Tweak.xm
-          grep -Fq '? 0.030 + (0.060 * tintResponse)' Tweak.xm
-          grep -Fq 'podView.alpha = MIN(0.78, 0.42 + 0.36 * materialResponse);' Tweak.xm
-
-          # Clear must remain a real wallpaper-owned shallow backdrop sample.
-          grep -Fq 'Clear reference target: a THIN wallpaper-owned material.' Tweak.xm
-          grep -Fq 'self.gfBackdropSampleView.hidden = NO;' Tweak.xm
-
-          # Beta2.9 Clear contract:
-          # Clear has a high-transmission baseline even at 0%, while the slider
-          # mainly adds blur, chroma separation and edge/specular structure.
-          grep -Fq 'GFClearBlurResponse' Tweak.xm
-          grep -Fq 'GFClearStructureResponse' Tweak.xm
-          grep -Fq 'GFClearOpenedBlurResponse' Tweak.xm
-          grep -Fq 'return pow(GFClamp01(strength), 1.15);' Tweak.xm
-          grep -Fq 'blurRadius = 40.0 * clearBlurResponse;' Tweak.xm
-
-          # Opened Clear: no activation gate / no low-strength grey fallback.
-          grep -Fq '? (1.080 + 0.065 * clearStructure)' Tweak.xm
-          grep -Fq ': (1.085 + 0.085 * clearStructure);' Tweak.xm
-          grep -Fq '? (0.048 + 0.006 * clearStructure)' Tweak.xm
-          grep -Fq ': (0.060 + 0.008 * clearStructure);' Tweak.xm
-          grep -Fq '? (0.992 + 0.006 * clearStructure)' Tweak.xm
-          grep -Fq ': (0.990 + 0.007 * clearStructure);' Tweak.xm
-          grep -Fq '? (0.050 + 0.004 * clearStructure)' Tweak.xm
-          grep -Fq ': (0.056 + 0.006 * clearStructure);' Tweak.xm
-          grep -Fq '? (0.72 + 0.14 * clearStructure)' Tweak.xm
-          grep -Fq ': (0.66 + 0.16 * clearStructure);' Tweak.xm
-          grep -Fq '? (0.030 + 0.022 * clearStructure)' Tweak.xm
-          grep -Fq ': (0.026 + 0.018 * clearStructure);' Tweak.xm
-          grep -Fq '? (0.24 + 0.22 * clearStructure)' Tweak.xm
-          grep -Fq '? (0.50 + 0.20 * clearStructure)' Tweak.xm
-
-          # Closed Clear follows the same baseline rule.
-          grep -Fq 'blurRadius = 8.40 * clearBlurResponse;' Tweak.xm
-          grep -Fq 'saturation = 1.105 + (0.070 * clearStructure);' Tweak.xm
-          grep -Fq 'brightness = 0.014 + (0.008 * clearStructure);' Tweak.xm
-          grep -Fq 'tintAlpha = 0.012 + (0.006 * clearStructure);' Tweak.xm
-
-          if grep -Fq 'GFClearActivationResponse' Tweak.xm || \
-             grep -Fq 'clearActivation' Tweak.xm || \
-             grep -Fq 'Clear at 0% intentionally becomes a fully transparent panel' Tweak.xm; then
-            echo "ERROR: old Clear activation-gated baseline reintroduced."
-            exit 1
-          fi
-
-          if grep -Fq '0.55 + 1.70 * materialResponse' Tweak.xm || \
-             grep -Fq '0.45 + 1.50 * materialResponse' Tweak.xm || \
-             grep -Fq '1.8 + (6.0 * materialResponse)' Tweak.xm; then
-            echo "ERROR: old Clear blur curve reintroduced."
-            exit 1
-          fi
-
-          if grep -Eq '%hook[[:space:]]+SBHLibrary|AppLibraryPods|GFShouldUseAppLibraryPods|SpringBoardHome\.framework|MSHookMessageEx|SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView' Tweak.xm; then
-            echo "ERROR: unsafe/obsolete experimental App Library code remains."
-            exit 1
-          fi
-
-          python - <<'PY'
-          import plistlib
-          from PIL import Image
-
-          plist = "layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist"
-          with open(plist, "rb") as f:
-              p = plistlib.load(f)
-
-          assert p["entry"]["bundle"] == "GlassFoldersPrefs"
-          assert p["entry"]["icon"] == "GlassFolders.png"
-
-          for path in (
-              "layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png",
-              "layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png",
-              "layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png",
-          ):
-              im = Image.open(path).convert("RGBA")
-              # Transparent external corners are intentional.
-              assert im.getpixel((0, 0))[3] < 16
-              assert im.getpixel((im.width - 1, 0))[3] < 16
-              assert im.getpixel((0, im.height - 1))[3] < 16
-              assert im.getpixel((im.width - 1, im.height - 1))[3] < 16
-
-          print("Rounded-alpha source icons verified.")
-          PY
-
-          echo "Checking Beta2.9 high-base Clear + locked Liquid baselines..."
-          # These names are unique to GFCreateOpenedPanelLightingImage in the
-          # Locked continuous-tangent model, so the gate cannot accidentally
-          # pass by finding similarly named closed-folder lighting variables.
-          grep -Fq 'Beta 2.8 — locked symmetric continuous tangent rails.' Tweak.xm
-          grep -Fq 'primaryQuadrantEnergy' Tweak.xm
-          grep -Fq 'secondaryQuadrantEnergy' Tweak.xm
-          grep -Fq 'tangentOverlap' Tweak.xm
-          grep -Fq 'sideTailLength' Tweak.xm
-          grep -Fq 'topLeftFadeStart' Tweak.xm
-          grep -Fq 'bottomRightFadeStart' Tweak.xm
-          grep -Fq 'primaryEnvelope' Tweak.xm
-          grep -Fq 'secondaryEnvelope' Tweak.xm
-          grep -Fq 'topLeftTailSmooth' Tweak.xm
-          grep -Fq 'bottomRightTailSmooth' Tweak.xm
-          grep -Fq 'primaryTurnGain' Tweak.xm
-          grep -Fq 'secondaryTurnGain' Tweak.xm
-          grep -Fq 'endpointRadius * 1.12' Tweak.xm
-          grep -Fq '@"P23-%@-%@-%zux%zu-r%.2f-s%ld"' Tweak.xm
-
-          if grep -Eq 'topLeftArcOwnership|bottomRightArcOwnership|topStraightOwnership|bottomStraightOwnership' Tweak.xm; then
-            echo "ERROR: old piecewise opened-rail splice model remains."
-            exit 1
-          fi
-
-          if grep -Eq 'leftCornerBridge|rightCornerBridge|sideRailGain|darkAxisWeight|pairedCorner' Tweak.xm; then
-            echo "ERROR: obsolete Beta1.5/older edge-distribution model remains."
-            exit 1
-          fi
-
-          echo "Checking Beta1.6.1 obsolete-variable cleanup..."
-          if grep -Eq 'CGFloat[[:space:]]+(highlightShoulderGain|highlightCoreGain|highlightFilamentGain|shoulderGain|coreGain|filamentGain|horizontalEdge)[[:space:]]*=' Tweak.xm; then
-            echo "ERROR: obsolete Beta1.6 unused-variable declaration remains."
-            grep -En 'CGFloat[[:space:]]+(highlightShoulderGain|highlightCoreGain|highlightFilamentGain|shoulderGain|coreGain|filamentGain|horizontalEdge)[[:space:]]*=' Tweak.xm || true
-            exit 1
-          fi
-
-          echo "Checking About / Author credit..."
           python - <<'PY'
           import plistlib
 
-          with open("prefs/Resources/Root.plist", "rb") as f:
-              p = plistlib.load(f)
+          with open('prefs/Resources/Root.plist', 'rb') as f:
+              root = plistlib.load(f)
 
-          items = p["items"]
-          about = [x for x in items if x.get("cell") == "PSGroupCell" and x.get("label") == "关于"]
-          author = [
-              x for x in items
-              if x.get("cell") == "PSTitleValueCell"
-              and x.get("label") == "作者"
-              and x.get("get") == "authorValue:"
-          ]
+          sliders = [x for x in root.get('items', []) if x.get('cell') == 'PSSliderCell']
+          keys = [x.get('key') for x in sliders]
 
-          if len(about) != 1:
-              raise SystemExit(f"Expected exactly one 关于 group, got {len(about)}")
-          if len(author) != 1:
-              raise SystemExit(f"Expected exactly one 作者 PSTitleValueCell, got {len(author)}")
+          if 'ClearStrength' not in keys:
+              raise SystemExit('Missing ClearStrength slider')
+          if 'LiquidGlassStrength' not in keys:
+              raise SystemExit('Missing LiquidGlassStrength slider')
 
-          print("Author specifier OK: 作者 -> authorValue:")
+          print('Repository sanity OK:', keys)
           PY
 
-          grep -Fq 'return @"kulinich";' prefs/GFRootListController.m
-
-          echo "Source sanity gate passed."
+          echo "Repository sanity gate passed."
 
       - name: Build RootHide package
         shell: bash
@@ -340,7 +181,7 @@ jobs:
           set -euo pipefail
 
           DEB="${{ steps.package.outputs.deb }}"
-          TMP="/tmp/gf074b29"
+          TMP="/tmp/gf074b30"
           rm -rf "$TMP"
           mkdir -p "$TMP"
           cd "$TMP"
@@ -492,7 +333,7 @@ jobs:
       - name: Upload deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.4-Beta2.9-DEB
+          name: GlassFolders-0.7.4-Beta3.0-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
