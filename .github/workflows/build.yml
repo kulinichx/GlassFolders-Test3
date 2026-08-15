@@ -1,4 +1,4 @@
-name: GlassFolders 0.7.4 Beta4.5 FOLLOW-FOLDER
+name: GlassFolders 0.7.4 Beta4.6 SETTINGS-CLEANUP
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 0.7.4 BETA4.5 FOLLOW-FOLDER ==="
+          echo "=== GLASSFOLDERS 0.7.4 BETA4.6 SETTINGS-CLEANUP ==="
           echo "THEOS=$THEOS"
 
       - name: Set up Python for PNG verification
@@ -143,7 +143,7 @@ jobs:
           set -euo pipefail
 
           DEB="${{ steps.package.outputs.deb }}"
-          TMP="/tmp/gf074b45"
+          TMP="/tmp/gf074b46"
           rm -rf "$TMP"
           mkdir -p "$TMP"
           cd "$TMP"
@@ -295,7 +295,7 @@ jobs:
       - name: Upload deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.4-Beta4.5-DEB
+          name: GlassFolders-0.7.4-Beta4.6-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
