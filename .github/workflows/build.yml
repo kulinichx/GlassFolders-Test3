@@ -78,9 +78,13 @@ jobs:
         run: |
           set -euo pipefail
           # RootHide commercial build keeps arm64e architecture.
+          echo "Package scheme: roothide"
           sed -i '' 's/^Architecture:.*/Architecture: iphoneos-arm64e/' control
-          make THEOS="$THEOS" clean
-          make THEOS="$THEOS" package FINALPACKAGE=1 ARCHS=arm64e
+          make THEOS="$THEOS" THEOS_PACKAGE_SCHEME=roothide clean
+          make THEOS="$THEOS" package \
+            FINALPACKAGE=1 \
+            THEOS_PACKAGE_SCHEME=roothide \
+            ARCHS=arm64e
 
       - name: Locate package
         id: package
@@ -220,8 +224,9 @@ jobs:
         run: |
           set -euo pipefail
           # Each job has a clean checkout, so changing Architecture here is safe.
+          echo "Package scheme: rootless"
           sed -i '' 's/^Architecture:.*/Architecture: iphoneos-arm64/' control
-          make THEOS="$THEOS" clean
+          make THEOS="$THEOS" THEOS_PACKAGE_SCHEME=rootless clean
           make THEOS="$THEOS" package \
             FINALPACKAGE=1 \
             THEOS_PACKAGE_SCHEME=rootless \
