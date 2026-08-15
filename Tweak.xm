@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 4.2 — App Library reference-restore pass
+ * GlassFolders 0.7.4 Beta 4.3 — App Library dark-mode pass
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -997,8 +997,8 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
             case 1: // Balanced
                 if (dark) {
                     r = (GFAppLibraryMaterialRecipe){
-                        9.4, 1.10, 0.022, 0.040,
-                        0.34, 0.130, 0.25, 0.08
+                        9.3, 1.13, 0.032, 0.038,
+                        0.34, 0.145, 0.22, 0.065
                     };
                 } else {
                     r = (GFAppLibraryMaterialRecipe){
@@ -1011,8 +1011,8 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
             case 2: // Soft
                 if (dark) {
                     r = (GFAppLibraryMaterialRecipe){
-                        11.8, 1.07, 0.018, 0.052,
-                        0.32, 0.115, 0.28, 0.09
+                        11.6, 1.09, 0.026, 0.049,
+                        0.32, 0.130, 0.25, 0.075
                     };
                 } else {
                     r = (GFAppLibraryMaterialRecipe){
@@ -1026,8 +1026,8 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
             default: // Apple Bright
                 if (dark) {
                     r = (GFAppLibraryMaterialRecipe){
-                        10.0, 1.12, 0.032, 0.050,
-                        0.36, 0.145, 0.24, 0.07
+                        9.9, 1.15, 0.043, 0.047,
+                        0.36, 0.160, 0.21, 0.058
                     };
                 } else {
                     r = (GFAppLibraryMaterialRecipe){
@@ -1043,13 +1043,16 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
          * Beta 3.5 was deliberately much brighter and looked disconnected.
          */
         if (searchVariant) {
-            r.blur += 0.8;
-            r.saturation += dark ? 0.010 : 0.015;
-            r.brightness += dark ? 0.004 : 0.006;
-            r.tintAlpha += dark ? 0.004 : 0.006;
-            r.borderWidth += 0.04;
-            r.borderAlpha += 0.018;
-            r.nativeSearchAlpha = MAX(0.04, r.nativeSearchAlpha - 0.01);
+            r.blur += dark ? 0.55 : 0.8;
+            r.saturation += dark ? 0.015 : 0.015;
+            r.brightness += dark ? 0.006 : 0.006;
+            r.tintAlpha += dark ? 0.002 : 0.006;
+            r.borderWidth += dark ? 0.02 : 0.04;
+            r.borderAlpha += dark ? 0.014 : 0.018;
+            r.nativeSearchAlpha = MAX(
+                dark ? 0.032 : 0.04,
+                r.nativeSearchAlpha - (dark ? 0.008 : 0.01)
+            );
         }
     } else {
         /*
@@ -1063,8 +1066,8 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
             case 1: // Balanced
                 if (dark) {
                     r = (GFAppLibraryMaterialRecipe){
-                        7.7, 1.16, 0.012, 0.017,
-                        0.36, 0.140, 0.18, 0.065
+                        7.4, 1.21, 0.019, 0.015,
+                        0.35, 0.155, 0.15, 0.052
                     };
                 } else {
                     r = (GFAppLibraryMaterialRecipe){
@@ -1077,8 +1080,8 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
             case 2: // Deep
                 if (dark) {
                     r = (GFAppLibraryMaterialRecipe){
-                        9.5, 1.10, 0.004, 0.023,
-                        0.38, 0.150, 0.24, 0.085
+                        9.2, 1.14, 0.010, 0.020,
+                        0.37, 0.160, 0.21, 0.070
                     };
                 } else {
                     r = (GFAppLibraryMaterialRecipe){
@@ -1092,8 +1095,8 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
             default: // Crystal
                 if (dark) {
                     r = (GFAppLibraryMaterialRecipe){
-                        5.9, 1.22, 0.017, 0.011,
-                        0.38, 0.165, 0.14, 0.044
+                        5.6, 1.27, 0.024, 0.0095,
+                        0.37, 0.180, 0.11, 0.036
                     };
                 } else {
                     r = (GFAppLibraryMaterialRecipe){
@@ -1105,13 +1108,16 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
         }
 
         if (searchVariant) {
-            r.blur += 0.35;
-            r.saturation += dark ? 0.006 : 0.008;
-            r.brightness += dark ? 0.002 : 0.003;
-            r.tintAlpha += dark ? 0.0015 : 0.0015;
+            r.blur += dark ? 0.25 : 0.35;
+            r.saturation += dark ? 0.012 : 0.008;
+            r.brightness += dark ? 0.004 : 0.003;
+            r.tintAlpha += dark ? 0.0008 : 0.0015;
             r.borderWidth += 0.01;
-            r.borderAlpha += 0.008;
-            r.nativeSearchAlpha = MAX(0.025, r.nativeSearchAlpha - 0.006);
+            r.borderAlpha += dark ? 0.012 : 0.008;
+            r.nativeSearchAlpha = MAX(
+                dark ? 0.022 : 0.025,
+                r.nativeSearchAlpha - (dark ? 0.008 : 0.006)
+            );
         }
     }
 
@@ -1275,22 +1281,22 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
     if (liquid) {
         switch (GFAppLibraryLiquidPreset) {
             case 1: // Balanced
-                bloomAlpha = dark ? 0.085 : 0.105;
-                rimAlpha = dark ? 0.105 : 0.130;
-                glintAlpha = dark ? 0.040 : 0.050;
+                bloomAlpha = dark ? 0.108 : 0.105;
+                rimAlpha = dark ? 0.132 : 0.130;
+                glintAlpha = dark ? 0.048 : 0.050;
                 break;
 
             case 2: // Deep
-                bloomAlpha = dark ? 0.065 : 0.080;
-                rimAlpha = dark ? 0.090 : 0.110;
-                glintAlpha = dark ? 0.032 : 0.040;
+                bloomAlpha = dark ? 0.082 : 0.080;
+                rimAlpha = dark ? 0.112 : 0.110;
+                glintAlpha = dark ? 0.038 : 0.040;
                 break;
 
             case 0:
             default: // Crystal
-                bloomAlpha = dark ? 0.105 : 0.135;
-                rimAlpha = dark ? 0.125 : 0.155;
-                glintAlpha = dark ? 0.048 : 0.060;
+                bloomAlpha = dark ? 0.132 : 0.135;
+                rimAlpha = dark ? 0.156 : 0.155;
+                glintAlpha = dark ? 0.058 : 0.060;
                 break;
         }
     } else {
@@ -1300,30 +1306,33 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
          */
         switch (GFAppLibraryClearPreset) {
             case 1:
-                bloomAlpha = dark ? 0.040 : 0.050;
-                rimAlpha = dark ? 0.045 : 0.055;
-                glintAlpha = 0.018;
+                bloomAlpha = dark ? 0.050 : 0.050;
+                rimAlpha = dark ? 0.056 : 0.055;
+                glintAlpha = dark ? 0.021 : 0.018;
                 break;
 
             case 2:
-                bloomAlpha = dark ? 0.030 : 0.040;
-                rimAlpha = dark ? 0.035 : 0.045;
-                glintAlpha = 0.014;
+                bloomAlpha = dark ? 0.038 : 0.040;
+                rimAlpha = dark ? 0.044 : 0.045;
+                glintAlpha = dark ? 0.017 : 0.014;
                 break;
 
             case 0:
             default:
-                bloomAlpha = dark ? 0.045 : 0.060;
-                rimAlpha = dark ? 0.050 : 0.065;
-                glintAlpha = 0.020;
+                bloomAlpha = dark ? 0.057 : 0.060;
+                rimAlpha = dark ? 0.063 : 0.065;
+                glintAlpha = dark ? 0.024 : 0.020;
                 break;
         }
     }
 
     if (self.gfSearchVariant) {
-        bloomAlpha *= 0.90;
-        rimAlpha *= 0.88;
-        glintAlpha *= 0.72;
+        BOOL darkSearch =
+            GFUsesDarkAppearance(self);
+
+        bloomAlpha *= darkSearch ? 0.96 : 0.90;
+        rimAlpha *= darkSearch ? 0.94 : 0.88;
+        glintAlpha *= darkSearch ? 0.76 : 0.72;
     }
 
     self.gfUpperLeftBloomLayer.colors = @[
