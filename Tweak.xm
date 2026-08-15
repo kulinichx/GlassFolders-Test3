@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 3.0 — Clear Light V2 + Liquid Glass Apple-reference pass
+ * GlassFolders 0.7.4 Beta 3.1 — Clear Light V2 + Liquid Glass optical-separation pass
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -140,6 +140,9 @@ static id GFCreateCAFilter(NSString *type) {
 static inline CGFloat GFClamp01(CGFloat value) {
     return MIN(1.0, MAX(0.0, value));
 }
+
+
+static BOOL GFUsesDarkAppearance(UIView *view);
 
 
 /*
@@ -853,7 +856,17 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
      * used by the lighter reference: no hue tint, just less native material
      * stacked over the wallpaper backdrop.
      */
-    podView.alpha = MIN(0.54, 0.24 + 0.30 * materialResponse);
+    BOOL darkAppearance = GFUsesDarkAppearance(podView);
+
+    /*
+     * Beta 3.1:
+     * Light-mode closed folders were reading as bright pink/white cards.
+     * Keep the accepted dark blend, but in light appearance let the wallpaper
+     * dominate and use the native pod only as a restrained material cue.
+     */
+    podView.alpha = darkAppearance
+        ? MIN(0.54, 0.24 + 0.30 * materialResponse)
+        : MIN(0.34, 0.12 + 0.18 * materialResponse);
 
     return podView;
 }
@@ -904,6 +917,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
         CGFloat clearBlurResponse = GFClearBlurResponse(_gfStrength);
         CGFloat clearStructure = GFClearStructureResponse(_gfStrength);
         BOOL clearStyle = (_gfStyle == 0);
+        BOOL darkAppearance = GFUsesDarkAppearance(self);
         BOOL materialRequested = clearStyle || (_gfStrength > 0.001);
 
         if (materialRequested && isBackdropLayer) {
@@ -922,9 +936,17 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
                  * The native pod is now a thin material cue rather than the
                  * main opaque body.
                  */
-                blurRadius = 4.2 + (5.8 * materialResponse);
-                saturation = 1.10 + (0.18 * materialResponse);
-                brightness = 0.010 + (0.018 * materialResponse);
+                blurRadius = darkAppearance
+                    ? (4.2 + 5.8 * materialResponse)
+                    : (3.6 + 4.4 * materialResponse);
+
+                saturation = darkAppearance
+                    ? (1.10 + 0.18 * materialResponse)
+                    : (1.06 + 0.10 * materialResponse);
+
+                brightness = darkAppearance
+                    ? (0.010 + 0.018 * materialResponse)
+                    : (0.001 + 0.006 * materialResponse);
             } else {
                 /*
                  * Clear starts clean even at 0%.  The slider keeps blur as its
@@ -982,8 +1004,11 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
 
             _gfFallbackBlurView.userInteractionEnabled = NO;
             _gfFallbackBlurView.alpha =
-                (_gfStyle == 1) ? MIN(0.66, 0.38 + 0.28 * materialResponse)
-                                : (0.20 + 0.08 * clearStructure);
+                (_gfStyle == 1)
+                    ? (darkAppearance
+                        ? MIN(0.66, 0.38 + 0.28 * materialResponse)
+                        : MIN(0.38, 0.18 + 0.20 * materialResponse))
+                    : (0.20 + 0.08 * clearStructure);
 
             [self addSubview:_gfFallbackBlurView];
         }
@@ -999,7 +1024,9 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
         if (_gfStyle == 0) {
             tintAlpha = 0.012 + (0.006 * clearStructure);
         } else if (_gfStrength > 0.001) {
-            tintAlpha = 0.010 + (0.028 * tintResponse);
+            tintAlpha = darkAppearance
+                ? (0.010 + 0.028 * tintResponse)
+                : (0.002 + 0.010 * tintResponse);
         }
 
         if (tintAlpha > 0.001) {
@@ -1029,6 +1056,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
             _gfOpticalLightingLayer.magnificationFilter = kCAFilterLinear;
             _gfOpticalLightingLayer.minificationFilter = kCAFilterLinear;
             _gfOpticalLightingLayer.opaque = NO;
+            _gfOpticalLightingLayer.opacity = darkAppearance ? 1.0 : 0.82;
 
             [self.layer addSublayer:_gfOpticalLightingLayer];
         }
@@ -1290,7 +1318,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     } else {
         darkShoulderGain = darkAppearance
             ? (0.008 + 0.003 * e)
-            : (0.008 + 0.003 * e);
+            : (0.010 + 0.005 * e);
     }
 
     const CGFloat invSqrt2 = 0.70710678118;
@@ -1727,31 +1755,31 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             } else {
                 primaryFilamentGain = darkAppearance
                     ? (0.036 + 0.300 * edgeDrive)
-                    : (0.034 + 0.270 * edgeDrive);
+                    : (0.046 + 0.360 * edgeDrive);
 
                 primaryCoreGain = darkAppearance
                     ? (0.014 + 0.090 * edgeDrive)
-                    : (0.012 + 0.075 * edgeDrive);
+                    : (0.016 + 0.100 * edgeDrive);
 
                 primaryShoulderGain = darkAppearance
                     ? (0.008 + 0.035 * edgeDrive)
-                    : (0.007 + 0.030 * edgeDrive);
+                    : (0.010 + 0.040 * edgeDrive);
 
                 secondaryFilamentGain = darkAppearance
                     ? (0.024 + 0.220 * edgeDrive)
-                    : (0.019 + 0.170 * edgeDrive);
+                    : (0.016 + 0.150 * edgeDrive);
 
                 secondaryCoreGain = darkAppearance
                     ? (0.009 + 0.064 * edgeDrive)
-                    : (0.007 + 0.050 * edgeDrive);
+                    : (0.006 + 0.045 * edgeDrive);
 
                 secondaryShoulderGain = darkAppearance
                     ? (0.005 + 0.023 * edgeDrive)
-                    : (0.004 + 0.018 * edgeDrive);
+                    : (0.004 + 0.016 * edgeDrive);
 
                 sideMiddleGain = darkAppearance
                     ? (0.0018 + 0.010 * edgeDrive)
-                    : (0.0012 + 0.0050 * edgeDrive);
+                    : (0.0008 + 0.0035 * edgeDrive);
 
                 /*
                  * Apple-reference opened Liquid Glass: the top/upper-left
@@ -1761,11 +1789,11 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                  */
                 topRightTransitionGain = darkAppearance
                     ? (0.0025 + 0.010 * edgeDrive)
-                    : (0.0015 + 0.006 * edgeDrive);
+                    : (0.0010 + 0.004 * edgeDrive);
 
                 bottomLeftTransitionGain = darkAppearance
                     ? (0.008 + 0.045 * edgeDrive)
-                    : (0.010 + 0.070 * edgeDrive);
+                    : (0.018 + 0.095 * edgeDrive);
             }
 
             /*
@@ -1856,7 +1884,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             } else {
                 edgePeak = darkAppearance
                     ? (0.215 + 0.275 * edgeDrive)
-                    : (0.190 + 0.260 * edgeDrive);
+                    : (0.220 + 0.320 * edgeDrive);
             }
 
             CGFloat signedLight =
@@ -2080,7 +2108,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             /*
              * Clear reference target: a THIN wallpaper-owned material.
              *
-             * Beta3.0 keeps the wide local Gaussian curve unchanged, but no
+             * Beta3.1 keeps the wide local Gaussian curve unchanged, but no
              * longer gates Clear's clean/transmitted look behind the strength
              * slider. 0% already uses the Clear optical baseline; strength adds
              * blur, chroma separation and edge structure.
@@ -2140,19 +2168,19 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              */
             blurRadius = darkAppearance
                 ? (4.6 + 4.8 * materialResponse)
-                : (3.4 + 3.6 * materialResponse);
+                : (2.6 + 2.8 * materialResponse);
 
             saturation = darkAppearance
                 ? (1.070 + 0.120 * materialResponse)
-                : (1.080 + 0.120 * materialResponse);
+                : (1.110 + 0.220 * materialResponse);
 
             brightness = darkAppearance
                 ? (0.015 + 0.025 * materialResponse)
-                : (0.010 + 0.018 * materialResponse);
+                : (0.026 + 0.030 * materialResponse);
 
             sampleAlpha = darkAppearance
                 ? (0.90 + 0.08 * materialResponse)
-                : (0.955 + 0.040 * materialResponse);
+                : (0.975 + 0.025 * materialResponse);
         }
 
         self.gfBackdropSampleView.alpha =
@@ -2294,10 +2322,10 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
          */
         CGFloat neutralLift = darkAppearance
             ? (0.030 + 0.050 * tintResponse) * self.gfStrength
-            : (0.005 + 0.012 * tintResponse) * self.gfStrength;
+            : (0.002 + 0.006 * tintResponse) * self.gfStrength;
 
         self.gfTintView.alpha =
-            MIN(darkAppearance ? 0.055 : 0.017, neutralLift);
+            MIN(darkAppearance ? 0.055 : 0.008, neutralLift);
     } else {
         self.gfTintView.alpha = 0.0;
     }
@@ -2335,9 +2363,11 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     } else {
         continuityAlpha = darkAppearance
             ? (0.025 + 0.040 * continuityEdge)
-            : (0.012 + 0.018 * continuityEdge);
+            : (0.006 + 0.010 * continuityEdge);
         self.layer.borderWidth =
-            (self.gfStrength > 0.001) ? 0.42 : 0.0;
+            (self.gfStrength > 0.001)
+                ? (darkAppearance ? 0.42 : 0.34)
+                : 0.0;
     }
 
     self.layer.borderColor =
