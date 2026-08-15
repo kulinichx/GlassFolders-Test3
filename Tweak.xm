@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 3.0 — brighter light Clear transmission + structure-driven strength
+ * GlassFolders 0.7.4 Beta 3.0 — Clear Light V2 + Liquid Glass Apple-reference pass
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -853,7 +853,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
      * used by the lighter reference: no hue tint, just less native material
      * stacked over the wallpaper backdrop.
      */
-    podView.alpha = MIN(0.78, 0.42 + 0.36 * materialResponse);
+    podView.alpha = MIN(0.54, 0.24 + 0.30 * materialResponse);
 
     return podView;
 }
@@ -916,9 +916,15 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
             CGFloat brightness;
 
             if (_gfStyle == 1) {
-                blurRadius = 4.8 + (7.5 * materialResponse);
-                saturation = 1.08 + (0.20 * materialResponse);
-                brightness = 0.006 + (0.014 * materialResponse);
+                /*
+                 * Liquid Glass closed-folder body: keep Apple's App Library
+                 * pod identity, but let the wallpaper own most of the color.
+                 * The native pod is now a thin material cue rather than the
+                 * main opaque body.
+                 */
+                blurRadius = 4.2 + (5.8 * materialResponse);
+                saturation = 1.10 + (0.18 * materialResponse);
+                brightness = 0.010 + (0.018 * materialResponse);
             } else {
                 /*
                  * Clear starts clean even at 0%.  The slider keeps blur as its
@@ -976,7 +982,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
 
             _gfFallbackBlurView.userInteractionEnabled = NO;
             _gfFallbackBlurView.alpha =
-                (_gfStyle == 1) ? MIN(0.86, 0.56 + 0.30 * materialResponse)
+                (_gfStyle == 1) ? MIN(0.66, 0.38 + 0.28 * materialResponse)
                                 : (0.20 + 0.08 * clearStructure);
 
             [self addSubview:_gfFallbackBlurView];
@@ -993,7 +999,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
         if (_gfStyle == 0) {
             tintAlpha = 0.012 + (0.006 * clearStructure);
         } else if (_gfStrength > 0.001) {
-            tintAlpha = 0.030 + (0.060 * tintResponse);
+            tintAlpha = 0.010 + (0.028 * tintResponse);
         }
 
         if (tintAlpha > 0.001) {
@@ -1166,7 +1172,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
 
     NSString *cacheKey = [NSString stringWithFormat:
-        @"P23-%@-%@-%zux%zu-r%.2f-s%ld",
+        @"P24-%@-%@-%zux%zu-r%.2f-s%ld",
         (style == 1) ? @"LG" : @"CL",
         darkAppearance ? @"D" : @"L",
         pixelWidth,
@@ -1238,7 +1244,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     CGFloat shoulderWidth =
         (clearStyle
             ? (10.4 + 2.6 * e)
-            : (8.0 + 2.4 * e)) * renderScale;
+            : (6.2 + 1.8 * e)) * renderScale;
 
     CGFloat coreWidth =
         (clearStyle
@@ -1284,7 +1290,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     } else {
         darkShoulderGain = darkAppearance
             ? (0.008 + 0.003 * e)
-            : (0.020 + 0.005 * e);
+            : (0.008 + 0.003 * e);
     }
 
     const CGFloat invSqrt2 = 0.70710678118;
@@ -1681,7 +1687,8 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             CGFloat secondaryCoreGain;
             CGFloat secondaryShoulderGain;
             CGFloat sideMiddleGain;
-            CGFloat transitionCornerGain;
+            CGFloat topRightTransitionGain;
+            CGFloat bottomLeftTransitionGain;
 
             if (clearStyle) {
                 primaryFilamentGain = darkAppearance
@@ -1712,41 +1719,53 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                     ? (0.0010 + 0.0040 * edgeDrive)
                     : (0.0008 + 0.0030 * edgeDrive);
 
-                transitionCornerGain = darkAppearance
+                topRightTransitionGain = darkAppearance
                     ? (0.0013 + 0.0050 * edgeDrive)
                     : (0.0010 + 0.0038 * edgeDrive);
+
+                bottomLeftTransitionGain = topRightTransitionGain;
             } else {
                 primaryFilamentGain = darkAppearance
                     ? (0.036 + 0.300 * edgeDrive)
-                    : (0.027 + 0.215 * edgeDrive);
+                    : (0.034 + 0.270 * edgeDrive);
 
                 primaryCoreGain = darkAppearance
                     ? (0.014 + 0.090 * edgeDrive)
-                    : (0.010 + 0.064 * edgeDrive);
+                    : (0.012 + 0.075 * edgeDrive);
 
                 primaryShoulderGain = darkAppearance
                     ? (0.008 + 0.035 * edgeDrive)
-                    : (0.006 + 0.025 * edgeDrive);
+                    : (0.007 + 0.030 * edgeDrive);
 
                 secondaryFilamentGain = darkAppearance
                     ? (0.024 + 0.220 * edgeDrive)
-                    : (0.018 + 0.158 * edgeDrive);
+                    : (0.019 + 0.170 * edgeDrive);
 
                 secondaryCoreGain = darkAppearance
                     ? (0.009 + 0.064 * edgeDrive)
-                    : (0.0065 + 0.046 * edgeDrive);
+                    : (0.007 + 0.050 * edgeDrive);
 
                 secondaryShoulderGain = darkAppearance
                     ? (0.005 + 0.023 * edgeDrive)
-                    : (0.0035 + 0.017 * edgeDrive);
+                    : (0.004 + 0.018 * edgeDrive);
 
                 sideMiddleGain = darkAppearance
                     ? (0.0018 + 0.010 * edgeDrive)
-                    : (0.0015 + 0.008 * edgeDrive);
+                    : (0.0012 + 0.0050 * edgeDrive);
 
-                transitionCornerGain = darkAppearance
-                    ? (0.0025 + 0.012 * edgeDrive)
-                    : (0.0020 + 0.009 * edgeDrive);
+                /*
+                 * Apple-reference opened Liquid Glass: the top/upper-left
+                 * filament stays dominant, while the lower-left corner gets
+                 * a compact specular glint instead of a uniformly bright
+                 * perimeter.  The upper-right remains only a transition cue.
+                 */
+                topRightTransitionGain = darkAppearance
+                    ? (0.0025 + 0.010 * edgeDrive)
+                    : (0.0015 + 0.006 * edgeDrive);
+
+                bottomLeftTransitionGain = darkAppearance
+                    ? (0.008 + 0.045 * edgeDrive)
+                    : (0.010 + 0.070 * edgeDrive);
             }
 
             /*
@@ -1785,10 +1804,18 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 filament * sideMiddleMask *
                     sideMiddleGain +
 
-                filament *
-                    (topRightTransition +
-                     bottomLeftTransition) *
-                    transitionCornerGain +
+                filament * topRightTransition *
+                    topRightTransitionGain +
+
+                filament * bottomLeftTransition *
+                    bottomLeftTransitionGain +
+
+                /* A small soft bloom under the lower-left Liquid glint. */
+                (clearStyle ? 0.0 :
+                    (core * bottomLeftTransition *
+                        bottomLeftTransitionGain * 0.36 +
+                     shoulder * bottomLeftTransition *
+                        bottomLeftTransitionGain * 0.14)) +
 
                 /*
                  * Far-side white reflection is confined to the secondary
@@ -1829,7 +1856,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             } else {
                 edgePeak = darkAppearance
                     ? (0.215 + 0.275 * edgeDrive)
-                    : (0.162 + 0.202 * edgeDrive);
+                    : (0.190 + 0.260 * edgeDrive);
             }
 
             CGFloat signedLight =
@@ -2113,19 +2140,19 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              */
             blurRadius = darkAppearance
                 ? (4.6 + 4.8 * materialResponse)
-                : (4.2 + 4.2 * materialResponse);
+                : (3.4 + 3.6 * materialResponse);
 
             saturation = darkAppearance
                 ? (1.070 + 0.120 * materialResponse)
-                : (1.050 + 0.100 * materialResponse);
+                : (1.080 + 0.120 * materialResponse);
 
             brightness = darkAppearance
                 ? (0.015 + 0.025 * materialResponse)
-                : (0.006 + 0.016 * materialResponse);
+                : (0.010 + 0.018 * materialResponse);
 
             sampleAlpha = darkAppearance
                 ? (0.90 + 0.08 * materialResponse)
-                : (0.88 + 0.07 * materialResponse);
+                : (0.955 + 0.040 * materialResponse);
         }
 
         self.gfBackdropSampleView.alpha =
@@ -2234,7 +2261,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         } else {
             self.gfFallbackBlurView.alpha = darkAppearance
                 ? MIN(0.48, 0.20 + 0.30 * materialResponse)
-                : MIN(0.40, 0.16 + 0.25 * materialResponse);
+                : MIN(0.28, 0.10 + 0.18 * materialResponse);
         }
     }
 
@@ -2267,10 +2294,10 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
          */
         CGFloat neutralLift = darkAppearance
             ? (0.030 + 0.050 * tintResponse) * self.gfStrength
-            : (0.012 + 0.025 * tintResponse) * self.gfStrength;
+            : (0.005 + 0.012 * tintResponse) * self.gfStrength;
 
         self.gfTintView.alpha =
-            MIN(darkAppearance ? 0.055 : 0.028, neutralLift);
+            MIN(darkAppearance ? 0.055 : 0.017, neutralLift);
     } else {
         self.gfTintView.alpha = 0.0;
     }
@@ -2287,7 +2314,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     } else {
         self.gfOpticalLayer.opacity = darkAppearance
             ? 1.0
-            : 0.88;
+            : 1.0;
     }
 
     /*
@@ -2308,9 +2335,9 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     } else {
         continuityAlpha = darkAppearance
             ? (0.025 + 0.040 * continuityEdge)
-            : (0.018 + 0.030 * continuityEdge);
+            : (0.012 + 0.018 * continuityEdge);
         self.layer.borderWidth =
-            (self.gfStrength > 0.001) ? 0.50 : 0.0;
+            (self.gfStrength > 0.001) ? 0.42 : 0.0;
     }
 
     self.layer.borderColor =
