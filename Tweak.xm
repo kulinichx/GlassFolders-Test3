@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 3.0 — high-base Clear transmission + structure-driven strength
+ * GlassFolders 0.7.4 Beta 3.0 — brighter light Clear transmission + structure-driven strength
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -2070,27 +2070,39 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              * appearance so the slider has one predictable meaning; only the
              * neutral optical compensation differs by appearance.
              */
-            blurRadius = 40.0 * clearBlurResponse;
+            /*
+             * Light Clear is calibrated against Apple's brighter Clear
+             * references. SpringBoard already applies a full-screen blur, so
+             * another 40 pt locally over-averages wallpaper chroma and reads
+             * as grey/frosted. Keep the accepted dark-mode ceiling unchanged,
+             * but let light Clear top out at 28 pt so color shapes still pass
+             * through the folder body.
+             */
+            blurRadius = darkAppearance
+                ? (40.0 * clearBlurResponse)
+                : (28.0 * clearBlurResponse);
 
             /*
-             * High-base Clear contract:
+             * High-transmission Clear contract:
              *
-             * - transmission/clean luminance begins near its final value;
-             * - strength mainly adds blur, chroma separation and edge structure;
-             * - sample opacity never collapses at low values, so SpringBoard's
-             *   dull host blur cannot leak back in and make Clear look grey.
+             * - luminance starts high instead of ramping from a dull host blur;
+             * - light mode restores wallpaper chroma more aggressively;
+             * - brightness is supplied by the backdrop filter, not a milky
+             *   white overlay;
+             * - sample opacity stays essentially full so the real wallpaper
+             *   remains the source of the glass body color.
              */
             saturation = darkAppearance
                 ? (1.080 + 0.065 * clearStructure)
-                : (1.085 + 0.085 * clearStructure);
+                : (1.120 + 0.120 * clearStructure);
 
             brightness = darkAppearance
                 ? (0.048 + 0.006 * clearStructure)
-                : (0.060 + 0.008 * clearStructure);
+                : (0.075 + 0.035 * clearStructure);
 
             sampleAlpha = darkAppearance
                 ? (0.992 + 0.006 * clearStructure)
-                : (0.990 + 0.007 * clearStructure);
+                : (0.995 + 0.005 * clearStructure);
         } else {
             /*
              * Liquid Glass: a thicker but not blackened backdrop.
@@ -2218,7 +2230,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              */
             self.gfFallbackBlurView.alpha = darkAppearance
                 ? (0.20 + 0.10 * clearStructure)
-                : (0.16 + 0.08 * clearStructure);
+                : (0.12 + 0.06 * clearStructure);
         } else {
             self.gfFallbackBlurView.alpha = darkAppearance
                 ? MIN(0.48, 0.20 + 0.30 * materialResponse)
@@ -2245,10 +2257,10 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
          */
         CGFloat neutralLift = darkAppearance
             ? (0.050 + 0.004 * clearStructure)
-            : (0.056 + 0.006 * clearStructure);
+            : (0.022 + 0.006 * clearStructure);
 
         self.gfTintView.alpha =
-            MIN(darkAppearance ? 0.054 : 0.062, neutralLift);
+            MIN(darkAppearance ? 0.054 : 0.028, neutralLift);
     } else if (self.gfStrength > 0.001) {
         /*
          * Liquid Glass keeps the Beta2.8 composite-strength behavior.
@@ -2271,7 +2283,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     if (self.gfStyle == 0) {
         self.gfOpticalLayer.opacity = darkAppearance
             ? (0.72 + 0.14 * clearStructure)
-            : (0.66 + 0.16 * clearStructure);
+            : (0.70 + 0.20 * clearStructure);
     } else {
         self.gfOpticalLayer.opacity = darkAppearance
             ? 1.0
@@ -2291,7 +2303,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     if (self.gfStyle == 0) {
         continuityAlpha = darkAppearance
             ? (0.030 + 0.022 * clearStructure)
-            : (0.026 + 0.018 * clearStructure);
+            : (0.032 + 0.026 * clearStructure);
         self.layer.borderWidth = 0.45;
     } else {
         continuityAlpha = darkAppearance
