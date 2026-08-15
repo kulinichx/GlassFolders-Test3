@@ -60,20 +60,14 @@ jobs:
           fi
           test -d "$SDK_EXACT"
 
-      - name: Preserve PreferenceLoader entry and clean old icons
+      - name: Verify PreferenceLoader entry and icon resources
         shell: bash
         run: |
           set -euo pipefail
-          # Required on clean devices so GlassFolders appears in Settings.
           test -f layout/Library/PreferenceLoader/Preferences/GlassFolders.plist
-          rm -f \
-            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon@2x.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon@3x.png
-
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png
       - name: Build RootHide package
         shell: bash
         run: |
@@ -123,11 +117,15 @@ jobs:
           FILTER="$(find root -type f -path '*MobileSubstrate/DynamicLibraries/GlassFolders.plist' | head -n 1)"
           ROOT_PLIST="$(find root -type f -path '*GlassFoldersPrefs.bundle/Root.plist' | head -n 1)"
           PREF_ENTRY="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders.plist' | head -n 1)"
+          PREF_ICON="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFoldersIcon.png' | head -n 1)"
+          PREF_ICON_2X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFoldersIcon@2x.png' | head -n 1)"
+          PREF_ICON_3X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFoldersIcon@3x.png' | head -n 1)"
           EN_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/en.lproj/Root.strings' | head -n 1)"
           ZH_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/zh-Hans.lproj/Root.strings' | head -n 1)"
 
           test -n "$DYLIB" -a -n "$PREFBIN" -a -n "$FILTER" -a -n "$ROOT_PLIST"
           test -n "$PREF_ENTRY" -a -n "$EN_STRINGS" -a -n "$ZH_STRINGS"
+          test -n "$PREF_ICON" -a -n "$PREF_ICON_2X" -a -n "$PREF_ICON_3X"
 
           file "$DYLIB" | grep -qi 'arm64e'
           file "$PREFBIN" | grep -qi 'arm64e'
@@ -142,7 +140,8 @@ jobs:
           assert e["label"] == "GlassFolders"
           assert e["isController"] is True
           assert e["bundle"] == "GlassFoldersPrefs"
-          print("PreferenceLoader entry verified.")
+          assert e["icon"] == "GlassFoldersIcon.png"
+          print("PreferenceLoader entry + icon registration verified.")
           PY
 
           python3 - "$ROOT_PLIST" <<'PY'
@@ -223,27 +222,21 @@ jobs:
           fi
           test -d "$SDK_EXACT"
 
-      - name: Preserve PreferenceLoader entry and clean old icons
+      - name: Verify PreferenceLoader entry and icon resources
         shell: bash
         run: |
           set -euo pipefail
-          # Required on clean devices so GlassFolders appears in Settings.
           test -f layout/Library/PreferenceLoader/Preferences/GlassFolders.plist
-          rm -f \
-            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon@2x.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon@3x.png
-
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png
       - name: Build standard rootless package
         shell: bash
         run: |
           set -euo pipefail
           # Each job has a clean checkout, so changing Architecture here is safe.
           echo "Package scheme: rootless"
-          echo "Theos source: roothide/theos (rootless scheme)"
+          echo "Theos source: roothide/theos (rootless scheme, arm64 + arm64e)"
           echo "roothide.h locations (diagnostic only):"
           find "$THEOS" -type f -name 'roothide.h' -print 2>/dev/null | head -n 10 || true
           sed -i '' 's/^Architecture:.*/Architecture: iphoneos-arm64/' control
@@ -251,7 +244,7 @@ jobs:
           make THEOS="$THEOS" package \
             FINALPACKAGE=1 \
             THEOS_PACKAGE_SCHEME=rootless \
-            ARCHS=arm64
+            ARCHS="arm64 arm64e"
 
       - name: Locate package
         id: package
@@ -289,17 +282,31 @@ jobs:
           FILTER="$(find root -type f -path '*MobileSubstrate/DynamicLibraries/GlassFolders.plist' | head -n 1)"
           ROOT_PLIST="$(find root -type f -path '*GlassFoldersPrefs.bundle/Root.plist' | head -n 1)"
           PREF_ENTRY="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders.plist' | head -n 1)"
+          PREF_ICON="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFoldersIcon.png' | head -n 1)"
+          PREF_ICON_2X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFoldersIcon@2x.png' | head -n 1)"
+          PREF_ICON_3X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFoldersIcon@3x.png' | head -n 1)"
           EN_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/en.lproj/Root.strings' | head -n 1)"
           ZH_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/zh-Hans.lproj/Root.strings' | head -n 1)"
 
           test -n "$DYLIB" -a -n "$PREFBIN" -a -n "$FILTER" -a -n "$ROOT_PLIST"
           test -n "$PREF_ENTRY" -a -n "$EN_STRINGS" -a -n "$ZH_STRINGS"
+          test -n "$PREF_ICON" -a -n "$PREF_ICON_2X" -a -n "$PREF_ICON_3X"
 
-          file "$DYLIB" | grep -qi 'arm64'
-          file "$PREFBIN" | grep -qi 'arm64'
+          echo "Tweak architectures:"
+          lipo -archs "$DYLIB"
+          echo "Prefs architectures:"
+          lipo -archs "$PREFBIN"
+
+          lipo -archs "$DYLIB" | grep -qw 'arm64'
+          lipo -archs "$DYLIB" | grep -qw 'arm64e'
+          lipo -archs "$PREFBIN" | grep -qw 'arm64'
+          lipo -archs "$PREFBIN" | grep -qw 'arm64e'
+
           grep -q 'com.apple.springboard' "$FILTER"
 
           # Standard rootless package data should be rooted under /var/jb.
+          # Binaries are universal arm64 + arm64e so system processes such as
+          # Settings on iOS/iPadOS 16.x can load the preference bundle.
           if ! find root -type f | grep -q '/var/jb/'; then
             echo "ERROR: package does not look like a standard rootless package."
             exit 1
@@ -314,7 +321,8 @@ jobs:
           assert e["label"] == "GlassFolders"
           assert e["isController"] is True
           assert e["bundle"] == "GlassFoldersPrefs"
-          print("PreferenceLoader entry verified.")
+          assert e["icon"] == "GlassFoldersIcon.png"
+          print("PreferenceLoader entry + icon registration verified.")
           PY
 
           python3 - "$ROOT_PLIST" <<'PY'
