@@ -131,3 +131,20 @@ PreferenceLoader duplicate-entry cleanup:
 
 No visual material parameters were changed.
 
+
+## Commercial Candidate FIX8
+
+Settings icon visual refresh:
+
+- Replaced the canonical nested PreferenceLoader icon set with the approved
+  frosted-glass GlassFolders identity.
+- Preserved the existing canonical filenames and sizes:
+  `GlassFolders.png` (29×29), `GlassFolders@2x.png` (58×58), and
+  `GlassFolders@3x.png` (87×87).
+- Icons retain alpha transparency outside the rounded icon body for clean
+  rendering in Settings.
+- No tweak logic, preference behavior, package identity, localization,
+  architecture settings, or GlassFolders visual material parameters were changed.
+
+FIX7 single-entry PreferenceLoader cleanup and FIX5 universal
+`arm64 + arm64e` standard rootless build behavior remain unchanged.
