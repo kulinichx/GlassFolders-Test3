@@ -73,3 +73,17 @@ The 1.0.0 commercial candidate locks the visual baseline from the validated Beta
 - iOS：`16.0+`
 
 1.0.0 商业候选版只做产品化整理，不重新调整已经确认的视觉参数。
+
+## Commercial Candidate FIX4
+
+Fresh-install Settings registration fix:
+
+- Restored `layout/Library/PreferenceLoader/Preferences/GlassFolders.plist`.
+- The entry loads `GlassFoldersPrefs.bundle` through PreferenceLoader.
+- GitHub Actions no longer deletes this required entry.
+- Both RootHide and standard rootless verification jobs now fail if the
+  PreferenceLoader entry is missing from the final `.deb`.
+
+This addresses clean iOS/iPadOS 16.x installations where the package installs
+but GlassFolders does not appear in Settings.
+
