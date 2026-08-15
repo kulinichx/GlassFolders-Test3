@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.4 Beta 3.1</string>
+			<string>GlassFolders 0.7.4 Beta 3.2</string>
 			<key>footerText</key>
-			<string>Beta 3.1：Clear 浅色 V2 保持不变。本版只收敛 Liquid Glass：浅色关闭态降低亮度、白色覆盖与 App Library pod 参与度，避免文件夹图标像发亮粉色卡片；打开态减少灰雾与局部模糊，提高真实壁纸色彩/亮度穿透，并把玻璃识别主要交给顶部/左上方向性高光、圆角结构与左下局部 specular glint。</string>
+			<string>Beta 3.2 保持 Beta 3.1 的 Clear / Liquid Glass 参数不变，新增独立的 App 资源库玻璃。资源库外层分类卡片使用真实壁纸 backdrop；资源库内部的小文件夹/小聚合区明确排除普通文件夹效果，恢复苹果原生透明表现。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -115,8 +115,48 @@
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>App 资源库</string>
 			<key>footerText</key>
-			<string>Beta 3.1 的 Liquid Glass 关闭态在浅色模式下降低 native pod、白色 tint、brightness 与光学层整体能量，避免过亮；深色关闭态保留原基线。打开态浅色模式降低 blur、提高 backdrop saturation / luminance、减薄白色 tint，并弱化整圈 border、强化顶部/左上主高光与左下局部 glint。真实 App 资源库不会被 hook 或修改。</string>
+			<string>独立控制 App Library 外层分类卡片，不影响普通桌面文件夹。开启后只处理 SBHLibraryCategoryPodBackgroundView；分类卡片内部的小文件夹/小聚合区继续使用苹果原生透明背景。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>启用资源库玻璃</string>
+			<key>key</key>
+			<string>AppLibraryGlassEnabled</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.local.glassfolders</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSliderCell</string>
+			<key>cellClass</key>
+			<string>GFPercentSliderCell</string>
+			<key>label</key>
+			<string></string>
+			<key>key</key>
+			<string>AppLibraryGlassStrength</string>
+			<key>default</key>
+			<integer>55</integer>
+			<key>defaults</key>
+			<string>com.local.glassfolders</string>
+			<key>min</key>
+			<integer>0</integer>
+			<key>max</key>
+			<integer>100</integer>
+			<key>showValue</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Beta 3.1 的普通文件夹 Clear / Liquid Glass 光学参数在 Beta 3.2 中保持不变。Beta 3.2 只新增资源库独立路径：外层分类卡片可选玻璃化，内部 mini folder/cluster 明确跳过普通文件夹 hook。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

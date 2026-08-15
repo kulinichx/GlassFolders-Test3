@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.4~beta3.1
+Version: 0.7.4~beta3.2
 Architecture: iphoneos-arm64e
-Description: Beta 3.1 keeps the accepted Clear Light V2 tuning, reduces light-mode closed Liquid Glass brightness/pod/tint, and makes opened Liquid Glass clearer and more glass-like with lower blur, stronger wallpaper chroma/luminance, directional highlights and a stronger localized specular glint.
+Description: Beta 3.2 keeps Beta 3.1 Clear and Liquid Glass tuning, adds an independent App Library Glass option for real SBHLibraryCategoryPodBackgroundView category cards, and excludes App Library mini-folder clusters from the normal folder background replacement.
 Maintainer: kulinich
 Author: kulinich
 Section: Tweaks

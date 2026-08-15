@@ -1,47 +1,51 @@
-# GlassFolders 0.7.4 Beta 3.1
+# GlassFolders 0.7.4 Beta 3.2
 
-Beta 3.1 keeps the accepted **Clear Light V2** tuning and only refines **Liquid Glass**.
+Beta 3.2 keeps the accepted **Beta 3.1 Clear / Liquid Glass optical tuning**
+and adds a separate **App Library Glass** path.
 
-## Clear
+## App Library separation
 
-No optical tuning changes in this pass.
+The previous normal-folder hook handled every `SBFolderIconImageView`.
+That meant mini-folder / cluster views inside App Library could accidentally
+receive the desktop Clear or Liquid Glass background.
 
-- Clear remains high-transmission from the bottom of the slider.
-- Light opened Clear keeps the accepted 28 pt local-blur ceiling.
-- Dark Clear keeps the existing curve.
-- `ClearStrength` remains independent from `LiquidGlassStrength`.
+Beta 3.2 explicitly separates these cases:
 
-## Liquid Glass — closed, light appearance
+- normal desktop folder icon -> existing Clear / Liquid Glass
+- opened normal folder -> existing Clear / Liquid Glass
+- real App Library category background -> independent App Library Glass
+- mini folder / cluster inside App Library -> Apple native transparent background
 
-The closed icon was reading too bright and too much like a pink/white card. Beta 3.1 makes the light appearance more wallpaper-owned:
+## App Library Glass
 
-- lower native `SBHLibraryCategoryPodBackgroundView` participation
-- lower neutral-white tint
-- much smaller brightness lift
-- slightly lower local blur and saturation lift
-- reduced closed optical-layer energy
+New independent preferences:
 
-Dark-appearance closed Liquid Glass keeps the previous baseline.
+- `AppLibraryGlassEnabled` — default OFF
+- `AppLibraryGlassStrength` — 0–100, default 55
 
-## Liquid Glass — opened, light appearance
+The outer category-card path targets the real runtime class:
 
-The opened panel was transparent but visually grey and did not read strongly enough as glass. Beta 3.1 shifts the energy away from a uniform body and toward optical structure:
+`SBHLibraryCategoryPodBackgroundView`
 
-- lower local blur
-- higher wallpaper saturation/chroma recovery
-- stronger neutral backdrop luminance
-- nearly full real-backdrop sampling
-- thinner neutral-white body tint
-- stronger top / upper-left directional rail
-- weaker uniform side/bottom energy
-- stronger localized lower-left specular glint
-- weaker full-perimeter continuity border
+The new material uses:
 
-The intent is **clear center + optical edge**, rather than **grey transparent sheet**.
+- real wallpaper/backdrop color
+- medium local blur
+- restrained saturation/luminance lift
+- very thin neutral-white tint
+- subtle rounded glass border
+- a small amount of Apple's native category-pod material blended above it
+
+## Internal-pod safety
+
+GlassFolders already creates a private copy of
+`SBHLibraryCategoryPodBackgroundView` inside normal Liquid Glass folder icons.
+Beta 3.2 marks that copy with an associated-object flag so the new real
+App Library hook never touches it.
 
 ## Version / build
 
-- package version: `0.7.4~beta3.1`
-- artifact: `GlassFolders-0.7.4-Beta3.1-DEB`
-- existing preference keys and defaults are unchanged
-- no new source files are added
+- package version: `0.7.4~beta3.2`
+- artifact: `GlassFolders-0.7.4-Beta3.2-DEB`
+- Clear / Liquid Glass preference keys and defaults are unchanged
+- no new source file is added

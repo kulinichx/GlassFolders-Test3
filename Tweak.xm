@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 3.1 — Clear Light V2 + Liquid Glass optical-separation pass
+ * GlassFolders 0.7.4 Beta 3.2 — App Library Glass separation pass
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -37,6 +37,10 @@ static NSInteger GFStyle = 0;          // 0 Clear, 1 Liquid Glass
 static CGFloat GFClearStrength = 0.0;        // 0.0 ... 1.0, Clear blur authority
 static CGFloat GFLiquidGlassStrength = 0.0;  // 0.0 ... 1.0, Liquid composite authority
 static CGFloat GFGlassStrength = 0.0;        // active style strength for existing rendering paths
+
+// Beta 3.2: App Library is intentionally independent from normal folders.
+static BOOL GFAppLibraryGlassEnabled = NO;
+static CGFloat GFAppLibraryGlassStrength = 0.55;
 
 static BOOL GFReadBool(CFStringRef key, BOOL fallback) {
     CFPropertyListRef value = CFPreferencesCopyAppValue(key, GFPreferencesDomain);
@@ -108,6 +112,12 @@ static void GFLoadPreferences(void) {
         CFSTR("LiquidGlassStrength"),
         legacyStrength * 100.0
     );
+
+    GFAppLibraryGlassEnabled =
+        GFReadBool(CFSTR("AppLibraryGlassEnabled"), NO);
+
+    GFAppLibraryGlassStrength =
+        GFReadPercent(CFSTR("AppLibraryGlassStrength"), 55.0);
 
     if (GFStyle < 0 || GFStyle > 1) {
         GFStyle = 0;
@@ -803,6 +813,31 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
 
 
 
+
+static char kGFInternalAppLibraryPodVisualKey;
+static char kGFAppLibraryOverlayAssociationKey;
+static char kGFAppLibraryOriginalAlphaKey;
+
+static BOOL GFIsInternalAppLibraryPodVisual(UIView *view) {
+    NSNumber *marker = objc_getAssociatedObject(
+        view,
+        &kGFInternalAppLibraryPodVisualKey
+    );
+    return marker.boolValue;
+}
+
+static void GFMarkInternalAppLibraryPodVisual(UIView *view) {
+    if (!view) return;
+
+    objc_setAssociatedObject(
+        view,
+        &kGFInternalAppLibraryPodVisualKey,
+        @YES,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+}
+
+
 #pragma mark - Native App Library category-pod visual reuse
 
 /*
@@ -837,6 +872,13 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
         return nil;
     }
 
+    /*
+     * This object is a private copy used only inside our normal folder
+     * material. Mark it before UIKit can lay it out so the Beta 3.2 real
+     * App Library hook will always ignore it.
+     */
+    GFMarkInternalAppLibraryPodVisual(podView);
+
     podView.userInteractionEnabled = NO;
     podView.clipsToBounds = YES;
     podView.layer.masksToBounds = YES;
@@ -870,6 +912,363 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
 
     return podView;
 }
+
+
+#pragma mark - Beta 3.2 App Library Glass
+
+@interface GFAppLibraryGlassView : UIView
+@property (nonatomic, strong) UIView *gfTintView;
+@property (nonatomic, assign) CGFloat gfStrength;
+@property (nonatomic, assign) CGFloat gfPreferredRadius;
+- (instancetype)initWithStrength:(CGFloat)strength;
+- (void)setPreferredRadius:(CGFloat)radius;
+- (void)gfRefreshMaterial;
+@end
+
+@implementation GFAppLibraryGlassView
+
++ (Class)layerClass {
+    Class backdropClass = NSClassFromString(@"CABackdropLayer");
+    return backdropClass ?: [CALayer class];
+}
+
+- (instancetype)initWithStrength:(CGFloat)strength {
+    self = [super initWithFrame:CGRectZero];
+
+    if (self) {
+        _gfStrength = GFClamp01(strength);
+        self.userInteractionEnabled = NO;
+        self.backgroundColor = UIColor.clearColor;
+        self.clipsToBounds = YES;
+        self.layer.masksToBounds = YES;
+        self.layer.cornerCurve = kCACornerCurveContinuous;
+
+        _gfTintView = [[UIView alloc] initWithFrame:CGRectZero];
+        _gfTintView.userInteractionEnabled = NO;
+        _gfTintView.backgroundColor = UIColor.whiteColor;
+        [self addSubview:_gfTintView];
+
+        [self gfRefreshMaterial];
+    }
+
+    return self;
+}
+
+- (void)setPreferredRadius:(CGFloat)radius {
+    _gfPreferredRadius = MAX(0.0, radius);
+    self.layer.cornerRadius = _gfPreferredRadius;
+    self.layer.cornerCurve = kCACornerCurveContinuous;
+}
+
+- (void)gfRefreshMaterial {
+    CGFloat strength = GFClamp01(self.gfStrength);
+    CGFloat material = GFMaterialResponse(strength);
+    CGFloat tint = GFTintResponse(strength);
+    BOOL dark = GFUsesDarkAppearance(self);
+
+    BOOL isBackdropLayer =
+        [NSStringFromClass(self.layer.class) containsString:@"Backdrop"];
+
+    /*
+     * Reference target:
+     * - real wallpaper owns the color
+     * - category cards remain visually distinct from the page
+     * - no opaque pink/white slab
+     * - medium blur, small luminance lift, restrained neutral tint
+     */
+    CGFloat blurRadius = dark
+        ? (5.0 + 7.0 * material)
+        : (4.2 + 6.6 * material);
+
+    CGFloat saturation = dark
+        ? (1.08 + 0.14 * material)
+        : (1.10 + 0.18 * material);
+
+    CGFloat brightness = dark
+        ? (0.006 + 0.014 * material)
+        : (0.004 + 0.012 * material);
+
+    if (isBackdropLayer) {
+        id saturate = GFCreateCAFilter(@"colorSaturate");
+        id brighten = GFCreateCAFilter(@"colorBrightness");
+        id blur = GFCreateCAFilter(@"gaussianBlur");
+
+        NSMutableArray *filters = [NSMutableArray array];
+
+        if (saturate) {
+            [saturate setValue:@(saturation) forKey:@"inputAmount"];
+            [filters addObject:saturate];
+        }
+
+        if (brighten) {
+            [brighten setValue:@(brightness) forKey:@"inputAmount"];
+            [filters addObject:brighten];
+        }
+
+        if (blur) {
+            [blur setValue:@(blurRadius) forKey:@"inputRadius"];
+            [blur setValue:@YES forKey:@"inputNormalizeEdges"];
+            [blur setValue:@YES forKey:@"inputHardEdges"];
+            [filters addObject:blur];
+        }
+
+        [self.layer setValue:filters forKey:@"filters"];
+        [self.layer setValue:@1.0 forKey:@"scale"];
+    }
+
+    /*
+     * Keep the body thin. The native pod remains above us at low opacity and
+     * contributes Apple's own material texture/shape.
+     */
+    self.gfTintView.alpha = dark
+        ? (0.010 + 0.020 * tint)
+        : (0.006 + 0.016 * tint);
+
+    self.layer.borderWidth = 0.34;
+    self.layer.borderColor =
+        [UIColor colorWithWhite:1.0
+                          alpha:(dark ? 0.105 : 0.145)]
+            .CGColor;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    self.gfTintView.frame = self.bounds;
+}
+
+- (void)traitCollectionDidChange:
+    (UITraitCollection *)previousTraitCollection {
+
+    [super traitCollectionDidChange:previousTraitCollection];
+    [self gfRefreshMaterial];
+}
+
+@end
+
+
+static GFAppLibraryGlassView *GFAppLibraryOverlayForPod(UIView *pod) {
+    return (GFAppLibraryGlassView *)
+        objc_getAssociatedObject(
+            pod,
+            &kGFAppLibraryOverlayAssociationKey
+        );
+}
+
+static void GFSetAppLibraryOverlayForPod(
+    UIView *pod,
+    GFAppLibraryGlassView *overlay
+) {
+    objc_setAssociatedObject(
+        pod,
+        &kGFAppLibraryOverlayAssociationKey,
+        overlay,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+}
+
+static void GFRestoreNativeAppLibraryPod(UIView *pod) {
+    GFAppLibraryGlassView *overlay =
+        GFAppLibraryOverlayForPod(pod);
+
+    if (overlay) {
+        [overlay removeFromSuperview];
+        GFSetAppLibraryOverlayForPod(pod, nil);
+    }
+
+    NSNumber *originalAlpha =
+        objc_getAssociatedObject(
+            pod,
+            &kGFAppLibraryOriginalAlphaKey
+        );
+
+    if (originalAlpha) {
+        pod.alpha = originalAlpha.doubleValue;
+
+        objc_setAssociatedObject(
+            pod,
+            &kGFAppLibraryOriginalAlphaKey,
+            nil,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+}
+
+static void GFUpdateRealAppLibraryPod(UIView *pod) {
+    if (!pod || GFIsInternalAppLibraryPodVisual(pod)) {
+        return;
+    }
+
+    BOOL enabled =
+        GFEnabled &&
+        GFAppLibraryGlassEnabled;
+
+    if (!enabled) {
+        GFRestoreNativeAppLibraryPod(pod);
+        return;
+    }
+
+    UIView *host = pod.superview;
+    if (!host) {
+        return;
+    }
+
+    NSNumber *originalAlpha =
+        objc_getAssociatedObject(
+            pod,
+            &kGFAppLibraryOriginalAlphaKey
+        );
+
+    if (!originalAlpha) {
+        objc_setAssociatedObject(
+            pod,
+            &kGFAppLibraryOriginalAlphaKey,
+            @(pod.alpha),
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+
+    GFAppLibraryGlassView *overlay =
+        GFAppLibraryOverlayForPod(pod);
+
+    if (!overlay) {
+        overlay =
+            [[GFAppLibraryGlassView alloc]
+                initWithStrength:
+                    GFAppLibraryGlassStrength];
+
+        GFSetAppLibraryOverlayForPod(
+            pod,
+            overlay
+        );
+    }
+
+    if (overlay.superview != host) {
+        [overlay removeFromSuperview];
+        [host insertSubview:overlay
+               belowSubview:pod];
+    } else {
+        [host insertSubview:overlay
+               belowSubview:pod];
+    }
+
+    overlay.bounds = pod.bounds;
+    overlay.center = pod.center;
+    overlay.transform = pod.transform;
+    overlay.hidden = pod.hidden;
+
+    CGFloat radius = pod.layer.cornerRadius;
+    if (radius <= 0.0) {
+        radius =
+            MIN(pod.bounds.size.width,
+                pod.bounds.size.height) * 0.18;
+    }
+
+    [overlay setPreferredRadius:radius];
+
+    /*
+     * Keep just enough of Apple's native background to preserve its visual
+     * identity, while the new sibling overlay supplies the real wallpaper
+     * transmission. This view is background-only; app icons are not children
+     * of SBHLibraryCategoryPodBackgroundView.
+     */
+    BOOL dark = GFUsesDarkAppearance(pod);
+    CGFloat material =
+        GFMaterialResponse(
+            GFAppLibraryGlassStrength
+        );
+
+    pod.alpha = dark
+        ? (0.24 + 0.16 * material)
+        : (0.16 + 0.13 * material);
+}
+
+
+/*
+ * Normal folder icons and App Library mini-clusters both pass through
+ * SBFolderIconImageView. The old all-or-nothing hook therefore painted our
+ * desktop folder glass onto the mini-clusters inside App Library.
+ *
+ * Beta 3.2 explicitly separates that hierarchy: if a folder icon is under
+ * any SpringBoard Library/CategoryPod container, leave Apple's original
+ * background untouched. On stock iOS this is the transparent mini-folder
+ * presentation the user expects.
+ */
+static BOOL GFViewIsInsideAppLibrary(UIView *view) {
+    UIResponder *node = view;
+
+    for (NSInteger depth = 0;
+         node && depth < 20;
+         depth++) {
+
+        NSString *className =
+            NSStringFromClass(node.class);
+
+        BOOL looksLikeLibrary =
+            [className containsString:@"SBHLibrary"] ||
+            [className containsString:@"SBLibrary"] ||
+            [className containsString:@"LibraryCategory"] ||
+            [className containsString:@"CategoryPod"];
+
+        if (looksLikeLibrary) {
+            return YES;
+        }
+
+        if ([node isKindOfClass:[UIView class]]) {
+            UIView *v = (UIView *)node;
+
+            if (v.superview) {
+                node = v.superview;
+                continue;
+            }
+        }
+
+        node = node.nextResponder;
+    }
+
+    return NO;
+}
+
+
+@interface SBHLibraryCategoryPodBackgroundView : UIView
+@end
+
+%group GFAppLibraryHooks
+
+%hook SBHLibraryCategoryPodBackgroundView
+
+- (void)didMoveToSuperview {
+    %orig;
+    GFUpdateRealAppLibraryPod(self);
+}
+
+- (void)didMoveToWindow {
+    %orig;
+    GFUpdateRealAppLibraryPod(self);
+}
+
+- (void)layoutSubviews {
+    %orig;
+    GFUpdateRealAppLibraryPod(self);
+}
+
+- (void)traitCollectionDidChange:
+    (UITraitCollection *)previousTraitCollection {
+
+    %orig(previousTraitCollection);
+
+    GFAppLibraryGlassView *overlay =
+        GFAppLibraryOverlayForPod(self);
+
+    if (overlay) {
+        [overlay gfRefreshMaterial];
+    }
+
+    GFUpdateRealAppLibraryPod(self);
+}
+
+%end
+
+%end
 
 
 @interface GFBackdropGlassView : UIView
@@ -2816,6 +3215,15 @@ static void GFUpdateOpenedFolderBackground(
         return;
     }
 
+    /*
+     * App Library mini-folders/clusters must keep Apple's native transparent
+     * presentation. Do not install Clear/Liquid Glass inside a category pod.
+     */
+    if (GFViewIsInsideAppLibrary(self)) {
+        %orig(backgroundView);
+        return;
+    }
+
     CGFloat originalRadius =
         backgroundView ? backgroundView.layer.cornerRadius : 0.0;
 
@@ -2842,6 +3250,10 @@ static void GFUpdateOpenedFolderBackground(
 
         if (objc_getClass("SBFolderBackgroundView")) {
             %init(GFOpenedPanelHooks);
+        }
+
+        if (objc_getClass("SBHLibraryCategoryPodBackgroundView")) {
+            %init(GFAppLibraryHooks);
         }
     }
 }
