@@ -60,14 +60,20 @@ jobs:
           fi
           test -d "$SDK_EXACT"
 
-      - name: Verify PreferenceLoader entry and icon resources
+      - name: Normalize single PreferenceLoader entry
         shell: bash
         run: |
           set -euo pipefail
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders.plist
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png
+
+          # The repository historically uses ONE canonical nested entry.
+          # Remove accidental FIX4/FIX6 top-level duplicates if they still
+          # exist in the Git checkout.
+          rm -f             layout/Library/PreferenceLoader/Preferences/GlassFolders.plist             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png
+
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png
       - name: Build RootHide package
         shell: bash
         run: |
@@ -116,20 +122,38 @@ jobs:
           PREFBIN="$(find root -type f -path '*GlassFoldersPrefs.bundle/GlassFoldersPrefs' | head -n 1)"
           FILTER="$(find root -type f -path '*MobileSubstrate/DynamicLibraries/GlassFolders.plist' | head -n 1)"
           ROOT_PLIST="$(find root -type f -path '*GlassFoldersPrefs.bundle/Root.plist' | head -n 1)"
-          PREF_ENTRY="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders.plist' | head -n 1)"
-          PREF_ICON="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFoldersIcon.png' | head -n 1)"
-          PREF_ICON_2X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFoldersIcon@2x.png' | head -n 1)"
-          PREF_ICON_3X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFoldersIcon@3x.png' | head -n 1)"
+          PREF_INFO="$(find root -type f -path '*GlassFoldersPrefs.bundle/Info.plist' | head -n 1)"
+          PREF_ENTRY="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist' | head -n 1)"
+          PREF_ICON="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders.png' | head -n 1)"
+          PREF_ICON_2X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png' | head -n 1)"
+          PREF_ICON_3X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png' | head -n 1)"
           EN_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/en.lproj/Root.strings' | head -n 1)"
           ZH_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/zh-Hans.lproj/Root.strings' | head -n 1)"
 
           test -n "$DYLIB" -a -n "$PREFBIN" -a -n "$FILTER" -a -n "$ROOT_PLIST"
+          test -n "$PREF_INFO"
           test -n "$PREF_ENTRY" -a -n "$EN_STRINGS" -a -n "$ZH_STRINGS"
           test -n "$PREF_ICON" -a -n "$PREF_ICON_2X" -a -n "$PREF_ICON_3X"
 
           file "$DYLIB" | grep -qi 'arm64e'
           file "$PREFBIN" | grep -qi 'arm64e'
           grep -q 'com.apple.springboard' "$FILTER"
+
+          # Regression guard: exactly one GlassFolders PreferenceLoader entry.
+          ENTRY_COUNT="$(find root -type f -path '*PreferenceLoader/Preferences/*GlassFolders*.plist' | wc -l | tr -d ' ')"
+          echo "GlassFolders PreferenceLoader entry count: $ENTRY_COUNT"
+          test "$ENTRY_COUNT" = "1"
+
+          python3 - "$PREF_INFO" <<'PY'
+          import plistlib, sys
+          with open(sys.argv[1], "rb") as f:
+              p = plistlib.load(f)
+          assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
+          assert p["CFBundleName"] == "GlassFoldersPrefs"
+          assert p["CFBundleShortVersionString"] == "1.0.0"
+          assert p["NSPrincipalClass"] == "GFRootListController"
+          print("Preference bundle Info.plist verified.")
+          PY
 
           python3 - "$PREF_ENTRY" <<'PY'
           import plistlib, sys
@@ -140,8 +164,8 @@ jobs:
           assert e["label"] == "GlassFolders"
           assert e["isController"] is True
           assert e["bundle"] == "GlassFoldersPrefs"
-          assert e["icon"] == "GlassFoldersIcon.png"
-          print("PreferenceLoader entry + icon registration verified.")
+          assert e["icon"] == "GlassFolders.png"
+          print("Single canonical PreferenceLoader entry verified.")
           PY
 
           python3 - "$ROOT_PLIST" <<'PY'
@@ -222,14 +246,20 @@ jobs:
           fi
           test -d "$SDK_EXACT"
 
-      - name: Verify PreferenceLoader entry and icon resources
+      - name: Normalize single PreferenceLoader entry
         shell: bash
         run: |
           set -euo pipefail
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders.plist
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png
+
+          # The repository historically uses ONE canonical nested entry.
+          # Remove accidental FIX4/FIX6 top-level duplicates if they still
+          # exist in the Git checkout.
+          rm -f             layout/Library/PreferenceLoader/Preferences/GlassFolders.plist             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png
+
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png
       - name: Build standard rootless package
         shell: bash
         run: |
@@ -281,14 +311,16 @@ jobs:
           PREFBIN="$(find root -type f -path '*GlassFoldersPrefs.bundle/GlassFoldersPrefs' | head -n 1)"
           FILTER="$(find root -type f -path '*MobileSubstrate/DynamicLibraries/GlassFolders.plist' | head -n 1)"
           ROOT_PLIST="$(find root -type f -path '*GlassFoldersPrefs.bundle/Root.plist' | head -n 1)"
-          PREF_ENTRY="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders.plist' | head -n 1)"
-          PREF_ICON="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFoldersIcon.png' | head -n 1)"
-          PREF_ICON_2X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFoldersIcon@2x.png' | head -n 1)"
-          PREF_ICON_3X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFoldersIcon@3x.png' | head -n 1)"
+          PREF_INFO="$(find root -type f -path '*GlassFoldersPrefs.bundle/Info.plist' | head -n 1)"
+          PREF_ENTRY="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist' | head -n 1)"
+          PREF_ICON="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders.png' | head -n 1)"
+          PREF_ICON_2X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png' | head -n 1)"
+          PREF_ICON_3X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png' | head -n 1)"
           EN_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/en.lproj/Root.strings' | head -n 1)"
           ZH_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/zh-Hans.lproj/Root.strings' | head -n 1)"
 
           test -n "$DYLIB" -a -n "$PREFBIN" -a -n "$FILTER" -a -n "$ROOT_PLIST"
+          test -n "$PREF_INFO"
           test -n "$PREF_ENTRY" -a -n "$EN_STRINGS" -a -n "$ZH_STRINGS"
           test -n "$PREF_ICON" -a -n "$PREF_ICON_2X" -a -n "$PREF_ICON_3X"
 
@@ -312,6 +344,22 @@ jobs:
             exit 1
           fi
 
+          # Regression guard: exactly one GlassFolders PreferenceLoader entry.
+          ENTRY_COUNT="$(find root -type f -path '*PreferenceLoader/Preferences/*GlassFolders*.plist' | wc -l | tr -d ' ')"
+          echo "GlassFolders PreferenceLoader entry count: $ENTRY_COUNT"
+          test "$ENTRY_COUNT" = "1"
+
+          python3 - "$PREF_INFO" <<'PY'
+          import plistlib, sys
+          with open(sys.argv[1], "rb") as f:
+              p = plistlib.load(f)
+          assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
+          assert p["CFBundleName"] == "GlassFoldersPrefs"
+          assert p["CFBundleShortVersionString"] == "1.0.0"
+          assert p["NSPrincipalClass"] == "GFRootListController"
+          print("Preference bundle Info.plist verified.")
+          PY
+
           python3 - "$PREF_ENTRY" <<'PY'
           import plistlib, sys
           with open(sys.argv[1], "rb") as f:
@@ -321,8 +369,8 @@ jobs:
           assert e["label"] == "GlassFolders"
           assert e["isController"] is True
           assert e["bundle"] == "GlassFoldersPrefs"
-          assert e["icon"] == "GlassFoldersIcon.png"
-          print("PreferenceLoader entry + icon registration verified.")
+          assert e["icon"] == "GlassFolders.png"
+          print("Single canonical PreferenceLoader entry verified.")
           PY
 
           python3 - "$ROOT_PLIST" <<'PY'
