@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.4 Beta 2.9</string>
+			<string>GlassFolders 0.7.4 Beta 3.0</string>
 			<key>footerText</key>
-			<string>Beta 2.9：只重做 Clear 的强度逻辑。进入 Clear 后从 0% 开始就保持高透亮、低灰雾的基础状态；滑杆不再把画面从灰闷慢慢推亮，而主要增加局部模糊、颜色/层次分离、边缘高光与光学结构。打开态 100% 仍保持约 40pt Gaussian 上限。Liquid Glass 沿用 Beta 2.8 已确认基线，不做调整。</string>
+			<string>Beta 3.0：只重做 Clear 的强度逻辑。进入 Clear 后从 0% 开始就保持高透亮、低灰雾的基础状态；滑杆不再把画面从灰闷慢慢推亮，而主要增加局部模糊、颜色/层次分离、边缘高光与光学结构。打开态 100% 仍保持约 40pt Gaussian 上限。Liquid Glass 沿用 Beta 2.8 已确认基线，不做调整。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

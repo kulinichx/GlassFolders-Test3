@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 2.9 — high-base Clear transmission + structure-driven strength
+ * GlassFolders 0.7.4 Beta 3.0 — high-base Clear transmission + structure-driven strength
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -2053,7 +2053,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             /*
              * Clear reference target: a THIN wallpaper-owned material.
              *
-             * Beta2.9 keeps the wide local Gaussian curve unchanged, but no
+             * Beta3.0 keeps the wide local Gaussian curve unchanged, but no
              * longer gates Clear's clean/transmitted look behind the strength
              * slider. 0% already uses the Clear optical baseline; strength adds
              * blur, chroma separation and edge structure.
