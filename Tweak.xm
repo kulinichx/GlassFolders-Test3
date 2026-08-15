@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 4.1 — Shared response / normalized App Library
+ * GlassFolders 0.7.4 Beta 4.2 — App Library reference-restore pass
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -973,10 +973,6 @@ typedef struct {
     CGFloat borderAlpha;
     CGFloat nativePodAlpha;
     CGFloat nativeSearchAlpha;
-
-    // Low-frequency optical accents only. No horizontal cap/ring.
-    CGFloat upperLeftBloomAlpha;
-    CGFloat lowerLeftGlintAlpha;
 } GFAppLibraryMaterialRecipe;
 
 
@@ -984,257 +980,139 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
     BOOL searchVariant,
     BOOL dark
 ) {
-    /*
-     * Beta 4.1:
-     * Share RESPONSE CURVES with the accepted desktop folder, but do NOT
-     * copy the desktop opened-panel final output 1:1.
-     *
-     * App Library already sits inside SpringBoard's page-level treatment and
-     * each category also retains a small amount of Apple's native pod material.
-     * Therefore the small cards need a normalized final brightness/chroma/
-     * edge output or the result becomes grey/white twice-processed material.
-     */
     GFAppLibraryMaterialRecipe r = {
-        7.0, 1.10, 0.012, 0.010,
-        0.20, 0.045, 0.10, 0.035,
-        0.08, 0.05
+        8.0, 1.10, 0.010, 0.020,
+        0.34, 0.14, 0.22, 0.08
     };
 
     if (GFAppLibraryStyle == 0) {
-        CGFloat referenceStrength;
-        CGFloat blurScale;
-        CGFloat brightnessScale;
-        CGFloat chromaScale;
-        CGFloat tintScale;
-        CGFloat nativePod;
-
+        /*
+         * CLEAR
+         *
+         * The reference is intentionally bright and luminous. Unlike normal
+         * Clear folder strength, these are fixed design presets so the whole
+         * App Library remains visually coherent.
+         */
         switch (GFAppLibraryClearPreset) {
             case 1: // Balanced
-                referenceStrength = 0.62;
-                blurScale = 0.56;
-                brightnessScale = 0.58;
-                chromaScale = 0.72;
-                tintScale = 0.72;
-                nativePod = 0.13;
+                if (dark) {
+                    r = (GFAppLibraryMaterialRecipe){
+                        9.4, 1.10, 0.022, 0.040,
+                        0.34, 0.130, 0.25, 0.08
+                    };
+                } else {
+                    r = (GFAppLibraryMaterialRecipe){
+                        9.2, 1.13, 0.038, 0.052,
+                        0.34, 0.155, 0.25, 0.07
+                    };
+                }
                 break;
 
             case 2: // Soft
-                referenceStrength = 0.40;
-                blurScale = 1.18;
-                brightnessScale = 0.48;
-                chromaScale = 0.54;
-                tintScale = 0.80;
-                nativePod = 0.16;
+                if (dark) {
+                    r = (GFAppLibraryMaterialRecipe){
+                        11.8, 1.07, 0.018, 0.052,
+                        0.32, 0.115, 0.28, 0.09
+                    };
+                } else {
+                    r = (GFAppLibraryMaterialRecipe){
+                        12.6, 1.08, 0.030, 0.068,
+                        0.32, 0.140, 0.28, 0.08
+                    };
+                }
                 break;
 
             case 0:
             default: // Apple Bright
-                referenceStrength = 0.90;
-                blurScale = 0.43;
-                brightnessScale = 0.61;
-                chromaScale = 0.78;
-                tintScale = 0.70;
-                nativePod = 0.11;
+                if (dark) {
+                    r = (GFAppLibraryMaterialRecipe){
+                        10.0, 1.12, 0.032, 0.050,
+                        0.36, 0.145, 0.24, 0.07
+                    };
+                } else {
+                    r = (GFAppLibraryMaterialRecipe){
+                        10.8, 1.15, 0.058, 0.076,
+                        0.36, 0.175, 0.24, 0.06
+                    };
+                }
                 break;
         }
 
-        CGFloat structure =
-            GFClearStructureResponse(referenceStrength);
-
-        CGFloat desktopBlur =
-            (dark ? 40.0 : 28.0) *
-            GFClearOpenedBlurResponse(referenceStrength);
-
-        CGFloat desktopSaturation = dark
-            ? (1.080 + 0.065 * structure)
-            : (1.120 + 0.120 * structure);
-
-        CGFloat desktopBrightness = dark
-            ? (0.048 + 0.006 * structure)
-            : (0.075 + 0.035 * structure);
-
-        CGFloat desktopTint = dark
-            ? MIN(0.054, 0.050 + 0.004 * structure)
-            : MIN(0.028, 0.022 + 0.006 * structure);
-
-        r.blur =
-            desktopBlur * blurScale;
-
         /*
-         * Keep the desktop chroma/luminance RELATION, but normalize the
-         * increment around 1.0 / 0.0 for the smaller already-treated cards.
+         * Search is an interactive control, so lift it only a tiny amount.
+         * Beta 3.5 was deliberately much brighter and looked disconnected.
          */
-        r.saturation =
-            1.0 +
-            (desktopSaturation - 1.0) *
-            chromaScale;
-
-        r.brightness =
-            desktopBrightness *
-            brightnessScale;
-
-        r.tintAlpha =
-            desktopTint *
-            tintScale;
-
-        r.borderWidth =
-            0.18;
-
-        r.borderAlpha = dark
-            ? (0.028 + 0.018 * structure)
-            : (0.024 + 0.016 * structure);
-
-        r.nativePodAlpha =
-            nativePod;
-
-        r.nativeSearchAlpha =
-            dark ? 0.045 : 0.032;
-
-        /*
-         * Clear remains a luminous frosted material.
-         * The optical cue is broad/low-frequency, not a top line.
-         */
-        r.upperLeftBloomAlpha = dark
-            ? (0.060 + 0.030 * structure)
-            : (0.070 + 0.045 * structure);
-
-        r.lowerLeftGlintAlpha =
-            r.upperLeftBloomAlpha * 0.28;
+        if (searchVariant) {
+            r.blur += 0.8;
+            r.saturation += dark ? 0.010 : 0.015;
+            r.brightness += dark ? 0.004 : 0.006;
+            r.tintAlpha += dark ? 0.004 : 0.006;
+            r.borderWidth += 0.04;
+            r.borderAlpha += 0.018;
+            r.nativeSearchAlpha = MAX(0.04, r.nativeSearchAlpha - 0.01);
+        }
     } else {
-        CGFloat referenceStrength;
-        CGFloat blurScale;
-        CGFloat brightnessScale;
-        CGFloat chromaScale;
-        CGFloat tintScale;
-        CGFloat edgeScale;
-        CGFloat nativePod;
-
+        /*
+         * LIQUID GLASS
+         *
+         * Lower blur and body tint. Wallpaper transmission stays strong and
+         * the object is identified mainly by the thin optical edge/native
+         * shading, matching the transparent Liquid Glass reference.
+         */
         switch (GFAppLibraryLiquidPreset) {
             case 1: // Balanced
-                referenceStrength = 0.72;
-                blurScale = 1.12;
-                brightnessScale = 0.50;
-                chromaScale = 0.70;
-                tintScale = 0.78;
-                edgeScale = 0.34;
-                nativePod = 0.075;
+                if (dark) {
+                    r = (GFAppLibraryMaterialRecipe){
+                        7.7, 1.16, 0.012, 0.017,
+                        0.36, 0.140, 0.18, 0.065
+                    };
+                } else {
+                    r = (GFAppLibraryMaterialRecipe){
+                        7.2, 1.23, 0.019, 0.014,
+                        0.34, 0.155, 0.17, 0.052
+                    };
+                }
                 break;
 
             case 2: // Deep
-                referenceStrength = 0.78;
-                blurScale = 1.48;
-                brightnessScale = 0.40;
-                chromaScale = 0.52;
-                tintScale = 0.92;
-                edgeScale = 0.28;
-                nativePod = 0.13;
+                if (dark) {
+                    r = (GFAppLibraryMaterialRecipe){
+                        9.5, 1.10, 0.004, 0.023,
+                        0.38, 0.150, 0.24, 0.085
+                    };
+                } else {
+                    r = (GFAppLibraryMaterialRecipe){
+                        9.0, 1.15, 0.009, 0.020,
+                        0.35, 0.150, 0.22, 0.070
+                    };
+                }
                 break;
 
             case 0:
             default: // Crystal
-                referenceStrength = 0.95;
-                blurScale = 0.92;
-                brightnessScale = 0.52;
-                chromaScale = 0.72;
-                tintScale = 0.72;
-                edgeScale = 0.38;
-                nativePod = 0.050;
+                if (dark) {
+                    r = (GFAppLibraryMaterialRecipe){
+                        5.9, 1.22, 0.017, 0.011,
+                        0.38, 0.165, 0.14, 0.044
+                    };
+                } else {
+                    r = (GFAppLibraryMaterialRecipe){
+                        5.4, 1.30, 0.027, 0.0085,
+                        0.36, 0.175, 0.12, 0.032
+                    };
+                }
                 break;
         }
 
-        CGFloat material =
-            GFMaterialResponse(referenceStrength);
-
-        CGFloat tint =
-            GFTintResponse(referenceStrength);
-
-        CGFloat edge =
-            GFEdgeResponse(referenceStrength);
-
-        CGFloat desktopBlur = dark
-            ? (4.6 + 4.8 * material)
-            : (2.6 + 2.8 * material);
-
-        CGFloat desktopSaturation = dark
-            ? (1.070 + 0.120 * material)
-            : (1.110 + 0.220 * material);
-
-        CGFloat desktopBrightness = dark
-            ? (0.015 + 0.025 * material)
-            : (0.026 + 0.030 * material);
-
-        CGFloat desktopTintLift = dark
-            ? MIN(
-                0.055,
-                (0.030 + 0.050 * tint) *
-                referenceStrength
-            )
-            : MIN(
-                0.008,
-                (0.002 + 0.006 * tint) *
-                referenceStrength
-            );
-
-        r.blur =
-            desktopBlur * blurScale;
-
-        r.saturation =
-            1.0 +
-            (desktopSaturation - 1.0) *
-            chromaScale;
-
-        r.brightness =
-            desktopBrightness *
-            brightnessScale;
-
-        r.tintAlpha =
-            desktopTintLift *
-            tintScale;
-
-        /*
-         * The desktop edge RESPONSE remains authoritative, but App Library
-         * renders it as a low-frequency corner bloom instead of a rail.
-         */
-        r.borderWidth =
-            dark ? 0.20 : 0.16;
-
-        r.borderAlpha =
-            (dark ? 0.020 : 0.010) +
-            edge * (dark ? 0.018 : 0.010);
-
-        r.nativePodAlpha =
-            nativePod;
-
-        r.nativeSearchAlpha =
-            dark ? 0.035 : 0.020;
-
-        r.upperLeftBloomAlpha =
-            (dark ? 0.11 : 0.13) +
-            edge * edgeScale * (dark ? 0.24 : 0.28);
-
-        r.lowerLeftGlintAlpha =
-            (dark ? 0.025 : 0.030) +
-            edge * edgeScale * (dark ? 0.10 : 0.12);
-    }
-
-    /*
-     * Search is the same material in a horizontal container.
-     * Only a tiny interaction lift is allowed.
-     */
-    if (searchVariant) {
-        r.blur *= 1.035;
-        r.saturation += dark ? 0.004 : 0.006;
-        r.brightness += dark ? 0.0015 : 0.0025;
-        r.tintAlpha *= 1.04;
-
-        r.upperLeftBloomAlpha *= 0.96;
-        r.lowerLeftGlintAlpha *= 0.72;
-
-        r.nativeSearchAlpha =
-            MAX(
-                dark ? 0.028 : 0.015,
-                r.nativeSearchAlpha - 0.004
-            );
+        if (searchVariant) {
+            r.blur += 0.35;
+            r.saturation += dark ? 0.006 : 0.008;
+            r.brightness += dark ? 0.002 : 0.003;
+            r.tintAlpha += dark ? 0.0015 : 0.0015;
+            r.borderWidth += 0.01;
+            r.borderAlpha += 0.008;
+            r.nativeSearchAlpha = MAX(0.025, r.nativeSearchAlpha - 0.006);
+        }
     }
 
     return r;
@@ -1246,6 +1124,7 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
 @interface GFAppLibraryGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) CAGradientLayer *gfUpperLeftBloomLayer;
+@property (nonatomic, strong) CAShapeLayer *gfPartialRimLayer;
 @property (nonatomic, strong) CAGradientLayer *gfLowerLeftGlintLayer;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
@@ -1279,35 +1158,44 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
         [self addSubview:_gfTintView];
 
         /*
-         * Beta 4.1:
-         * no horizontal top specular at all.
-         * Glass presence comes from broad low-frequency luminosity shaping.
+         * Beta 4.2 starts from the proven Beta 3.6 visual base.
+         * These are intentionally LOCAL optical cues:
+         *
+         * - broad upper-left luminosity bloom
+         * - a thin rim only around the upper corners/top
+         * - a tiny lower-left reflection
+         *
+         * No horizontal white cap. No full second outline.
          */
         _gfUpperLeftBloomLayer =
             [CAGradientLayer layer];
-
         _gfUpperLeftBloomLayer.startPoint =
             CGPointMake(0.0, 0.0);
         _gfUpperLeftBloomLayer.endPoint =
             CGPointMake(1.0, 1.0);
         _gfUpperLeftBloomLayer.cornerCurve =
             kCACornerCurveContinuous;
+        [self.layer addSublayer:_gfUpperLeftBloomLayer];
 
-        [self.layer addSublayer:
-            _gfUpperLeftBloomLayer];
+        _gfPartialRimLayer =
+            [CAShapeLayer layer];
+        _gfPartialRimLayer.fillColor =
+            UIColor.clearColor.CGColor;
+        _gfPartialRimLayer.lineCap =
+            kCALineCapRound;
+        _gfPartialRimLayer.lineJoin =
+            kCALineJoinRound;
+        [self.layer addSublayer:_gfPartialRimLayer];
 
         _gfLowerLeftGlintLayer =
             [CAGradientLayer layer];
-
         _gfLowerLeftGlintLayer.startPoint =
             CGPointMake(0.0, 0.5);
         _gfLowerLeftGlintLayer.endPoint =
             CGPointMake(1.0, 0.5);
         _gfLowerLeftGlintLayer.cornerCurve =
             kCACornerCurveContinuous;
-
-        [self.layer addSublayer:
-            _gfLowerLeftGlintLayer];
+        [self.layer addSublayer:_gfLowerLeftGlintLayer];
 
         [self gfRefreshMaterial];
     }
@@ -1377,31 +1265,88 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
                           alpha:recipe.borderAlpha]
             .CGColor;
 
-    CGFloat bloomAlpha =
-        GFClamp01(
-            recipe.upperLeftBloomAlpha
-        );
+    BOOL liquid =
+        (GFAppLibraryStyle == 1);
 
-    CGFloat glintAlpha =
-        GFClamp01(
-            recipe.lowerLeftGlintAlpha
-        );
+    CGFloat bloomAlpha = 0.0;
+    CGFloat rimAlpha = 0.0;
+    CGFloat glintAlpha = 0.0;
+
+    if (liquid) {
+        switch (GFAppLibraryLiquidPreset) {
+            case 1: // Balanced
+                bloomAlpha = dark ? 0.085 : 0.105;
+                rimAlpha = dark ? 0.105 : 0.130;
+                glintAlpha = dark ? 0.040 : 0.050;
+                break;
+
+            case 2: // Deep
+                bloomAlpha = dark ? 0.065 : 0.080;
+                rimAlpha = dark ? 0.090 : 0.110;
+                glintAlpha = dark ? 0.032 : 0.040;
+                break;
+
+            case 0:
+            default: // Crystal
+                bloomAlpha = dark ? 0.105 : 0.135;
+                rimAlpha = dark ? 0.125 : 0.155;
+                glintAlpha = dark ? 0.048 : 0.060;
+                break;
+        }
+    } else {
+        /*
+         * Clear keeps its Beta3.6 luminous/frosted body. Only very subtle
+         * corner light is added so Clear does not turn into Liquid Glass.
+         */
+        switch (GFAppLibraryClearPreset) {
+            case 1:
+                bloomAlpha = dark ? 0.040 : 0.050;
+                rimAlpha = dark ? 0.045 : 0.055;
+                glintAlpha = 0.018;
+                break;
+
+            case 2:
+                bloomAlpha = dark ? 0.030 : 0.040;
+                rimAlpha = dark ? 0.035 : 0.045;
+                glintAlpha = 0.014;
+                break;
+
+            case 0:
+            default:
+                bloomAlpha = dark ? 0.045 : 0.060;
+                rimAlpha = dark ? 0.050 : 0.065;
+                glintAlpha = 0.020;
+                break;
+        }
+    }
+
+    if (self.gfSearchVariant) {
+        bloomAlpha *= 0.90;
+        rimAlpha *= 0.88;
+        glintAlpha *= 0.72;
+    }
 
     self.gfUpperLeftBloomLayer.colors = @[
         (id)[UIColor colorWithWhite:1.0
-                              alpha:bloomAlpha * 0.78].CGColor,
+                              alpha:bloomAlpha * 0.82].CGColor,
         (id)[UIColor colorWithWhite:1.0
-                              alpha:bloomAlpha * 0.45].CGColor,
+                              alpha:bloomAlpha * 0.48].CGColor,
         (id)[UIColor colorWithWhite:1.0
                               alpha:bloomAlpha * 0.18].CGColor,
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:bloomAlpha * 0.045].CGColor,
         (id)[UIColor colorWithWhite:1.0
                               alpha:0.0].CGColor
     ];
 
     self.gfUpperLeftBloomLayer.locations =
-        @[@0.00, @0.22, @0.48, @0.72, @1.00];
+        @[@0.00, @0.28, @0.58, @1.00];
+
+    self.gfPartialRimLayer.strokeColor =
+        [UIColor colorWithWhite:1.0
+                          alpha:rimAlpha]
+            .CGColor;
+
+    self.gfPartialRimLayer.lineWidth =
+        liquid ? 0.68 : 0.52;
 
     self.gfLowerLeftGlintLayer.colors = @[
         (id)[UIColor colorWithWhite:1.0
@@ -1442,29 +1387,20 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
         (GFAppLibraryStyle == 1);
 
     /*
-     * Broad low-frequency luminosity field.
-     * It intentionally occupies an AREA, not an edge strip.
+     * Broad corner luminosity. It occupies AREA, not an edge strip.
      */
     CGFloat bloomWidth =
         CGRectGetWidth(bounds) *
-        (liquid ? 0.68 : 0.62);
+        (self.gfSearchVariant ? 0.42 : (liquid ? 0.52 : 0.46));
 
     CGFloat bloomHeight =
         CGRectGetHeight(bounds) *
-        (liquid ? 0.60 : 0.54);
-
-    if (self.gfSearchVariant) {
-        bloomWidth =
-            CGRectGetWidth(bounds) * 0.54;
-
-        bloomHeight =
-            CGRectGetHeight(bounds) * 0.92;
-    }
+        (self.gfSearchVariant ? 0.92 : (liquid ? 0.48 : 0.42));
 
     self.gfUpperLeftBloomLayer.frame =
         CGRectMake(
-            -radius * 0.18,
-            -radius * 0.16,
+            -radius * 0.10,
+            -radius * 0.08,
             MAX(1.0, bloomWidth),
             MAX(1.0, bloomHeight)
         );
@@ -1472,31 +1408,88 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
     self.gfUpperLeftBloomLayer.cornerRadius =
         MIN(
             radius,
-            MIN(
-                bloomWidth,
-                bloomHeight
-            ) * 0.42
+            MIN(bloomWidth, bloomHeight) * 0.44
         );
 
     /*
-     * Very small lower-left reflection. This must never read as a border.
+     * A single partial rim follows ONLY the upper corners/top.
+     * The existing Beta3.6 base border remains the only full silhouette.
+     */
+    CGRect rimRect =
+        CGRectInset(bounds, 0.80, 0.80);
+
+    CGFloat rimRadius =
+        MIN(
+            MAX(0.0, radius - 0.80),
+            MIN(
+                CGRectGetWidth(rimRect),
+                CGRectGetHeight(rimRect)
+            ) * 0.50
+        );
+
+    UIBezierPath *rimPath =
+        [UIBezierPath bezierPath];
+
+    CGFloat minX = CGRectGetMinX(rimRect);
+    CGFloat maxX = CGRectGetMaxX(rimRect);
+    CGFloat minY = CGRectGetMinY(rimRect);
+
+    [rimPath moveToPoint:
+        CGPointMake(
+            minX,
+            minY + rimRadius * 1.15
+        )];
+
+    [rimPath addArcWithCenter:
+        CGPointMake(
+            minX + rimRadius,
+            minY + rimRadius
+        )
+        radius:rimRadius
+        startAngle:(CGFloat)M_PI
+        endAngle:(CGFloat)(M_PI * 1.5)
+        clockwise:YES];
+
+    [rimPath addLineToPoint:
+        CGPointMake(
+            maxX - rimRadius,
+            minY
+        )];
+
+    [rimPath addArcWithCenter:
+        CGPointMake(
+            maxX - rimRadius,
+            minY + rimRadius
+        )
+        radius:rimRadius
+        startAngle:(CGFloat)(M_PI * 1.5)
+        endAngle:0.0
+        clockwise:YES];
+
+    self.gfPartialRimLayer.frame =
+        bounds;
+    self.gfPartialRimLayer.path =
+        rimPath.CGPath;
+
+    /*
+     * Very small lower-left reflection.
      */
     CGFloat glintWidth =
         MIN(
             CGRectGetWidth(bounds) *
-                (self.gfSearchVariant ? 0.16 : 0.20),
+                (self.gfSearchVariant ? 0.14 : 0.18),
             MAX(
-                30.0,
-                radius * 1.25
+                28.0,
+                radius * 1.12
             )
         );
 
     CGFloat glintHeight =
         MIN(
-            3.8,
+            3.6,
             MAX(
-                2.2,
-                radius * 0.10
+                2.0,
+                radius * 0.095
             )
         );
 
