@@ -1692,7 +1692,7 @@ static void GFUpdateRealAppLibraryPod(UIView *pod) {
 
 
 
-#pragma mark - Beta 3.5 App Library Search Glass
+#pragma mark - App Library Search Glass (1.0 FIX8 iPad geometry)
 
 /*
  * Beta 3.4 required the candidate itself to look like a Search class.
@@ -1741,13 +1741,35 @@ static BOOL GFAppLibrarySearchGeometryMatches(
     }
 
     /*
-     * Intentionally broad enough for iPhone display-scale/layout variants.
-     * The real App Library pill occupies roughly 65–92% of the page width,
-     * is shallow, and lives in the first quarter of the page.
+     * iPhone and iPad use noticeably different App Library search widths.
+     *
+     * iPhone:
+     *   search is normally a wide page-level pill.
+     *
+     * iPad:
+     *   search is a centered, medium-width pill above the 4-column category
+     *   grid. Requiring >= 52% of the page width rejects the real iPad pill.
+     *
+     * Keep the proven iPhone thresholds untouched and add a dedicated iPad
+     * geometry branch.
      */
+    UIUserInterfaceIdiom idiom =
+        root.traitCollection.userInterfaceIdiom;
+
+    BOOL iPadLayout =
+        idiom == UIUserInterfaceIdiomPad ||
+        rootWidth >= 700.0;
+
     BOOL wideEnough =
-        width >= rootWidth * 0.52 &&
-        width <= rootWidth * 0.98;
+        iPadLayout
+            ? (
+                width >= rootWidth * 0.28 &&
+                width <= rootWidth * 0.72
+            )
+            : (
+                width >= rootWidth * 0.52 &&
+                width <= rootWidth * 0.98
+            );
 
     BOOL shallowEnough =
         height >= 34.0 &&
@@ -1755,15 +1777,36 @@ static BOOL GFAppLibrarySearchGeometryMatches(
 
     BOOL nearTop =
         CGRectGetMinY(rect) >= -12.0 &&
-        CGRectGetMidY(rect) <= rootHeight * 0.28;
+        CGRectGetMidY(rect) <=
+            rootHeight * (iPadLayout ? 0.32 : 0.28);
 
     BOOL pillAspect =
-        width / MAX(height, 1.0) >= 3.2;
+        width / MAX(height, 1.0) >=
+            (iPadLayout ? 3.6 : 3.2);
+
+    /*
+     * The iPad search pill is intentionally centered. This extra constraint
+     * lets us accept its narrower width without accidentally selecting a
+     * shallow category/header view elsewhere in the hierarchy.
+     */
+    BOOL centeredEnough = YES;
+
+    if (iPadLayout) {
+        CGFloat centerDelta =
+            fabs(
+                CGRectGetMidX(rect) -
+                rootWidth * 0.5
+            );
+
+        centeredEnough =
+            centerDelta <= rootWidth * 0.18;
+    }
 
     return wideEnough &&
            shallowEnough &&
            nearTop &&
-           pillAspect;
+           pillAspect &&
+           centeredEnough;
 }
 
 
@@ -1856,8 +1899,16 @@ static void GFFindBestAppLibrarySearchInput(
              * Width is intentionally NOT required here; the real text field
              * can be narrower than its outer glass pill.
              */
+            UIUserInterfaceIdiom idiom =
+                root.traitCollection.userInterfaceIdiom;
+
+            BOOL iPadLayout =
+                idiom == UIUserInterfaceIdiomPad ||
+                CGRectGetWidth(root.bounds) >= 700.0;
+
             if (CGRectGetMidY(rect) <=
-                    rootHeight * 0.30 &&
+                    rootHeight *
+                        (iPadLayout ? 0.36 : 0.30) &&
                 CGRectGetHeight(rect) >= 20.0 &&
                 CGRectGetHeight(rect) <= 110.0) {
 
@@ -1940,11 +1991,19 @@ static CGFloat GFAppLibrarySearchContainerScore(
     CGFloat radius =
         view.layer.cornerRadius;
 
+    UIUserInterfaceIdiom idiom =
+        root.traitCollection.userInterfaceIdiom;
+
+    BOOL iPadLayout =
+        idiom == UIUserInterfaceIdiomPad ||
+        rootWidth >= 700.0;
+
     CGFloat score = 0.0;
 
     /*
-     * Geometry dominates the fallback: very wide, close to the top, and
-     * pill-shaped. This avoids requiring any particular private class name.
+     * Width remains useful, but on iPad the actual search pill is narrower
+     * than the page. Add a center-position score so the correct iPad pill
+     * still wins without weakening the iPhone fallback.
      */
     score +=
         70.0 *
@@ -1953,12 +2012,32 @@ static CGFloat GFAppLibrarySearchContainerScore(
             width / rootWidth
         );
 
+    if (iPadLayout) {
+        CGFloat normalizedCenterDelta =
+            fabs(
+                CGRectGetMidX(rect) -
+                rootWidth * 0.5
+            ) /
+            rootWidth;
+
+        score +=
+            28.0 *
+            (
+                1.0 -
+                MIN(
+                    1.0,
+                    normalizedCenterDelta / 0.18
+                )
+            );
+    }
+
     score -=
         24.0 *
         (CGRectGetMidY(rect) /
          rootHeight);
 
-    CGFloat expectedHeight = 56.0;
+    CGFloat expectedHeight =
+        iPadLayout ? 58.0 : 56.0;
     score -=
         MIN(
             20.0,
