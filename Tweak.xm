@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 3.7 — App Library Glass Presence pass
+ * GlassFolders 0.7.4 Beta 3.8 — App Library clean optical highlights
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -1002,8 +1002,8 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
                     };
                 } else {
                     r = (GFAppLibraryMaterialRecipe){
-                        9.4, 1.15, 0.046, 0.058,
-                        0.34, 0.145, 0.24, 0.065
+                        9.2, 1.14, 0.042, 0.054,
+                        0.27, 0.095, 0.24, 0.065
                     };
                 }
                 break;
@@ -1016,8 +1016,8 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
                     };
                 } else {
                     r = (GFAppLibraryMaterialRecipe){
-                        12.8, 1.09, 0.036, 0.072,
-                        0.32, 0.135, 0.27, 0.075
+                        12.6, 1.09, 0.034, 0.070,
+                        0.26, 0.090, 0.27, 0.075
                     };
                 }
                 break;
@@ -1031,8 +1031,8 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
                     };
                 } else {
                     r = (GFAppLibraryMaterialRecipe){
-                        11.0, 1.18, 0.072, 0.086,
-                        0.34, 0.160, 0.22, 0.055
+                        10.8, 1.16, 0.064, 0.080,
+                        0.28, 0.105, 0.23, 0.055
                     };
                 }
                 break;
@@ -1043,13 +1043,13 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
          * Beta 3.5 was deliberately much brighter and looked disconnected.
          */
         if (searchVariant) {
-            r.blur += 0.6;
-            r.saturation += dark ? 0.008 : 0.010;
-            r.brightness += dark ? 0.003 : 0.004;
-            r.tintAlpha += dark ? 0.003 : 0.004;
-            r.borderWidth += 0.02;
-            r.borderAlpha += 0.010;
-            r.nativeSearchAlpha = MAX(0.04, r.nativeSearchAlpha - 0.008);
+            r.blur += 0.45;
+            r.saturation += dark ? 0.006 : 0.008;
+            r.brightness += dark ? 0.002 : 0.003;
+            r.tintAlpha += dark ? 0.002 : 0.003;
+            r.borderWidth += 0.01;
+            r.borderAlpha += 0.006;
+            r.nativeSearchAlpha = MAX(0.04, r.nativeSearchAlpha - 0.006);
         }
     } else {
         /*
@@ -1068,8 +1068,8 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
                     };
                 } else {
                     r = (GFAppLibraryMaterialRecipe){
-                        6.9, 1.24, 0.020, 0.015,
-                        0.30, 0.115, 0.17, 0.05
+                        7.2, 1.22, 0.018, 0.015,
+                        0.24, 0.075, 0.18, 0.052
                     };
                 }
                 break;
@@ -1082,8 +1082,8 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
                     };
                 } else {
                     r = (GFAppLibraryMaterialRecipe){
-                        8.7, 1.15, 0.010, 0.022,
-                        0.32, 0.125, 0.23, 0.07
+                        9.0, 1.14, 0.008, 0.022,
+                        0.25, 0.080, 0.24, 0.072
                     };
                 }
                 break;
@@ -1097,21 +1097,21 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
                     };
                 } else {
                     r = (GFAppLibraryMaterialRecipe){
-                        5.1, 1.32, 0.029, 0.009,
-                        0.28, 0.105, 0.12, 0.03
+                        5.4, 1.30, 0.026, 0.009,
+                        0.22, 0.070, 0.13, 0.032
                     };
                 }
                 break;
         }
 
         if (searchVariant) {
-            r.blur += 0.45;
-            r.saturation += dark ? 0.008 : 0.010;
-            r.brightness += 0.003;
+            r.blur += 0.35;
+            r.saturation += dark ? 0.006 : 0.008;
+            r.brightness += 0.002;
             r.tintAlpha += 0.002;
-            r.borderWidth += 0.02;
-            r.borderAlpha += 0.010;
-            r.nativeSearchAlpha = MAX(0.025, r.nativeSearchAlpha - 0.008);
+            r.borderWidth += 0.01;
+            r.borderAlpha += 0.006;
+            r.nativeSearchAlpha = MAX(0.025, r.nativeSearchAlpha - 0.006);
         }
     }
 
@@ -1123,11 +1123,8 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
 
 @interface GFAppLibraryGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
-@property (nonatomic, strong) CAGradientLayer *gfDirectionalSpecularLayer;
-@property (nonatomic, strong) CAShapeLayer *gfDirectionalSpecularMask;
-@property (nonatomic, strong) CAShapeLayer *gfInnerHighlightLayer;
-@property (nonatomic, strong) CAShapeLayer *gfInnerShoulderLayer;
-@property (nonatomic, strong) CAGradientLayer *gfCornerGlintLayer;
+@property (nonatomic, strong) CAGradientLayer *gfTopSpecularLayer;
+@property (nonatomic, strong) CAGradientLayer *gfLowerLeftGlintLayer;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
 @property (nonatomic, assign) BOOL gfSearchVariant;
@@ -1160,72 +1157,20 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
         [self addSubview:_gfTintView];
 
         /*
-         * Beta 3.7 optical-presence stack.
-         *
-         * The old App Library material had transmission + a uniform border,
-         * which could read as a transparent card. These layers add the visual
-         * signals that make the eye read a physical glass surface:
-         *
-         *   directional outer specular
-         *   thin inner bright edge
-         *   subtle inner dark shoulder
-         *   localized lower-left glint
-         *
-         * They are static CoreAnimation layers: no timer/display-link loop.
+         * Beta 3.8 deliberately avoids the Beta 3.7 full-perimeter optical
+         * stack. Glass presence comes from two local light events only.
          */
-        _gfDirectionalSpecularLayer =
-            [CAGradientLayer layer];
+        _gfTopSpecularLayer = [CAGradientLayer layer];
+        _gfTopSpecularLayer.startPoint = CGPointMake(0.0, 0.5);
+        _gfTopSpecularLayer.endPoint = CGPointMake(1.0, 0.5);
+        _gfTopSpecularLayer.cornerCurve = kCACornerCurveContinuous;
+        [self.layer addSublayer:_gfTopSpecularLayer];
 
-        _gfDirectionalSpecularLayer.startPoint =
-            CGPointMake(0.05, 0.02);
-        _gfDirectionalSpecularLayer.endPoint =
-            CGPointMake(0.94, 0.82);
-
-        _gfDirectionalSpecularMask =
-            [CAShapeLayer layer];
-        _gfDirectionalSpecularMask.fillColor =
-            UIColor.clearColor.CGColor;
-        _gfDirectionalSpecularMask.strokeColor =
-            UIColor.whiteColor.CGColor;
-        _gfDirectionalSpecularMask.lineCap =
-            kCALineCapRound;
-        _gfDirectionalSpecularLayer.mask =
-            _gfDirectionalSpecularMask;
-
-        [self.layer addSublayer:
-            _gfDirectionalSpecularLayer];
-
-        _gfInnerHighlightLayer =
-            [CAShapeLayer layer];
-        _gfInnerHighlightLayer.fillColor =
-            UIColor.clearColor.CGColor;
-        _gfInnerHighlightLayer.lineCap =
-            kCALineCapRound;
-
-        [self.layer addSublayer:
-            _gfInnerHighlightLayer];
-
-        _gfInnerShoulderLayer =
-            [CAShapeLayer layer];
-        _gfInnerShoulderLayer.fillColor =
-            UIColor.clearColor.CGColor;
-        _gfInnerShoulderLayer.lineCap =
-            kCALineCapRound;
-
-        [self.layer addSublayer:
-            _gfInnerShoulderLayer];
-
-        _gfCornerGlintLayer =
-            [CAGradientLayer layer];
-        _gfCornerGlintLayer.startPoint =
-            CGPointMake(0.0, 0.45);
-        _gfCornerGlintLayer.endPoint =
-            CGPointMake(1.0, 0.55);
-        _gfCornerGlintLayer.cornerCurve =
-            kCACornerCurveContinuous;
-
-        [self.layer addSublayer:
-            _gfCornerGlintLayer];
+        _gfLowerLeftGlintLayer = [CAGradientLayer layer];
+        _gfLowerLeftGlintLayer.startPoint = CGPointMake(0.0, 0.5);
+        _gfLowerLeftGlintLayer.endPoint = CGPointMake(1.0, 0.5);
+        _gfLowerLeftGlintLayer.cornerCurve = kCACornerCurveContinuous;
+        [self.layer addSublayer:_gfLowerLeftGlintLayer];
 
         [self gfRefreshMaterial];
     }
@@ -1298,117 +1243,82 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
     BOOL liquid =
         (GFAppLibraryStyle == 1);
 
-    CGFloat presetPresence = 1.0;
+    CGFloat presetWeight = 1.0;
 
     if (liquid) {
         switch (GFAppLibraryLiquidPreset) {
             case 1: // Balanced
-                presetPresence = 0.84;
+                presetWeight = 0.82;
                 break;
-
             case 2: // Deep
-                presetPresence = 0.72;
+                presetWeight = 0.66;
                 break;
-
             case 0:
             default: // Crystal
-                presetPresence = 1.00;
+                presetWeight = 1.0;
                 break;
         }
     } else {
         switch (GFAppLibraryClearPreset) {
             case 1: // Balanced
-                presetPresence = 0.78;
+                presetWeight = 0.72;
                 break;
-
             case 2: // Soft
-                presetPresence = 0.60;
+                presetWeight = 0.52;
                 break;
-
             case 0:
             default: // Apple Bright
-                presetPresence = 0.88;
+                presetWeight = 0.78;
                 break;
         }
     }
 
-    CGFloat searchLift =
-        self.gfSearchVariant ? 1.06 : 1.0;
-
-    /*
-     * Liquid Glass receives much stronger directional optics while Clear
-     * keeps a cleaner luminous/frosted identity.
-     */
-    CGFloat specularAlpha =
+    CGFloat topAlpha =
         (liquid
-            ? (dark ? 0.34 : 0.46)
-            : (dark ? 0.18 : 0.24))
-        * presetPresence
-        * searchLift;
-
-    CGFloat innerHighlightAlpha =
-        (liquid
-            ? (dark ? 0.16 : 0.21)
-            : (dark ? 0.09 : 0.12))
-        * presetPresence
-        * searchLift;
-
-    CGFloat innerShoulderAlpha =
-        (liquid
-            ? (dark ? 0.090 : 0.068)
-            : (dark ? 0.048 : 0.032))
-        * presetPresence;
+            ? (dark ? 0.20 : 0.27)
+            : (dark ? 0.11 : 0.15))
+        * presetWeight;
 
     CGFloat glintAlpha =
         (liquid
-            ? (dark ? 0.30 : 0.40)
-            : (dark ? 0.12 : 0.16))
-        * presetPresence
-        * searchLift;
+            ? (dark ? 0.16 : 0.22)
+            : (dark ? 0.07 : 0.095))
+        * presetWeight;
 
-    self.gfDirectionalSpecularLayer.colors = @[
+    if (self.gfSearchVariant) {
+        topAlpha *= 1.05;
+        glintAlpha *= 0.90;
+    }
+
+    self.gfTopSpecularLayer.colors = @[
         (id)[UIColor colorWithWhite:1.0
-                              alpha:specularAlpha].CGColor,
+                              alpha:0.0].CGColor,
         (id)[UIColor colorWithWhite:1.0
-                              alpha:specularAlpha * 0.52].CGColor,
+                              alpha:topAlpha * 0.70].CGColor,
         (id)[UIColor colorWithWhite:1.0
-                              alpha:specularAlpha * 0.10].CGColor,
+                              alpha:topAlpha].CGColor,
+        (id)[UIColor colorWithWhite:1.0
+                              alpha:topAlpha * 0.35].CGColor,
         (id)[UIColor colorWithWhite:1.0
                               alpha:0.0].CGColor
     ];
 
-    self.gfDirectionalSpecularLayer.locations =
-        @[@0.00, @0.24, @0.52, @1.00];
+    self.gfTopSpecularLayer.locations =
+        @[@0.00, @0.12, @0.42, @0.72, @1.00];
 
-    self.gfInnerHighlightLayer.strokeColor =
-        [UIColor colorWithWhite:1.0
-                          alpha:innerHighlightAlpha]
-            .CGColor;
-
-    self.gfInnerHighlightLayer.lineWidth =
-        liquid ? 0.78 : 0.62;
-
-    self.gfInnerShoulderLayer.strokeColor =
-        [UIColor colorWithWhite:0.0
-                          alpha:innerShoulderAlpha]
-            .CGColor;
-
-    self.gfInnerShoulderLayer.lineWidth =
-        liquid ? 1.10 : 0.86;
-
-    self.gfCornerGlintLayer.colors = @[
+    self.gfLowerLeftGlintLayer.colors = @[
         (id)[UIColor colorWithWhite:1.0
                               alpha:0.0].CGColor,
         (id)[UIColor colorWithWhite:1.0
                               alpha:glintAlpha].CGColor,
         (id)[UIColor colorWithWhite:1.0
-                              alpha:glintAlpha * 0.32].CGColor,
+                              alpha:glintAlpha * 0.42].CGColor,
         (id)[UIColor colorWithWhite:1.0
                               alpha:0.0].CGColor
     ];
 
-    self.gfCornerGlintLayer.locations =
-        @[@0.00, @0.28, @0.55, @1.00];
+    self.gfLowerLeftGlintLayer.locations =
+        @[@0.00, @0.34, @0.60, @1.00];
 }
 
 - (void)layoutSubviews {
@@ -1431,77 +1341,50 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
             ) * 0.18;
     }
 
-    self.gfDirectionalSpecularLayer.frame =
-        bounds;
+    /*
+     * Soft top light: only the upper band. It does NOT follow the whole
+     * rounded perimeter, which avoids the Beta 3.7 double-outline look.
+     */
+    CGFloat topHeight =
+        MIN(
+            7.0,
+            MAX(3.6, radius * 0.20)
+        );
 
-    CGRect specularRect =
-        CGRectInset(bounds, 0.55, 0.55);
+    self.gfTopSpecularLayer.frame =
+        CGRectMake(
+            MAX(3.0, radius * 0.15),
+            0.60,
+            MAX(
+                0.0,
+                CGRectGetWidth(bounds) -
+                MAX(6.0, radius * 0.30)
+            ),
+            topHeight
+        );
 
-    UIBezierPath *specularPath =
-        [UIBezierPath
-            bezierPathWithRoundedRect:
-                specularRect
-            cornerRadius:
-                MAX(0.0, radius - 0.55)];
-
-    self.gfDirectionalSpecularMask.frame =
-        bounds;
-    self.gfDirectionalSpecularMask.path =
-        specularPath.CGPath;
-    self.gfDirectionalSpecularMask.lineWidth =
-        (GFAppLibraryStyle == 1)
-            ? 1.55
-            : 1.10;
-
-    CGRect highlightRect =
-        CGRectInset(bounds, 1.25, 1.25);
-
-    UIBezierPath *highlightPath =
-        [UIBezierPath
-            bezierPathWithRoundedRect:
-                highlightRect
-            cornerRadius:
-                MAX(0.0, radius - 1.25)];
-
-    self.gfInnerHighlightLayer.frame =
-        bounds;
-    self.gfInnerHighlightLayer.path =
-        highlightPath.CGPath;
-
-    CGRect shoulderRect =
-        CGRectInset(bounds, 2.35, 2.35);
-
-    UIBezierPath *shoulderPath =
-        [UIBezierPath
-            bezierPathWithRoundedRect:
-                shoulderRect
-            cornerRadius:
-                MAX(0.0, radius - 2.35)];
-
-    self.gfInnerShoulderLayer.frame =
-        bounds;
-    self.gfInnerShoulderLayer.path =
-        shoulderPath.CGPath;
+    self.gfTopSpecularLayer.cornerRadius =
+        topHeight * 0.5;
 
     /*
-     * Localized lower-left optical glint.
-     * Keep it compact so it reads as a highlight rather than body whitening.
+     * Small lower-left glint only. Keep it local enough that it reads as a
+     * light event, not another border.
      */
     CGFloat glintWidth =
         MIN(
-            CGRectGetWidth(bounds) * 0.34,
-            MAX(54.0, radius * 2.20)
+            CGRectGetWidth(bounds) * 0.25,
+            MAX(40.0, radius * 1.65)
         );
 
     CGFloat glintHeight =
         MIN(
-            8.0,
-            MAX(4.0, radius * 0.20)
+            5.0,
+            MAX(2.8, radius * 0.13)
         );
 
-    self.gfCornerGlintLayer.frame =
+    self.gfLowerLeftGlintLayer.frame =
         CGRectMake(
-            MAX(4.0, radius * 0.30),
+            MAX(5.0, radius * 0.36),
             MAX(
                 0.0,
                 CGRectGetHeight(bounds) -
@@ -1512,7 +1395,7 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
             glintHeight
         );
 
-    self.gfCornerGlintLayer.cornerRadius =
+    self.gfLowerLeftGlintLayer.cornerRadius =
         glintHeight * 0.5;
 }
 
