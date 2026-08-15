@@ -10,9 +10,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.4 Beta 3.0</string>
+			<string>GlassFolders 0.7.4 Beta 3.1</string>
 			<key>footerText</key>
-			<string>Beta 3.0：只重做 Clear 的强度逻辑。进入 Clear 后从 0% 开始就保持高透亮、低灰雾的基础状态；滑杆不再把画面从灰闷慢慢推亮，而主要增加局部模糊、颜色/层次分离、边缘高光与光学结构。打开态 100% 仍保持约 40pt Gaussian 上限。Liquid Glass 沿用 Beta 2.8 已确认基线，不做调整。</string>
+			<string>Beta 3.1：Clear 浅色 V2 保持不变。本版只收敛 Liquid Glass：浅色关闭态降低亮度、白色覆盖与 App Library pod 参与度，避免文件夹图标像发亮粉色卡片；打开态减少灰雾与局部模糊，提高真实壁纸色彩/亮度穿透，并把玻璃识别主要交给顶部/左上方向性高光、圆角结构与左下局部 specular glint。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -32,7 +32,7 @@
 			<key>label</key>
 			<string>风格</string>
 			<key>footerText</key>
-			<string>Clear：颜色只来自真实壁纸/backdrop，不添加紫、蓝、粉等彩色 tint。Clear 本身从最低强度就保持干净透亮；强度提高时主要增加模糊、色彩分离与边缘/高光结构，而不是明显增加白色透光。Liquid Glass：保持既有较厚玻璃的 saturation、白色透光与镜面高光基线。</string>
+			<string>Clear：颜色只来自真实壁纸/backdrop，不添加紫、蓝、粉等彩色 tint。Clear 本身从最低强度就保持干净透亮；强度提高时主要增加模糊、色彩分离与边缘/高光结构，而不是明显增加白色透光。Liquid Glass：浅色关闭态更克制、更少发白；打开态更透明、更少灰雾，并用方向性高光和局部折射感突出玻璃。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -90,7 +90,7 @@
 			<key>label</key>
 			<string>Liquid Glass 强度</string>
 			<key>footerText</key>
-			<string>只用于 Liquid Glass。继续控制 blur、saturation、白色透光与镜面高光等综合玻璃响应。与 Clear 强度分开记忆。</string>
+			<string>只用于 Liquid Glass。滑杆继续控制 blur、真实壁纸色彩/亮度穿透与镜面高光。浅色打开态会减少均匀白雾，把更多视觉强度放在顶部/圆角/局部 specular 上；与 Clear 强度分开记忆。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -116,7 +116,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>关闭文件夹的 Liquid Glass 现在完整恢复到此前真机确认满意的较浅基线：原 blur / saturation、中性 brightness、白色透光、被动 SBHLibraryCategoryPodBackgroundView blend 与关闭态光照图均保持该基线。不主动调用 _updateVisualStyle；真实 App 资源库本身不会被 hook 或修改。</string>
+			<string>Beta 3.1 的 Liquid Glass 关闭态在浅色模式下降低 native pod、白色 tint、brightness 与光学层整体能量，避免过亮；深色关闭态保留原基线。打开态浅色模式降低 blur、提高 backdrop saturation / luminance、减薄白色 tint，并弱化整圈 border、强化顶部/左上主高光与左下局部 glint。真实 App 资源库不会被 hook 或修改。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

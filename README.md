@@ -1,61 +1,47 @@
-# GlassFolders 0.7.4 Beta 3.0
+# GlassFolders 0.7.4 Beta 3.1
 
-Beta 3.0 changes only the Clear contract. Liquid Glass stays on the accepted Beta 2.8 baselines.
+Beta 3.1 keeps the accepted **Clear Light V2** tuning and only refines **Liquid Glass**.
 
-## 1. Independent controls
+## Clear
 
-The Settings page keeps two separate saved sliders:
+No optical tuning changes in this pass.
 
-- **Clear 强度** -> key `ClearStrength`
-- **Liquid Glass 强度** -> key `LiquidGlassStrength`
+- Clear remains high-transmission from the bottom of the slider.
+- Light opened Clear keeps the accepted 28 pt local-blur ceiling.
+- Dark Clear keeps the existing curve.
+- `ClearStrength` remains independent from `LiquidGlassStrength`.
 
-Existing installs remain compatible. If either split key has never been written, the old `GlassStrength` value is still used as the migration fallback.
+## Liquid Glass — closed, light appearance
 
-## 2. Clear — high-base transmission, structure-driven strength
+The closed icon was reading too bright and too much like a pink/white card. Beta 3.1 makes the light appearance more wallpaper-owned:
 
-Clear no longer starts from a dull/grey optical state.
+- lower native `SBHLibraryCategoryPodBackgroundView` participation
+- lower neutral-white tint
+- much smaller brightness lift
+- slightly lower local blur and saturation lift
+- reduced closed optical-layer energy
 
-Selecting Clear now establishes the clean/transmitted look immediately, including at `ClearStrength = 0`. The slider does **not** ramp Clear from grey to transparent. Instead it mainly adds:
+Dark-appearance closed Liquid Glass keeps the previous baseline.
 
-- local Gaussian blur
-- wallpaper/chroma separation
-- optical edge definition
-- a small amount of additional neutral luminance
+## Liquid Glass — opened, light appearance
 
-The opened blur curve is unchanged:
+The opened panel was transparent but visually grey and did not read strongly enough as glass. Beta 3.1 shifts the energy away from a uniform body and toward optical structure:
 
-- 0%: 0 pt
-- 10%: ~2.8 pt
-- 25%: ~8.1 pt
-- 50%: ~18.0 pt
-- 55%: ~20.1 pt
-- 75%: ~28.7 pt
-- 100%: 40.0 pt
+- lower local blur
+- higher wallpaper saturation/chroma recovery
+- stronger neutral backdrop luminance
+- nearly full real-backdrop sampling
+- thinner neutral-white body tint
+- stronger top / upper-left directional rail
+- weaker uniform side/bottom energy
+- stronger localized lower-left specular glint
+- weaker full-perimeter continuity border
 
-The curve remains `40 * strength^1.15`.
+The intent is **clear center + optical edge**, rather than **grey transparent sheet**.
 
-### Opened Clear baseline
+## Version / build
 
-At 0%, the locally sampled backdrop is already shown at about 99% alpha instead of being gated off. Neutral brightness and white-light transmission also begin near their final Clear values.
-
-As the slider rises, the larger changes are saturation/separation, local blur and edge/specular structure. The white/transmission component moves only slightly, so high Clear should become more structured rather than simply whiter.
-
-### Closed Clear baseline
-
-Closed-folder Clear follows the same rule: 0% is still a real Clear material instead of a fully transparent replacement view. Blur begins at 0, while the colorless clean/saturation/luminance baseline is already present.
-
-## 3. Liquid Glass — unchanged
-
-`LiquidGlassStrength` keeps the Beta 2.8 composite behavior and accepted closed/open visual baselines. Blur, saturation, neutral-white transmission, passive `SBHLibraryCategoryPodBackgroundView` participation and Liquid Glass specular behavior are not recalibrated in this pass.
-
-## Scope / stability
-
-- Clear and Liquid Glass keep independent saved strength values
-- opened Clear keeps the validated 0–40 pt blur curve
-- Clear 0% now keeps a high-transmission clean baseline
-- Clear strength mainly adds blur, separation and optical structure
-- no chromatic Clear body tint
-- Liquid Glass constants are unchanged
-- no App Library controller hooks
-- no `_updateVisualStyle` activation
-- no daemon, timer, display link, gyro, or Metal render loop
+- package version: `0.7.4~beta3.1`
+- artifact: `GlassFolders-0.7.4-Beta3.1-DEB`
+- existing preference keys and defaults are unchanged
+- no new source files are added
