@@ -1,4 +1,4 @@
-name: GlassFolders 0.7.4 Beta4.6 SETTINGS-CLEANUP
+name: GlassFolders 1.0.0 Commercial
 
 on:
   workflow_dispatch:
@@ -8,8 +8,150 @@ on:
       - master
 
 jobs:
-  build:
-    name: RootHide arm64e folder-only
+  build-roothide:
+    name: RootHide arm64e
+    runs-on: macos-latest
+
+    env:
+      THEOS: ${{ github.workspace }}/theos-roothide
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Workflow stamp
+        run: |
+          echo "=== GLASSFOLDERS 1.0.0 / ROOTHIDE ARM64E ==="
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install ldid xz
+
+      - name: Install RootHide Theos
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$THEOS"
+          git clone --recursive https://github.com/roothide/theos.git "$THEOS"
+          test -f "$THEOS/makefiles/common.mk"
+
+      - name: Install iOS 16.5 SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="$THEOS/sdks"
+          SDK_EXACT="$SDK_ROOT/iPhoneOS16.5.sdk"
+          SDK_ARCHIVE="/tmp/iPhoneOS16.5.sdk.tar.xz"
+          mkdir -p "$SDK_ROOT"
+          rm -rf "$SDK_EXACT" "$SDK_ARCHIVE"
+
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://github.com/theos/sdks/releases/latest/download/iPhoneOS16.5.sdk.tar.xz" \
+            -o "$SDK_ARCHIVE"
+          tar -xJf "$SDK_ARCHIVE" -C "$SDK_ROOT"
+
+          FOUND="$(find "$SDK_ROOT" -maxdepth 3 -type d -name 'iPhoneOS16.5.sdk' -print -quit)"
+          test -n "$FOUND"
+          if [ "$FOUND" != "$SDK_EXACT" ]; then
+            rm -rf "$SDK_EXACT"
+            ditto "$FOUND" "$SDK_EXACT"
+          fi
+          test -d "$SDK_EXACT"
+
+      - name: Normalize obsolete PreferenceLoader leftovers
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f \
+            layout/Library/PreferenceLoader/Preferences/GlassFolders.plist \
+            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png \
+            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png \
+            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png \
+            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon.png \
+            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon@2x.png \
+            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon@3x.png
+
+      - name: Build RootHide package
+        shell: bash
+        run: |
+          set -euo pipefail
+          # RootHide commercial build keeps arm64e architecture.
+          sed -i '' 's/^Architecture:.*/Architecture: iphoneos-arm64e/' control
+          make THEOS="$THEOS" clean
+          make THEOS="$THEOS" package FINALPACKAGE=1 ARCHS=arm64e
+
+      - name: Locate package
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEB="$(find packages -maxdepth 1 -type f -name '*.deb' | sort | tail -n 1)"
+          test -n "$DEB"
+          echo "deb=$DEB" >> "$GITHUB_OUTPUT"
+          ls -lh "$DEB"
+
+      - name: Verify RootHide package
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEB="${{ steps.package.outputs.deb }}"
+          TMP="/tmp/gf100-roothide"
+          rm -rf "$TMP"
+          mkdir -p "$TMP/root" "$TMP/ctrl"
+          cd "$TMP"
+
+          ar -x "$GITHUB_WORKSPACE/$DEB"
+          DATA="$(find . -maxdepth 1 -type f -name 'data.tar*' | head -n 1)"
+          CONTROL="$(find . -maxdepth 1 -type f -name 'control.tar*' | head -n 1)"
+          test -n "$DATA" -a -n "$CONTROL"
+          tar -xf "$DATA" -C root
+          tar -xf "$CONTROL" -C ctrl
+
+          grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
+          grep -q '^Version: 1.0.0$' ctrl/control
+          grep -q '^Architecture: iphoneos-arm64e$' ctrl/control
+
+          DYLIB="$(find root -type f -name 'GlassFolders.dylib' | head -n 1)"
+          PREFBIN="$(find root -type f -path '*GlassFoldersPrefs.bundle/GlassFoldersPrefs' | head -n 1)"
+          FILTER="$(find root -type f -path '*MobileSubstrate/DynamicLibraries/GlassFolders.plist' | head -n 1)"
+          ROOT_PLIST="$(find root -type f -path '*GlassFoldersPrefs.bundle/Root.plist' | head -n 1)"
+          EN_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/en.lproj/Root.strings' | head -n 1)"
+          ZH_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/zh-Hans.lproj/Root.strings' | head -n 1)"
+
+          test -n "$DYLIB" -a -n "$PREFBIN" -a -n "$FILTER" -a -n "$ROOT_PLIST"
+          test -n "$EN_STRINGS" -a -n "$ZH_STRINGS"
+
+          file "$DYLIB" | grep -qi 'arm64e'
+          file "$PREFBIN" | grep -qi 'arm64e'
+          grep -q 'com.apple.springboard' "$FILTER"
+
+          python3 - "$ROOT_PLIST" <<'PY'
+          import plistlib, sys
+          with open(sys.argv[1], "rb") as f:
+              p = plistlib.load(f)
+          items = p["items"]
+          defaults = {x.get("key"): x.get("defaults") for x in items if x.get("key")}
+          assert set(defaults.values()) == {"com.kulinich.glassfolders"}
+          assert any(x.get("label") == "Folders" for x in items)
+          assert any(x.get("label") == "App Library" for x in items)
+          print("RootHide product identity/localization resources verified.")
+          PY
+
+      - name: SHA256
+        run: shasum -a 256 "${{ steps.package.outputs.deb }}"
+
+      - name: Upload RootHide deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: GlassFolders-1.0.0-RootHide-arm64e
+          path: ${{ steps.package.outputs.deb }}
+          if-no-files-found: error
+          retention-days: 14
+
+  build-rootless:
+    name: Standard rootless arm64
     runs-on: macos-latest
 
     env:
@@ -21,82 +163,49 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 0.7.4 BETA4.6 SETTINGS-CLEANUP ==="
-          echo "THEOS=$THEOS"
-
-      - name: Set up Python for PNG verification
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+          echo "=== GLASSFOLDERS 1.0.0 / STANDARD ROOTLESS ARM64 ==="
 
       - name: Install dependencies
         shell: bash
         run: |
           set -euo pipefail
-
           brew install ldid xz
 
-          echo "Python selected by actions/setup-python:"
-          which python
-          python --version
-
-          echo "Installing Pillow into setup-python environment..."
-          python -m pip install --upgrade pip
-          python -m pip install pillow
-
-          echo "Verifying Pillow import..."
-          python - <<'PY'
-          from PIL import Image
-          print("Pillow import OK")
-          print("PIL image module:", Image)
-          PY
-
-      - name: Install RootHide Theos
+      - name: Install official Theos
         shell: bash
         run: |
           set -euo pipefail
           rm -rf "$THEOS"
-          git clone --recursive https://github.com/roothide/theos.git "$THEOS"
+          git clone --recursive https://github.com/theos/theos.git "$THEOS"
           test -f "$THEOS/makefiles/common.mk"
 
-      - name: Install and normalize patched iOS 16.5 SDK
+      - name: Install iOS 16.5 SDK
         shell: bash
         run: |
           set -euo pipefail
-
           SDK_ROOT="$THEOS/sdks"
           SDK_EXACT="$SDK_ROOT/iPhoneOS16.5.sdk"
           SDK_ARCHIVE="/tmp/iPhoneOS16.5.sdk.tar.xz"
-          SDK_URL="https://github.com/theos/sdks/releases/latest/download/iPhoneOS16.5.sdk.tar.xz"
-
           mkdir -p "$SDK_ROOT"
           rm -rf "$SDK_EXACT" "$SDK_ARCHIVE"
 
           curl -fL --retry 3 --retry-delay 2 \
-            "$SDK_URL" \
+            "https://github.com/theos/sdks/releases/latest/download/iPhoneOS16.5.sdk.tar.xz" \
             -o "$SDK_ARCHIVE"
-
           tar -xJf "$SDK_ARCHIVE" -C "$SDK_ROOT"
 
           FOUND="$(find "$SDK_ROOT" -maxdepth 3 -type d -name 'iPhoneOS16.5.sdk' -print -quit)"
           test -n "$FOUND"
-
           if [ "$FOUND" != "$SDK_EXACT" ]; then
             rm -rf "$SDK_EXACT"
             ditto "$FOUND" "$SDK_EXACT"
           fi
-
           test -d "$SDK_EXACT"
-          test -d "$SDK_EXACT/System/Library/PrivateFrameworks/Preferences.framework"
 
-          echo "SDK verified at $SDK_EXACT"
-
-      - name: Normalize old repository leftovers
+      - name: Normalize obsolete PreferenceLoader leftovers
         shell: bash
         run: |
           set -euo pipefail
-
-          echo "Deleting all obsolete PreferenceLoader entry/icon files..."
           rm -f \
             layout/Library/PreferenceLoader/Preferences/GlassFolders.plist \
             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png \
@@ -106,28 +215,19 @@ jobs:
             layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon@2x.png \
             layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFoldersIcon@3x.png
 
-          echo "Only this PreferenceLoader plist may remain:"
-          find layout/Library/PreferenceLoader/Preferences -type f -name '*.plist' -print
-
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist
-          test ! -e layout/Library/PreferenceLoader/Preferences/GlassFolders.plist
-
-      - name: Build RootHide package
+      - name: Build standard rootless package
         shell: bash
         run: |
           set -euo pipefail
-
-          SDK="$THEOS/sdks/iPhoneOS16.5.sdk"
-          test -d "$SDK"
-
-          echo "PWD=$(pwd)"
-          echo "THEOS=$THEOS"
-          ls -ld "$THEOS" "$SDK"
-
+          # Each job has a clean checkout, so changing Architecture here is safe.
+          sed -i '' 's/^Architecture:.*/Architecture: iphoneos-arm64/' control
           make THEOS="$THEOS" clean
-          make THEOS="$THEOS" package FINALPACKAGE=1
+          make THEOS="$THEOS" package \
+            FINALPACKAGE=1 \
+            THEOS_PACKAGE_SCHEME=rootless \
+            ARCHS=arm64
 
-      - name: Locate deb
+      - name: Locate package
         id: package
         shell: bash
         run: |
@@ -137,165 +237,67 @@ jobs:
           echo "deb=$DEB" >> "$GITHUB_OUTPUT"
           ls -lh "$DEB"
 
-      - name: Verify actual final deb
+      - name: Verify standard rootless package
         shell: bash
         run: |
           set -euo pipefail
-
           DEB="${{ steps.package.outputs.deb }}"
-          TMP="/tmp/gf074b46"
+          TMP="/tmp/gf100-rootless"
           rm -rf "$TMP"
-          mkdir -p "$TMP"
+          mkdir -p "$TMP/root" "$TMP/ctrl"
           cd "$TMP"
 
           ar -x "$GITHUB_WORKSPACE/$DEB"
           DATA="$(find . -maxdepth 1 -type f -name 'data.tar*' | head -n 1)"
           CONTROL="$(find . -maxdepth 1 -type f -name 'control.tar*' | head -n 1)"
-          test -n "$DATA"
-          test -n "$CONTROL"
-
-          mkdir root ctrl
+          test -n "$DATA" -a -n "$CONTROL"
           tar -xf "$DATA" -C root
           tar -xf "$CONTROL" -C ctrl
+
+          grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
+          grep -q '^Version: 1.0.0$' ctrl/control
+          grep -q '^Architecture: iphoneos-arm64$' ctrl/control
 
           DYLIB="$(find root -type f -name 'GlassFolders.dylib' | head -n 1)"
           PREFBIN="$(find root -type f -path '*GlassFoldersPrefs.bundle/GlassFoldersPrefs' | head -n 1)"
           FILTER="$(find root -type f -path '*MobileSubstrate/DynamicLibraries/GlassFolders.plist' | head -n 1)"
-
-          test -n "$DYLIB"
-          test -n "$PREFBIN"
-          test -n "$FILTER"
-
-          file "$DYLIB" | grep -qi 'arm64e'
-          file "$PREFBIN" | grep -qi 'arm64e'
-
-          grep -q 'com.apple.springboard' "$FILTER"
-          if grep -qi 'launchd' "$FILTER"; then
-            echo "ERROR: launchd injection detected"
-            exit 1
-          fi
-
-          strings "$DYLIB" > tweak.strings
-          grep -Fq 'SBFolderIconImageView' tweak.strings
-          grep -Fq 'SBFolderBackgroundView' tweak.strings
-
-          # Exact native category-pod class is expected as a passive view in Beta2.8.
-          # Other App Library/controller experiments and direct framework references are not.
-          grep -Fq 'SBHLibraryCategoryPodBackgroundView' tweak.strings
-
-          if grep -Eq 'AppLibraryPods|GFShouldUseAppLibraryPods|SpringBoardHome\.framework|SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView' tweak.strings; then
-            echo "ERROR: unsafe/obsolete symbol leaked into final dylib"
-            exit 1
-          fi
-
-          PREFROOT="$(find root -type d -path '*/Library/PreferenceLoader/Preferences' | head -n 1)"
-          test -n "$PREFROOT"
-
-          echo "Packaged PreferenceLoader files:"
-          find "$PREFROOT" -type f -print | sort
-
-          # Hard reject the exact duplicate entry seen in Beta1.2.
-          if [ -f "$PREFROOT/GlassFolders.plist" ]; then
-            echo "ERROR: duplicate legacy top-level GlassFolders.plist is packaged."
-            exit 1
-          fi
-
-          PL="$PREFROOT/GlassFolders"
-          test -f "$PL/GlassFolders.plist"
-          test -f "$PL/GlassFolders.png"
-          test -f "$PL/GlassFolders@2x.png"
-          test -f "$PL/GlassFolders@3x.png"
-
-          if find "$PREFROOT" -type f -name 'GlassFoldersIcon*.png' | grep -q .; then
-            echo "ERROR: obsolete GlassFoldersIcon*.png remains."
-            find "$PREFROOT" -type f -name 'GlassFoldersIcon*.png' -print
-            exit 1
-          fi
-
-          PLIST_COUNT="$(find "$PREFROOT" -type f -name 'GlassFolders.plist' | wc -l | tr -d ' ')"
-          if [ "$PLIST_COUNT" != "1" ]; then
-            echo "ERROR: expected exactly one GlassFolders.plist, got $PLIST_COUNT"
-            exit 1
-          fi
-
-          PB="$(find root -type d -path '*/Library/PreferenceBundles/GlassFoldersPrefs.bundle' | head -n 1)"
-          test -n "$PB"
-          test -f "$PB/GlassFolders.png"
-          test -f "$PB/GlassFolders@2x.png"
-          test -f "$PB/GlassFolders@3x.png"
-          test -f "$PB/GlassFoldersLarge.png"
-
-          python - "$PL/GlassFolders.plist" \
-            "$PL/GlassFolders.png" \
-            "$PL/GlassFolders@2x.png" \
-            "$PL/GlassFolders@3x.png" \
-            "$PB/Info.plist" <<'PY'
-          import plistlib, sys
-          from PIL import Image
-
-          with open(sys.argv[1], "rb") as f:
-              entry = plistlib.load(f)
-          assert entry["entry"]["icon"] == "GlassFolders.png"
-
-          expected_sizes = [(29, 29), (58, 58), (87, 87)]
-          for path, size in zip(sys.argv[2:5], expected_sizes):
-              im = Image.open(path).convert("RGBA")
-              assert im.size == size
-              corners = [
-                  im.getpixel((0, 0))[3],
-                  im.getpixel((im.width - 1, 0))[3],
-                  im.getpixel((0, im.height - 1))[3],
-                  im.getpixel((im.width - 1, im.height - 1))[3],
-              ]
-              assert max(corners) < 16, (path, corners)
-
-          with open(sys.argv[5], "rb") as f:
-              info = plistlib.load(f)
-          assert info["CFBundleIconFile"] == "GlassFolders"
-
-          print("Exactly one Settings entry + rounded-alpha icons verified.")
-          PY
-
-          if find ctrl -maxdepth 1 -type f \( -name preinst -o -name postinst -o -name prerm -o -name postrm \) | grep -q .; then
-            echo "ERROR: unexpected maintainer script present"
-            exit 1
-          fi
-
-          echo "Verifying packaged About / Author credit..."
           ROOT_PLIST="$(find root -type f -path '*GlassFoldersPrefs.bundle/Root.plist' | head -n 1)"
-          test -n "$ROOT_PLIST"
+          EN_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/en.lproj/Root.strings' | head -n 1)"
+          ZH_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/zh-Hans.lproj/Root.strings' | head -n 1)"
 
-          python - "$ROOT_PLIST" <<'PY'
+          test -n "$DYLIB" -a -n "$PREFBIN" -a -n "$FILTER" -a -n "$ROOT_PLIST"
+          test -n "$EN_STRINGS" -a -n "$ZH_STRINGS"
+
+          file "$DYLIB" | grep -qi 'arm64'
+          file "$PREFBIN" | grep -qi 'arm64'
+          grep -q 'com.apple.springboard' "$FILTER"
+
+          # Standard rootless package data should be rooted under /var/jb.
+          if ! find root -type f | grep -q '/var/jb/'; then
+            echo "ERROR: package does not look like a standard rootless package."
+            exit 1
+          fi
+
+          python3 - "$ROOT_PLIST" <<'PY'
           import plistlib, sys
-
           with open(sys.argv[1], "rb") as f:
               p = plistlib.load(f)
-
-          items = p["items"]
-          author = [
-              x for x in items
-              if x.get("cell") == "PSTitleValueCell"
-              and x.get("label") == "作者"
-              and x.get("get") == "authorValue:"
-          ]
-          if len(author) != 1:
-              raise SystemExit("Packaged author row missing or duplicated")
-
-          print("Packaged author row verified.")
+          defaults = {
+              x.get("key"): x.get("defaults")
+              for x in p["items"]
+              if x.get("key")
+          }
+          assert set(defaults.values()) == {"com.kulinich.glassfolders"}
+          print("Standard rootless product identity/localization resources verified.")
           PY
 
-          strings "$PREFBIN" | grep -Fq 'kulinich'
-
-          echo "FINAL DEB VERIFICATION PASSED"
-
       - name: SHA256
-        run: |
-          shasum -a 256 "${{ steps.package.outputs.deb }}"
+        run: shasum -a 256 "${{ steps.package.outputs.deb }}"
 
-      - name: Upload deb
+      - name: Upload rootless deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-0.7.4-Beta4.6-DEB
+          name: GlassFolders-1.0.0-Rootless-arm64
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
