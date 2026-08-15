@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.4~beta2.8
+Version: 0.7.4~beta2.9
 Architecture: iphoneos-arm64e
-Description: Beta 2.8 keeps the 40 pt independent Clear blur curve and all Liquid Glass baselines locked, while giving light-appearance Clear a stronger neutral brightness/transmission lift to match the brighter Apple reference. Dark Clear remains on the accepted calibration. Wallpaper remains the only chroma source; no chromatic tint is added.
+Description: Beta 2.9 gives Clear a high-transmission clean baseline from 0%, while ClearStrength mainly adds local blur, chroma separation and optical edge structure. The validated 40 pt opened-Clear blur curve remains unchanged and Liquid Glass keeps the accepted Beta 2.8 baselines.
 Maintainer: kulinich
 Author: kulinich
 Section: Tweaks

@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 3.0 — fixed bright-Clear optical floor + blur/detail strength split
+ * GlassFolders 0.7.4 Beta 2.9 — high-base Clear transmission + structure-driven strength
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -94,7 +94,7 @@ static void GFLoadPreferences(void) {
     GFStyle = GFReadInteger(CFSTR("Style"), 0);
 
     /*
-     * Beta 3.0 keeps the split-control migration contract: Clear and Liquid Glass keep independent strength
+     * Beta 2.8 keeps the split-control migration contract: Clear and Liquid Glass keep independent strength
      * values. Existing installs inherit the legacy GlassStrength value the
      * first time these new keys are absent, so upgrading does not silently
      * change the user's current appearance.
@@ -213,7 +213,7 @@ static inline CGFloat GFClearBlurResponse(CGFloat strength) {
 
 /*
  * Opened folders already sit over SpringBoard's full-screen blur, therefore
- * small 2–8 pt local kernels are visually swallowed by the host blur. Beta3.0
+ * small 2–8 pt local kernels are visually swallowed by the host blur. Beta2.8
  * keeps ClearStrength as an intentionally high-authority blur control while
  * keeping the material itself colorless and thin:
  *   0%   ->  0.0 pt
@@ -236,32 +236,22 @@ static inline CGFloat GFClearOpenedBlurResponse(CGFloat strength) {
 
 
 /*
- * Non-blur Clear optics are only softly gated by the first 15% of the slider.
- * Above that point the slider is effectively a blur control.  The smootherstep
- * avoids a visible pop when moving away from 0%.
- */
-static inline CGFloat GFClearActivationResponse(CGFloat strength) {
-    CGFloat t = GFClamp01(strength / 0.15);
-    return t * t * (3.0 - 2.0 * t);
-}
-
-/*
- * Beta3.0 opened-Clear contract:
- * - once Clear is enabled at any non-zero strength, its neutral optical
- *   transmission starts at the full bright-Clear floor instead of ramping
- *   from a grey/murky low-strength state;
- * - ClearStrength then primarily controls local blur and secondarily adds
- *   saturation/specular definition, NOT body whiteness.
+ * Clear strength no longer owns the basic "is this transparent/clean?" state.
  *
- * The opened panel is applied only after a respring, so there is no need for
- * a long 0..15% visual activation ramp that would make low values look dirty.
+ * The Clear mode itself establishes the high-transmission baseline, including
+ * at 0%. The slider then adds structure: local blur, chroma separation and
+ * optical-edge definition. This prevents low Clear values from falling back
+ * to the host's dull/grey opened-folder blur.
+ *
+ * 0%   -> 0.00 structure
+ * 25%  -> 0.156 structure
+ * 50%  -> 0.50 structure
+ * 75%  -> 0.844 structure
+ * 100% -> 1.00 structure
  */
-static inline CGFloat GFClearOpenedPresenceResponse(CGFloat strength) {
-    return (GFClamp01(strength) > 0.001) ? 1.0 : 0.0;
-}
-
-static inline CGFloat GFClearDetailResponse(CGFloat strength) {
-    return pow(GFClamp01(strength), 0.95);
+static inline CGFloat GFClearStructureResponse(CGFloat strength) {
+    CGFloat s = GFClamp01(strength);
+    return s * s * (3.0 - 2.0 * s);
 }
 
 static inline CGFloat GFRoundedRectSDF(CGFloat x,
@@ -912,9 +902,11 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
         CGFloat materialResponse = GFMaterialResponse(_gfStrength);
         CGFloat tintResponse = GFTintResponse(_gfStrength);
         CGFloat clearBlurResponse = GFClearBlurResponse(_gfStrength);
-        CGFloat clearActivation = GFClearActivationResponse(_gfStrength);
+        CGFloat clearStructure = GFClearStructureResponse(_gfStrength);
+        BOOL clearStyle = (_gfStyle == 0);
+        BOOL materialRequested = clearStyle || (_gfStrength > 0.001);
 
-        if (_gfStrength > 0.001 && isBackdropLayer) {
+        if (materialRequested && isBackdropLayer) {
             /*
              * Preserve wallpaper color instead of whitening it.
              * At 45–55%, blur stays moderate while saturation is boosted.
@@ -929,14 +921,14 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
                 brightness = 0.006 + (0.014 * materialResponse);
             } else {
                 /*
-                 * Clear closed-folder semantics match the opened panel: the
-                 * slider primarily changes blur.  8.40 * response preserves
-                 * the old accepted 55% closed-Clear blur (~4.9 pt) while
-                 * saturation settles early instead of climbing with strength.
+                 * Clear starts clean even at 0%.  The slider keeps blur as its
+                 * largest change, while color separation and a very small
+                 * neutral luminance lift grow with structure.  Do not use the
+                 * slider as the gate for Clear transparency.
                  */
                 blurRadius = 8.40 * clearBlurResponse;
-                saturation = 1.120 + (0.055 * clearActivation);
-                brightness = 0.0;
+                saturation = 1.105 + (0.070 * clearStructure);
+                brightness = 0.014 + (0.008 * clearStructure);
             }
 
             id saturate = GFCreateCAFilter(@"colorSaturate");
@@ -955,7 +947,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
                 [filters addObject:brighten];
             }
 
-            if (blur) {
+            if (blur && blurRadius > 0.001) {
                 [blur setValue:@(blurRadius) forKey:@"inputRadius"];
                 [blur setValue:@YES forKey:@"inputNormalizeEdges"];
                 [blur setValue:@YES forKey:@"inputHardEdges"];
@@ -966,7 +958,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
                 [self.layer setValue:filters forKey:@"filters"];
                 [self.layer setValue:@1.0 forKey:@"scale"];
             }
-        } else if (_gfStrength > 0.001) {
+        } else if (materialRequested) {
             /*
              * Conservative fallback for systems where CABackdropLayer cannot
              * be resolved. This is not the primary iOS 16 path.
@@ -985,7 +977,7 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
             _gfFallbackBlurView.userInteractionEnabled = NO;
             _gfFallbackBlurView.alpha =
                 (_gfStyle == 1) ? MIN(0.86, 0.56 + 0.30 * materialResponse)
-                                : 0.30 * clearActivation;
+                                : (0.20 + 0.08 * clearStructure);
 
             [self addSubview:_gfFallbackBlurView];
         }
@@ -998,10 +990,10 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
          */
         CGFloat tintAlpha = 0.0;
 
-        if (_gfStrength > 0.001) {
-            tintAlpha = (_gfStyle == 1)
-                ? 0.030 + (0.060 * tintResponse)
-                : 0.010 * clearActivation;
+        if (_gfStyle == 0) {
+            tintAlpha = 0.012 + (0.006 * clearStructure);
+        } else if (_gfStrength > 0.001) {
+            tintAlpha = 0.030 + (0.060 * tintResponse);
         }
 
         if (tintAlpha > 0.001) {
@@ -1154,7 +1146,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                                                  BOOL darkAppearance) {
     if (size.width < 2.0 ||
         size.height < 2.0 ||
-        strength <= 0.001) {
+        (style != 0 && strength <= 0.001)) {
         return nil;
     }
 
@@ -1222,21 +1214,17 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     CGFloat radius = MAX(0.0, cornerRadius * renderScale);
 
     BOOL clearStyle = (style == 0);
-    CGFloat clearPresence = clearStyle
-        ? GFClearOpenedPresenceResponse(strength)
+    CGFloat clearStructure = clearStyle
+        ? GFClearStructureResponse(strength)
         : 1.0;
 
-    CGFloat clearDetail = clearStyle
-        ? GFClearDetailResponse(strength)
-        : 0.0;
-
     /*
-     * Clear edge optics are intentionally almost strength-independent.
-     * 0.62 matches the old Clear look around the user's 55% baseline; after
-     * the first 15% only the blur continues to grow materially.
+     * Clear always has a visible thin-glass edge, including at 0%.  Strength
+     * now adds edge definition instead of deciding whether the edge exists.
+     * The base remains softer than Liquid Glass.
      */
     CGFloat e = clearStyle
-        ? (clearPresence * (0.70 + 0.25 * clearDetail))
+        ? (0.50 + 0.20 * clearStructure)
         : GFSpecularResponse(strength);
 
     /*
@@ -1421,7 +1409,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              * The large panel is broader/softer, not differently organized.
              */
             CGFloat edgeDrive = clearStyle
-                ? (clearPresence * (0.38 + 0.30 * clearDetail))
+                ? (0.24 + 0.22 * clearStructure)
                 : GFEdgeResponse(strength);
 
             CGFloat verticalEdge =
@@ -1465,7 +1453,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 );
 
             /*
-             * Beta 3.0 — locked symmetric continuous tangent rails.
+             * Beta 2.8 — locked symmetric continuous tangent rails.
              *
              * Do not splice a "corner mask" into a separate straight-edge
              * mask. The SDF normal is already unit length, so in the owned
@@ -2031,11 +2019,14 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     CGFloat clearBlurResponse =
         GFClearOpenedBlurResponse(self.gfStrength);
 
-    CGFloat clearPresence =
-        GFClearOpenedPresenceResponse(self.gfStrength);
+    CGFloat clearStructure =
+        GFClearStructureResponse(self.gfStrength);
 
-    CGFloat clearDetail =
-        GFClearDetailResponse(self.gfStrength);
+    BOOL clearStyle =
+        (self.gfStyle == 0);
+
+    BOOL materialRequested =
+        clearStyle || (self.gfStrength > 0.001);
 
     CALayer *materialLayer =
         self.gfBackdropSampleView.layer;
@@ -2044,7 +2035,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         [NSStringFromClass(materialLayer.class)
             containsString:@"Backdrop"];
 
-    if (self.gfStrength > 0.001 &&
+    if (materialRequested &&
         isBackdropLayer) {
 
         /*
@@ -2062,17 +2053,16 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             /*
              * Clear reference target: a THIN wallpaper-owned material.
              *
-             * Beta3.0 keeps the validated 0..40 pt local Gaussian curve locked,
-             * but decouples BODY TRANSMISSION from ClearStrength. Any non-zero
-             * Clear setting starts from a bright neutral optical floor; increasing
-             * ClearStrength primarily adds blur and secondarily adds chroma/specular
-             * definition. This prevents low Clear values from becoming grey/murky.
+             * Beta2.9 keeps the wide local Gaussian curve unchanged, but no
+             * longer gates Clear's clean/transmitted look behind the strength
+             * slider. 0% already uses the Clear optical baseline; strength adds
+             * blur, chroma separation and edge structure.
              *
              * At the 55% baseline the local blur is ~20.1 pt in both appearances;
-             * at 100% it reaches 40 pt. Clear is intentionally NOT constrained
+             * at 100% it reaches 40 pt.  Clear is intentionally NOT constrained
              * to a numerically smaller radius than Liquid Glass: the two styles
              * are separated by tint/lift/specular behavior, not by blur radius
-             * alone. Color still comes only from the wallpaper backdrop.
+             * alone.  Color still comes only from the wallpaper backdrop.
              */
             /*
              * Clear strength is now calibrated against the *already blurred*
@@ -2082,31 +2072,25 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              */
             blurRadius = 40.0 * clearBlurResponse;
 
+            /*
+             * High-base Clear contract:
+             *
+             * - transmission/clean luminance begins near its final value;
+             * - strength mainly adds blur, chroma separation and edge structure;
+             * - sample opacity never collapses at low values, so SpringBoard's
+             *   dull host blur cannot leak back in and make Clear look grey.
+             */
             saturation = darkAppearance
-                ? (1.075 + 0.025 * clearDetail)
-                : (1.080 + 0.035 * clearDetail);
+                ? (1.080 + 0.065 * clearStructure)
+                : (1.085 + 0.085 * clearStructure);
 
-            /*
-             * Clear body luminance is intentionally almost strength-independent.
-             * The panel should look clean and luminous at 10% just as it does at
-             * 100%; the slider is not a "make it less grey" control.
-             */
             brightness = darkAppearance
-                ? (0.060 + 0.005 * clearDetail)
-                : (0.100 + 0.005 * clearDetail);
+                ? (0.048 + 0.006 * clearStructure)
+                : (0.060 + 0.008 * clearStructure);
 
-            /*
-             * Keep most of the filtered backdrop visible. The previous pass blended
-             * 16–21% of the unfiltered underlying composition back in, which
-             * further hid small blur changes. This remains colorless.
-             */
-            /*
-             * Nearly all of the panel should show the locally filtered sample.
-             * Leaving 5-7% of the unfiltered host composition visible still
-             * masks large-radius changes, especially above 50%. Keep only a
-             * tiny appearance-dependent reserve while remaining fully colorless.
-             */
-            sampleAlpha = clearPresence;
+            sampleAlpha = darkAppearance
+                ? (0.992 + 0.006 * clearStructure)
+                : (0.990 + 0.007 * clearStructure);
         } else {
             /*
              * Liquid Glass: a thicker but not blackened backdrop.
@@ -2166,7 +2150,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             [filters addObject:brighten];
         }
 
-        if (blur) {
+        if (blur && blurRadius > 0.001) {
             [blur
                 setValue:@(blurRadius)
                   forKey:@"inputRadius"];
@@ -2203,7 +2187,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
             self.gfFallbackBlurView = nil;
         }
-    } else if (self.gfStrength > 0.001) {
+    } else if (materialRequested) {
         self.gfBackdropSampleView.hidden = YES;
 
         if (!self.gfFallbackBlurView) {
@@ -2232,8 +2216,9 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
              * used only when CABackdropLayer is unavailable, and at a low alpha
              * so it cannot become a milky system material card.
              */
-            self.gfFallbackBlurView.alpha = clearPresence *
-                (darkAppearance ? 0.34 : 0.30);
+            self.gfFallbackBlurView.alpha = darkAppearance
+                ? (0.20 + 0.10 * clearStructure)
+                : (0.16 + 0.08 * clearStructure);
         } else {
             self.gfFallbackBlurView.alpha = darkAppearance
                 ? MIN(0.48, 0.20 + 0.30 * materialResponse)
@@ -2244,40 +2229,36 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     /*
      * No chromatic body tint: purple/blue/pink always comes from wallpaper.
      *
-     * Apple-style Clear uses a bright neutral-white transmission floor.
-     * That is optical luminance, not a hue; green/orange wallpaper stays
-     * green/orange because the backdrop remains the sole chroma source.
+     * Apple's "Clear" appearance still has a very small neutral-white
+     * transmission/specular lift.  That is optical luminance, not a hue.
+     * Keep it deliberately weak so a green/orange wallpaper stays green/orange.
      * Liquid Glass keeps the body colorless; its stronger white energy lives
      * in the specular rail image instead.
      */
     self.gfTintView.backgroundColor = UIColor.whiteColor;
 
-    if (self.gfStrength > 0.001) {
-        CGFloat neutralLift = 0.0;
+    if (self.gfStyle == 0) {
+        /*
+         * Clear transmission is a mode baseline, not a strength ramp.  Start
+         * close to the previous high-strength white-light compensation and
+         * only add a few tenths of a percent as structure rises.
+         */
+        CGFloat neutralLift = darkAppearance
+            ? (0.050 + 0.004 * clearStructure)
+            : (0.056 + 0.006 * clearStructure);
 
-        if (self.gfStyle == 0) {
-            /*
-             * Fixed bright-Clear transmission floor. This is neutral white light,
-             * not a body color: wallpaper remains the sole chroma source. Unlike
-             * Beta2.x, low ClearStrength no longer ramps through a dirty grey state.
-             */
-            neutralLift = clearPresence *
-                (darkAppearance ? 0.065 : 0.080);
+        self.gfTintView.alpha =
+            MIN(darkAppearance ? 0.054 : 0.062, neutralLift);
+    } else if (self.gfStrength > 0.001) {
+        /*
+         * Liquid Glass keeps the Beta2.8 composite-strength behavior.
+         */
+        CGFloat neutralLift = darkAppearance
+            ? (0.030 + 0.050 * tintResponse) * self.gfStrength
+            : (0.012 + 0.025 * tintResponse) * self.gfStrength;
 
-            self.gfTintView.alpha = neutralLift;
-        } else {
-            /*
-             * Liquid Glass needs a little more neutral transmission in dark
-             * mode so the thicker blur stays luminous. This is white light,
-             * not a chromatic tint; wallpaper hue remains untouched.
-             */
-            neutralLift = darkAppearance
-                ? (0.030 + 0.050 * tintResponse) * self.gfStrength
-                : (0.012 + 0.025 * tintResponse) * self.gfStrength;
-
-            self.gfTintView.alpha =
-                MIN(darkAppearance ? 0.055 : 0.028, neutralLift);
-        }
+        self.gfTintView.alpha =
+            MIN(darkAppearance ? 0.055 : 0.028, neutralLift);
     } else {
         self.gfTintView.alpha = 0.0;
     }
@@ -2288,10 +2269,9 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
      * neutral-white definition; light mode is intentionally quieter.
      */
     if (self.gfStyle == 0) {
-        self.gfOpticalLayer.opacity = clearPresence *
-            (darkAppearance
-                ? (0.84 + 0.04 * clearDetail)
-                : (0.80 + 0.08 * clearDetail));
+        self.gfOpticalLayer.opacity = darkAppearance
+            ? (0.72 + 0.14 * clearStructure)
+            : (0.66 + 0.16 * clearStructure);
     } else {
         self.gfOpticalLayer.opacity = darkAppearance
             ? 1.0
@@ -2309,12 +2289,10 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     CGFloat continuityAlpha;
 
     if (self.gfStyle == 0) {
-        continuityAlpha = clearPresence *
-            (darkAppearance
-                ? (0.052 + 0.010 * clearDetail)
-                : (0.048 + 0.014 * clearDetail));
-        self.layer.borderWidth =
-            (clearPresence > 0.001) ? 0.45 : 0.0;
+        continuityAlpha = darkAppearance
+            ? (0.030 + 0.022 * clearStructure)
+            : (0.026 + 0.018 * clearStructure);
+        self.layer.borderWidth = 0.45;
     } else {
         continuityAlpha = darkAppearance
             ? (0.025 + 0.040 * continuityEdge)
@@ -2476,9 +2454,8 @@ static char kGFStockSubviewOriginalHiddenKey;
 
 static inline BOOL GFShouldUseOpenedPanel(void) {
     /*
-     * FIX6: both selectable styles own the opened panel.
-     * Clear at 0% intentionally becomes a fully transparent panel, matching
-     * the existing closed-folder Clear 0% semantics.
+     * Both selectable styles own the opened panel. Clear at 0% still uses the
+     * high-transmission Clear baseline; only its added blur/structure is zero.
      */
     return GFEnabled && (GFStyle == 0 || GFStyle == 1);
 }
@@ -2767,17 +2744,6 @@ static void GFUpdateOpenedFolderBackground(
 - (void)setBackgroundView:(UIView *)backgroundView {
     if (!GFEnabled) {
         %orig(backgroundView);
-        return;
-    }
-
-    /*
-     * Stable Test3.1 behavior at Clear 0%.
-     */
-    if (GFStyle == 0 && GFGlassStrength <= 0.001) {
-        UIView *clearPlate = [[UIView alloc] initWithFrame:CGRectZero];
-        clearPlate.backgroundColor = UIColor.clearColor;
-        clearPlate.userInteractionEnabled = NO;
-        %orig(clearPlate);
         return;
     }
 

@@ -1,23 +1,28 @@
-# GlassFolders 0.7.4 Beta 2.8
+# GlassFolders 0.7.4 Beta 2.9
 
-Beta 2.8 keeps Clear and Liquid Glass on independent saved controls, locks the accepted Liquid Glass baselines and the 40 pt opened-Clear blur curve, and raises ONLY light-appearance Clear neutral luminance/transmission more decisively. Dark Clear stays on the accepted calibration. Strong blur should look brighter and more translucent without becoming a white card, while wallpaper remains the sole hue source. App Library experimentation remains deferred in this pass.
+Beta 2.9 changes only the Clear contract. Liquid Glass stays on the accepted Beta 2.8 baselines.
 
 ## 1. Independent controls
 
-The Settings page exposes two separate sliders:
+The Settings page keeps two separate saved sliders:
 
-- **Clear 模糊强度** -> key `ClearStrength`
+- **Clear 强度** -> key `ClearStrength`
 - **Liquid Glass 强度** -> key `LiquidGlassStrength`
 
-Changing one style no longer changes the stored strength of the other. Existing installations remain compatible: if either new key has never been written, the tweak reads the previous `GlassStrength` value as that slider's initial fallback. The old `GlassStrength` key is migration-only and is no longer shown as a slider.
+Existing installs remain compatible. If either split key has never been written, the old `GlassStrength` value is still used as the migration fallback.
 
-## 2. Clear — high-authority opened blur
+## 2. Clear — high-base transmission, structure-driven strength
 
-Clear is a colorless wallpaper-owned material. It does not inject purple, blue, pink, orange, green, or any other hue. Chroma comes from the real wallpaper / desktop backdrop.
+Clear no longer starts from a dull/grey optical state.
 
-`ClearStrength` primarily controls local Gaussian blur. Neutral-white transmission, edge highlight and saturation establish the Clear appearance early and then remain nearly constant, so increasing strength changes blur rather than simply making the panel whiter.
+Selecting Clear now establishes the clean/transmitted look immediately, including at `ClearStrength = 0`. The slider does **not** ramp Clear from grey to transparent. Instead it mainly adds:
 
-Opened Clear sits over SpringBoard's existing full-screen blur, so Beta 2.8 keeps the validated high-authority local range:
+- local Gaussian blur
+- wallpaper/chroma separation
+- optical edge definition
+- a small amount of additional neutral luminance
+
+The opened blur curve is unchanged:
 
 - 0%: 0 pt
 - 10%: ~2.8 pt
@@ -27,42 +32,30 @@ Opened Clear sits over SpringBoard's existing full-screen blur, so Beta 2.8 keep
 - 75%: ~28.7 pt
 - 100%: 40.0 pt
 
-The curve uses `40 * strength^1.15`: the low end stays genuinely light, while the middle/high range separates strongly enough to remain visible over the host blur. The locally filtered backdrop is shown at ~99% opacity once Clear is active, preventing an unfiltered host layer from masking the slider's effect.
+The curve remains `40 * strength^1.15`.
 
-The same blur curve is used in light and dark appearance so a Clear percentage has one predictable blur meaning. Light/dark differences remain limited to neutral brightness, white transmission, saturation compensation and specular gain; hue is never changed.
+### Opened Clear baseline
 
-### Light appearance optical calibration
+At 0%, the locally sampled backdrop is already shown at about 99% alpha instead of being gated off. Neutral brightness and white-light transmission also begin near their final Clear values.
 
-Beta 2.8 leaves the 40 pt blur curve unchanged and changes only light-appearance Clear optics. Above the first 15% Clear activation, light mode now targets roughly **+7.0% neutral brightness**, **~5.8% neutral-white transmission**, **~1.075 saturation**, **0.77 soft specular opacity**, and a slightly stronger **~4.0% continuous white edge floor**. Dark mode remains on the accepted calibration: roughly **+4.1% neutral brightness**, **~5.1% neutral-white transmission**, **~1.065 saturation**, and **0.82 soft specular opacity**. These are neutral luminance adjustments only: wallpaper remains the sole hue source.
+As the slider rises, the larger changes are saturation/separation, local blur and edge/specular structure. The white/transmission component moves only slightly, so high Clear should become more structured rather than simply whiter.
 
-Closed Clear keeps its separately accepted response and is driven by the same independent `ClearStrength` setting.
+### Closed Clear baseline
 
-## 3. Liquid Glass — independent composite strength, locked
+Closed-folder Clear follows the same rule: 0% is still a real Clear material instead of a fully transparent replacement view. Blur begins at 0, while the colorless clean/saturation/luminance baseline is already present.
 
-`LiquidGlassStrength` remains the composite Liquid Glass control: blur, saturation, neutral-white transmission and specular response continue to scale together. It does not share a stored value with Clear.
+## 3. Liquid Glass — unchanged
 
-The accepted lighter closed-folder implementation remains locked. It keeps the established backdrop blur/saturation, neutral brightness lift, neutral-white transmission lift, passive `SBHLibraryCategoryPodBackgroundView` blend and closed-folder optical lighting. The passive App Library category pod is not actively styled; `_updateVisualStyle` is not invoked.
-
-## 4. Liquid Glass opened highlight continuity — locked
-
-The opened directional specular remains the established mirrored continuous-rail model:
-
-- top -> upper-left corner -> left-side fade
-- bottom -> lower-right corner -> right-side fade
-
-The corner/horizontal-edge tangent is not a fade endpoint. Side fade occurs only after the reflection has turned through the corner. Geometry is identical in dark and light appearance; only neutral optical gain changes.
-
-The opened optical map remains cached at the established 1.5x render scale. No 2x/high-load experiment is used.
+`LiquidGlassStrength` keeps the Beta 2.8 composite behavior and accepted closed/open visual baselines. Blur, saturation, neutral-white transmission, passive `SBHLibraryCategoryPodBackgroundView` participation and Liquid Glass specular behavior are not recalibrated in this pass.
 
 ## Scope / stability
 
-- Clear and Liquid Glass have independent stored strength values
-- opened Clear strength is aggressively blur-dominant
-- closed Clear response remains separately locked
-- no chromatic body tint in Clear or Liquid Glass
-- dark/light appearance uses separate neutral compensation
-- accepted Liquid Glass closed/open visual baselines are locked
+- Clear and Liquid Glass keep independent saved strength values
+- opened Clear keeps the validated 0–40 pt blur curve
+- Clear 0% now keeps a high-transmission clean baseline
+- Clear strength mainly adds blur, separation and optical structure
+- no chromatic Clear body tint
+- Liquid Glass constants are unchanged
 - no App Library controller hooks
 - no `_updateVisualStyle` activation
 - no daemon, timer, display link, gyro, or Metal render loop
-- real App Library is not modified in this pass
