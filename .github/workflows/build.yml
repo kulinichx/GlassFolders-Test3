@@ -175,13 +175,17 @@ jobs:
           set -euo pipefail
           brew install ldid xz
 
-      - name: Install official Theos
+      - name: Install RootHide-compatible Theos
         shell: bash
         run: |
           set -euo pipefail
           rm -rf "$THEOS"
-          git clone --recursive https://github.com/theos/theos.git "$THEOS"
+          # Use roothide/theos for source compatibility with <roothide.h>.
+          # The actual package remains STANDARD ROOTLESS because the build
+          # explicitly uses THEOS_PACKAGE_SCHEME=rootless.
+          git clone --recursive https://github.com/roothide/theos.git "$THEOS"
           test -f "$THEOS/makefiles/common.mk"
+          test -f "$THEOS/include/roothide.h"
 
       - name: Install iOS 16.5 SDK
         shell: bash
@@ -225,6 +229,8 @@ jobs:
           set -euo pipefail
           # Each job has a clean checkout, so changing Architecture here is safe.
           echo "Package scheme: rootless"
+          echo "Theos source: roothide/theos (rootless scheme)"
+          test -f "$THEOS/include/roothide.h"
           sed -i '' 's/^Architecture:.*/Architecture: iphoneos-arm64/' control
           make THEOS="$THEOS" THEOS_PACKAGE_SCHEME=rootless clean
           make THEOS="$THEOS" package \
