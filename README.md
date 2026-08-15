@@ -113,3 +113,21 @@ Settings icon packaging fix:
 
 The icon uses the approved GlassFolders blue/purple Liquid Glass folder identity.
 
+## Commercial Candidate FIX7
+
+PreferenceLoader duplicate-entry cleanup:
+
+- Restored the original canonical entry:
+  `Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist`
+- Removed the accidental top-level entry introduced during FIX4/FIX6.
+- Restored the canonical nested icon names:
+  `GlassFolders.png`, `GlassFolders@2x.png`, `GlassFolders@3x.png`.
+- GitHub Actions removes stale top-level duplicates before packaging.
+- Final package verification requires exactly **one** GlassFolders
+  PreferenceLoader entry.
+- `GlassFoldersPrefs.bundle/Info.plist` is now updated to the commercial
+  `com.kulinich.glassfolders.preferences` / `1.0.0` identity.
+- FIX5 universal `arm64 + arm64e` rootless build remains enabled.
+
+No visual material parameters were changed.
+

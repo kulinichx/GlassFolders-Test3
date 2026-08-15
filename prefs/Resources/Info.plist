@@ -3,26 +3,22 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>zh_CN</string>
+	<string>en</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.local.glassfolders.preferences</string>
+	<string>com.kulinich.glassfolders.preferences</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>GlassFoldersPrefs</string>
+	<key>CFBundleDisplayName</key>
+	<string>GlassFolders</string>
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.7.4</string>
+	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>0.7.4-beta2.8</string>
+	<string>1.0.0</string>
 	<key>NSPrincipalClass</key>
 	<string>GFRootListController</string>
-	<key>CFBundleIconFiles</key>
-	<array>
-		<string>GlassFolders</string>
-	</array>
-	<key>CFBundleIconFile</key>
-	<string>GlassFolders</string>
 </dict>
 </plist>
