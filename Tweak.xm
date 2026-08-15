@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 4.5 — App Library follow-folder integration
+ * GlassFolders 0.7.4 Beta 4.6 — settings cleanup and independent toggles
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -32,7 +32,7 @@
 
 static CFStringRef const GFPreferencesDomain = CFSTR("com.local.glassfolders");
 
-static BOOL GFEnabled = YES;
+static BOOL GFEnabled = YES;  // Folder glass only; legacy preference key: Enabled
 static NSInteger GFStyle = 0;          // 0 Clear, 1 Liquid Glass
 static CGFloat GFClearStrength = 0.0;        // 0.0 ... 1.0, Clear blur authority
 static CGFloat GFLiquidGlassStrength = 0.0;  // 0.0 ... 1.0, Liquid composite authority
@@ -141,11 +141,14 @@ static void GFLoadPreferences(void) {
     GFAppLibraryStyleMode =
         GFReadInteger(CFSTR("AppLibraryStyleMode"), 0);
 
-    GFAppLibraryClearPreset =
-        GFReadInteger(CFSTR("AppLibraryClearPreset"), 0);
-
-    GFAppLibraryLiquidPreset =
-        GFReadInteger(CFSTR("AppLibraryLiquidPreset"), 0);
+    /*
+     * Beta 4.6 final UI:
+     * App Library preset pickers are intentionally hidden.
+     * Lock the internal recipes to the accepted visual baselines:
+     * Clear = Apple Bright, Liquid Glass = Crystal.
+     */
+    GFAppLibraryClearPreset = 0;
+    GFAppLibraryLiquidPreset = 0;
 
     /*
      * Read the legacy key only so old preferences remain harmless.
@@ -1605,7 +1608,6 @@ static void GFUpdateRealAppLibraryPod(UIView *pod) {
     }
 
     BOOL enabled =
-        GFEnabled &&
         GFAppLibraryGlassEnabled;
 
     if (!enabled) {
@@ -2301,7 +2303,6 @@ static void GFUpdateAppLibrarySearchView(
     }
 
     BOOL enabled =
-        GFEnabled &&
         GFAppLibraryGlassEnabled;
 
     if (!enabled) {

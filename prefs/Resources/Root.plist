@@ -10,15 +10,13 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 0.7.4 Beta 4.5</string>
-			<key>footerText</key>
-			<string>Beta 4.5 锁定 Beta 4.4 的资源库视觉。新增“跟随文件夹 / Clear / Liquid Glass”三档样式：默认跟随普通文件夹的当前样式，也可以单独强制资源库使用 Clear 或 Liquid Glass。浅色、深色、搜索框和分类卡片现有材质参数不再改动。</string>
+			<string>GlassFolders 0.7.4 Beta 4.6</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>
-			<string>启用</string>
+			<string>文件夹</string>
 			<key>key</key>
 			<string>Enabled</string>
 			<key>default</key>
@@ -28,11 +26,21 @@
 		</dict>
 		<dict>
 			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>资源库</string>
+			<key>key</key>
+			<string>AppLibraryGlassEnabled</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.local.glassfolders</string>
+		</dict>
+		<dict>
+			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>风格</string>
-			<key>footerText</key>
-			<string>Clear：颜色只来自真实壁纸/backdrop，不添加紫、蓝、粉等彩色 tint。Clear 本身从最低强度就保持干净透亮；强度提高时主要增加模糊、色彩分离与边缘/高光结构，而不是明显增加白色透光。Liquid Glass：浅色关闭态更克制、更少发白；打开态更透明、更少灰雾，并用方向性高光和局部折射感突出玻璃。</string>
+			<string>文件夹样式</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -62,7 +70,7 @@
 			<key>label</key>
 			<string>Clear 强度</string>
 			<key>footerText</key>
-			<string>只用于 Clear。0% 已经保持高透亮/低灰雾，只是不额外增加局部模糊与结构；往上主要增加 Gaussian 模糊、颜色/层次分离和边缘高光，100% 打开态仍约 40pt。透亮本身只做小幅变化，避免低档闷灰、高档又只是变白。</string>
+			<string>保持通透，向上增加模糊与层次。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -90,7 +98,7 @@
 			<key>label</key>
 			<string>Liquid Glass 强度</string>
 			<key>footerText</key>
-			<string>只用于 Liquid Glass。滑杆继续控制 blur、真实壁纸色彩/亮度穿透与镜面高光。浅色打开态会减少均匀白雾，把更多视觉强度放在顶部/圆角/局部 specular 上；与 Clear 强度分开记忆。</string>
+			<string>向上增强玻璃结构、高光与模糊。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -116,27 +124,13 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>App 资源库</string>
-			<key>footerText</key>
-			<string>“跟随文件夹”会自动使用普通文件夹当前的 Clear / Liquid Glass 样式；也可以单独强制资源库为 Clear 或 Liquid Glass。Clear / Liquid Glass 各自仍使用现有固定预设；搜索框与分类卡片保持同材质同层级。</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>label</key>
-			<string>启用资源库玻璃</string>
-			<key>key</key>
-			<string>AppLibraryGlassEnabled</string>
-			<key>default</key>
-			<false/>
-			<key>defaults</key>
-			<string>com.local.glassfolders</string>
+			<string>资源库样式</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSegmentCell</string>
 			<key>label</key>
-			<string>资源库样式</string>
+			<string></string>
 			<key>key</key>
 			<string>AppLibraryStyleMode</string>
 			<key>default</key>
@@ -158,57 +152,9 @@
 		</dict>
 		<dict>
 			<key>cell</key>
-			<string>PSSegmentCell</string>
-			<key>label</key>
-			<string>Clear 预设</string>
-			<key>key</key>
-			<string>AppLibraryClearPreset</string>
-			<key>default</key>
-			<integer>0</integer>
-			<key>defaults</key>
-			<string>com.local.glassfolders</string>
-			<key>validTitles</key>
-			<array>
-				<string>Apple Bright</string>
-				<string>Balanced</string>
-				<string>Soft</string>
-			</array>
-			<key>validValues</key>
-			<array>
-				<integer>0</integer>
-				<integer>1</integer>
-				<integer>2</integer>
-			</array>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSegmentCell</string>
-			<key>label</key>
-			<string>Liquid Glass 预设</string>
-			<key>key</key>
-			<string>AppLibraryLiquidPreset</string>
-			<key>default</key>
-			<integer>0</integer>
-			<key>defaults</key>
-			<string>com.local.glassfolders</string>
-			<key>validTitles</key>
-			<array>
-				<string>Crystal</string>
-				<string>Balanced</string>
-				<string>Deep</string>
-			</array>
-			<key>validValues</key>
-			<array>
-				<integer>0</integer>
-				<integer>1</integer>
-				<integer>2</integer>
-			</array>
-		</dict>
-		<dict>
-			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>
-			<string>Beta 3.6 只重构 App 资源库材质控制：固定 Clear / Liquid Glass 预设，不再使用资源库百分比滑杆。普通文件夹的 Clear / Liquid Glass 强度和光学参数保持不变。</string>
+			<string>文件夹与资源库可独立开启。“跟随文件夹”只同步 Clear / Liquid Glass 样式；资源库使用已调好的固定玻璃效果。</string>
 		</dict>
 		<dict>
 			<key>cell</key>

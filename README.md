@@ -1,51 +1,55 @@
-# GlassFolders 0.7.4 Beta 4.5
+# GlassFolders 0.7.4 Beta 4.6
 
-Beta 4.5 is the **App Library Follow Folder integration** pass.
+Beta 4.6 is the **Settings Cleanup** pass.
 
-## App Library style
+## Final settings layout
 
-The App Library style selector is now:
+At the top of the page there are two independent master switches:
 
-- **跟随文件夹**
-- **Clear**
-- **Liquid Glass**
+- 文件夹
+- 资源库
 
-Default: **跟随文件夹**
+Disabling folder glass no longer disables App Library glass.
 
-### Follow Folder
+### Folder
 
-When selected, App Library reads the normal folder style directly:
+Folder controls stay simple:
 
-- normal folder Clear -> App Library Clear
-- normal folder Liquid Glass -> App Library Liquid Glass
+- Clear / Liquid Glass
+- Clear strength
+- Liquid Glass strength
 
-The App Library keeps its own compact card/search material presets; only the
-style family follows the normal folder.
+The strength descriptions are intentionally short.
 
-### Forced styles
+### App Library
 
-Selecting Clear or Liquid Glass forces that style only for App Library,
-independent of the normal folder style.
+Only one public style selector remains:
 
-## Visual baseline locked
+- 跟随文件夹
+- Clear
+- Liquid Glass
 
-No visual retuning in Beta 4.5:
+The old Clear/Liquid preset pickers are removed from Settings.
 
-- light App Library cards: Beta 4.2 baseline
-- dark App Library cards: Beta 4.3 baseline
-- search/card material unification: Beta 4.4 baseline
-- desktop folder Clear/Liquid Glass: unchanged
+Internally the accepted fixed presets are locked:
 
-## Compatibility
+- Clear = Apple Bright
+- Liquid Glass = Crystal
 
-The old `AppLibraryStyle` preference is still read for compatibility, but the
-new UI uses `AppLibraryStyleMode`:
+“跟随文件夹” follows only the normal folder style family. App Library keeps
+its own accepted card/search material recipes.
 
-- 0 = Follow Folder
-- 1 = Clear
-- 2 = Liquid Glass
+## Visual baseline
+
+Beta 4.6 does **not** retune the visual effects:
+
+- light App Library = Beta 4.2 baseline
+- dark App Library = Beta 4.3 baseline
+- search/card unification = Beta 4.4 baseline
+- follow-folder behavior = Beta 4.5
+- desktop Clear / Liquid Glass optics = unchanged
 
 ## Version
 
-- package: `0.7.4~beta4.5`
-- artifact: `GlassFolders-0.7.4-Beta4.5-DEB`
+- package: `0.7.4~beta4.6`
+- artifact: `GlassFolders-0.7.4-Beta4.6-DEB`
