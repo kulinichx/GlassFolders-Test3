@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 4.3 — App Library dark-mode pass
+ * GlassFolders 0.7.4 Beta 4.4 — App Library search material unification
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -1042,18 +1042,11 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
          * Search is an interactive control, so lift it only a tiny amount.
          * Beta 3.5 was deliberately much brighter and looked disconnected.
          */
-        if (searchVariant) {
-            r.blur += dark ? 0.55 : 0.8;
-            r.saturation += dark ? 0.015 : 0.015;
-            r.brightness += dark ? 0.006 : 0.006;
-            r.tintAlpha += dark ? 0.002 : 0.006;
-            r.borderWidth += dark ? 0.02 : 0.04;
-            r.borderAlpha += dark ? 0.014 : 0.018;
-            r.nativeSearchAlpha = MAX(
-                dark ? 0.032 : 0.04,
-                r.nativeSearchAlpha - (dark ? 0.008 : 0.01)
-            );
-        }
+        /*
+         * Beta 4.4:
+         * searchVariant intentionally does NOT alter the material recipe.
+         * Search is the same Clear material as a category card.
+         */
     } else {
         /*
          * LIQUID GLASS
@@ -1107,18 +1100,11 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
                 break;
         }
 
-        if (searchVariant) {
-            r.blur += dark ? 0.25 : 0.35;
-            r.saturation += dark ? 0.012 : 0.008;
-            r.brightness += dark ? 0.004 : 0.003;
-            r.tintAlpha += dark ? 0.0008 : 0.0015;
-            r.borderWidth += 0.01;
-            r.borderAlpha += dark ? 0.012 : 0.008;
-            r.nativeSearchAlpha = MAX(
-                dark ? 0.022 : 0.025,
-                r.nativeSearchAlpha - (dark ? 0.008 : 0.006)
-            );
-        }
+        /*
+         * Beta 4.4:
+         * searchVariant intentionally does NOT alter the material recipe.
+         * Search is the same Liquid Glass material as a category card.
+         */
     }
 
     return r;
@@ -1326,14 +1312,11 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
         }
     }
 
-    if (self.gfSearchVariant) {
-        BOOL darkSearch =
-            GFUsesDarkAppearance(self);
-
-        bloomAlpha *= darkSearch ? 0.96 : 0.90;
-        rimAlpha *= darkSearch ? 0.94 : 0.88;
-        glintAlpha *= darkSearch ? 0.76 : 0.72;
-    }
+    /*
+     * Beta 4.4:
+     * search and category cards use the same optical alpha values.
+     * No search-specific bloom/rim/glint suppression or amplification.
+     */
 
     self.gfUpperLeftBloomLayer.colors = @[
         (id)[UIColor colorWithWhite:1.0
@@ -1400,11 +1383,15 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
      */
     CGFloat bloomWidth =
         CGRectGetWidth(bounds) *
-        (self.gfSearchVariant ? 0.42 : (liquid ? 0.52 : 0.46));
+        (self.gfSearchVariant
+            ? (liquid ? 0.52 : 0.46)
+            : (liquid ? 0.52 : 0.46));
 
     CGFloat bloomHeight =
         CGRectGetHeight(bounds) *
-        (self.gfSearchVariant ? 0.92 : (liquid ? 0.48 : 0.42));
+        (self.gfSearchVariant
+            ? (liquid ? 0.48 : 0.42)
+            : (liquid ? 0.48 : 0.42));
 
     self.gfUpperLeftBloomLayer.frame =
         CGRectMake(
@@ -1485,8 +1472,7 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
      */
     CGFloat glintWidth =
         MIN(
-            CGRectGetWidth(bounds) *
-                (self.gfSearchVariant ? 0.14 : 0.18),
+            CGRectGetWidth(bounds) * 0.18,
             MAX(
                 28.0,
                 radius * 1.12
@@ -2180,8 +2166,12 @@ static void GFSetNativeSearchBackgroundsDimmed(
                         GFUsesDarkAppearance(view)
                     );
 
+                /*
+                 * Beta 4.4: keep native search material participation aligned
+                 * with the category-card material, not independently reduced.
+                 */
                 child.alpha =
-                    searchRecipe.nativeSearchAlpha;
+                    searchRecipe.nativePodAlpha;
             } else if (original) {
                 child.alpha = original.doubleValue;
 
