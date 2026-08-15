@@ -12,6 +12,8 @@
 		<true/>
 		<key>bundle</key>
 		<string>GlassFoldersPrefs</string>
+		<key>icon</key>
+		<string>GlassFoldersIcon.png</string>
 	</dict>
 </dict>
 </plist>

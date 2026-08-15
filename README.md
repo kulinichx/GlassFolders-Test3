@@ -87,3 +87,29 @@ Fresh-install Settings registration fix:
 This addresses clean iOS/iPadOS 16.x installations where the package installs
 but GlassFolders does not appear in Settings.
 
+## Commercial Candidate FIX5
+
+iOS/iPadOS 16.x Preference Bundle architecture fix:
+
+- Standard rootless binaries now build as universal `arm64 + arm64e`.
+- Debian package architecture remains `iphoneos-arm64`, as expected for rootless.
+- GitHub Actions verifies both the tweak dylib and `GlassFoldersPrefs` bundle
+  contain both `arm64` and `arm64e` slices.
+- This fixes the Settings loader error:
+  `have 'arm64', need 'arm64e'`.
+
+No visual formulas or preference UI were changed.
+
+## Commercial Candidate FIX6
+
+Settings icon packaging fix:
+
+- Added `GlassFoldersIcon.png` (29×29).
+- Added `GlassFoldersIcon@2x.png` (58×58).
+- Added `GlassFoldersIcon@3x.png` (87×87).
+- Added `icon = GlassFoldersIcon.png` to the PreferenceLoader entry.
+- GitHub Actions no longer deletes the icon assets.
+- Both RootHide and standard rootless jobs verify all three icons exist inside the final `.deb`.
+
+The icon uses the approved GlassFolders blue/purple Liquid Glass folder identity.
+
