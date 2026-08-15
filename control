@@ -1,8 +1,8 @@
 Package: com.local.glassfolderstest3
 Name: GlassFolders
-Version: 0.7.4~beta3.6
+Version: 0.7.4~beta4.5
 Architecture: iphoneos-arm64e
-Description: Beta 3.6 keeps the verified App Library controller/search attachment and replaces the App Library percentage slider with fixed Clear and Liquid Glass material presets. Clear defaults to Apple Bright; Liquid Glass defaults to Crystal. Normal folder Clear/Liquid tuning is unchanged.
+Description: Beta 4.5 locks the accepted App Library visual baseline and adds a three-way App Library style selector: Follow Folder, Clear, or Liquid Glass. Follow Folder resolves directly from the normal folder GFStyle while Clear/Liquid can still be forced independently. Existing light/dark/search/category optics remain unchanged.
 Maintainer: kulinich
 Author: kulinich
 Section: Tweaks

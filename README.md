@@ -1,58 +1,51 @@
-# GlassFolders 0.7.4 Beta 3.6
+# GlassFolders 0.7.4 Beta 4.5
 
-Beta 3.6 keeps the verified Beta 3.5 App Library attachment and changes only
-the App Library material model.
-
-## Why fixed presets
-
-App Library fills most of the screen and contains many category cards plus the
-top search control. A free 0–100 material percentage can easily make these
-surfaces inconsistent, so Beta 3.6 removes the App Library strength slider.
-
-Normal folder Clear and Liquid Glass percentage controls are unchanged.
+Beta 4.5 is the **App Library Follow Folder integration** pass.
 
 ## App Library style
 
-### Clear
+The App Library style selector is now:
 
-Default: **Apple Bright**
+- **跟随文件夹**
+- **Clear**
+- **Liquid Glass**
 
-- Apple Bright — bright, luminous, clean frosted App Library reference
-- Balanced — less white/luminance, more wallpaper-owned
-- Soft — more blur and softer separation
+Default: **跟随文件夹**
 
-### Liquid Glass
+### Follow Folder
 
-Default: **Crystal**
+When selected, App Library reads the normal folder style directly:
 
-- Crystal — low blur/body tint, strong wallpaper transmission, thin optical edge
-- Balanced — slightly more material body
-- Deep — more blur/native material and a denser glass feel
+- normal folder Clear -> App Library Clear
+- normal folder Liquid Glass -> App Library Liquid Glass
 
-The top search pill uses the same selected material as category cards, with only
-a small interaction lift. It no longer receives the large brightness difference
-used in Beta 3.5.
+The App Library keeps its own compact card/search material presets; only the
+style family follows the normal folder.
 
-## App Library hierarchy
+### Forced styles
 
-Unchanged:
+Selecting Clear or Liquid Glass forces that style only for App Library,
+independent of the normal folder style.
 
-- outer category cards -> App Library material
-- top search pill -> same App Library material
-- mini-folder / mini-cluster inside category cards -> Apple native transparent
-- normal desktop/opened folders -> existing independent Clear / Liquid Glass
+## Visual baseline locked
 
-## Preferences
+No visual retuning in Beta 4.5:
 
-- `AppLibraryGlassEnabled`
-- `AppLibraryStyle`
-- `AppLibraryClearPreset`
-- `AppLibraryLiquidPreset`
+- light App Library cards: Beta 4.2 baseline
+- dark App Library cards: Beta 4.3 baseline
+- search/card material unification: Beta 4.4 baseline
+- desktop folder Clear/Liquid Glass: unchanged
 
-The old `AppLibraryGlassStrength` preference is ignored by the Beta 3.6 visual
-model and is no longer exposed in Settings.
+## Compatibility
+
+The old `AppLibraryStyle` preference is still read for compatibility, but the
+new UI uses `AppLibraryStyleMode`:
+
+- 0 = Follow Folder
+- 1 = Clear
+- 2 = Liquid Glass
 
 ## Version
 
-- package: `0.7.4~beta3.6`
-- artifact: `GlassFolders-0.7.4-Beta3.6-DEB`
+- package: `0.7.4~beta4.5`
+- artifact: `GlassFolders-0.7.4-Beta4.5-DEB`
