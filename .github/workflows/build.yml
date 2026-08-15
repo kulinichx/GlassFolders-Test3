@@ -1,4 +1,4 @@
-name: GlassFolders 0.7.4 Beta3.0 STABLE-CI
+name: GlassFolders 0.7.4 Beta3.0 FIXED-BRIGHT-CLEAR
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 0.7.4 BETA3.0 STABLE-CI ==="
+          echo "=== GLASSFOLDERS 0.7.4 BETA3.0 FIXED-BRIGHT-CLEAR ==="
           echo "THEOS=$THEOS"
 
       - name: Set up Python for PNG verification
@@ -117,87 +117,189 @@ jobs:
         run: |
           set -euo pipefail
 
-          fail() {
-            echo "ERROR: $*" >&2
-            exit 1
-          }
+          grep -Fq 'GLASSFOLDERS 0.7.4 BETA3.0 FIXED-BRIGHT-CLEAR' \
+            .github/workflows/build.yml
 
-          must_have() {
-            local needle="$1"
-            local file="$2"
-            grep -Fq -- "$needle" "$file" || fail "missing required marker in $file: $needle"
-          }
-
-          must_not_match() {
-            local pattern="$1"
-            local file="$2"
-            if grep -Eq -- "$pattern" "$file"; then
-              echo "Matched forbidden pattern: $pattern" >&2
-              grep -En -- "$pattern" "$file" || true
-              fail "forbidden/obsolete code remains in $file"
-            fi
-          }
-
-          echo "=== Beta3.0 stable source sanity ==="
-
-          # Independent Clear / Liquid Glass controls.
-          must_have 'CFSTR("ClearStrength")' Tweak.xm
-          must_have 'CFSTR("LiquidGlassStrength")' Tweak.xm
-          must_have 'CFSTR("GlassStrength")' Tweak.xm
-
-          python - <<'PY2'
+          # Beta3.0 retains the two split controls plus a read-only
+          # legacy GlassStrength migration path for existing installations.
+          grep -Fq 'CFSTR("ClearStrength")' Tweak.xm
+          grep -Fq 'CFSTR("LiquidGlassStrength")' Tweak.xm
+          grep -Fq 'CFSTR("GlassStrength")' Tweak.xm
+          python - <<'PY'
           import plistlib
           with open('prefs/Resources/Root.plist', 'rb') as f:
               root = plistlib.load(f)
           sliders = [x for x in root['items'] if x.get('cell') == 'PSSliderCell']
           keys = [x.get('key') for x in sliders]
-          if keys != ['ClearStrength', 'LiquidGlassStrength']:
-              raise SystemExit(f'Expected ClearStrength + LiquidGlassStrength sliders, got {keys!r}')
-          if any(x.get('key') == 'GlassStrength' for x in root['items']):
-              raise SystemExit('Legacy GlassStrength must not be exposed as a slider')
+          assert keys == ['ClearStrength', 'LiquidGlassStrength'], keys
+          assert all(x.get('default') == 55 for x in sliders)
+          assert not any(x.get('key') == 'GlassStrength' for x in root['items'])
           print('Independent Clear/Liquid strength sliders verified:', keys)
-          PY2
+          PY
 
-          # Core SpringBoard hooks.
-          must_have '%group GFIconHooks' Tweak.xm
-          must_have '%init(GFIconHooks);' Tweak.xm
-          must_have 'SBFolderIconImageView' Tweak.xm
-          must_have '%group GFOpenedPanelHooks' Tweak.xm
-          must_have '%init(GFOpenedPanelHooks);' Tweak.xm
-          must_have '%hook SBFolderBackgroundView' Tweak.xm
+          grep -Fq '%group GFIconHooks' Tweak.xm
+          grep -Fq '%init(GFIconHooks);' Tweak.xm
+          grep -Fq 'SBFolderIconImageView' Tweak.xm
 
-          # Accepted closed Liquid Glass baseline.
-          must_have 'brightness = 0.006 + (0.014 * materialResponse);' Tweak.xm
-          must_have '? 0.030 + (0.060 * tintResponse)' Tweak.xm
-          must_have 'podView.alpha = MIN(0.78, 0.42 + 0.36 * materialResponse);' Tweak.xm
+          grep -Fq '%group GFOpenedPanelHooks' Tweak.xm
+          grep -Fq '%init(GFOpenedPanelHooks);' Tweak.xm
+          grep -Fq '%hook SBFolderBackgroundView' Tweak.xm
 
-          # Passive App Library category pod only.
-          must_have 'SBHLibraryCategoryPodBackgroundView' Tweak.xm
-          must_have 'GFCreateNativeAppLibraryPodVisual' Tweak.xm
-          must_not_match 'GFActivateNativeAppLibraryPodVisual|_updateVisualStyle' Tweak.xm
+          # Beta3.0 may resolve the exact App Library category background class
+          # dynamically as a passive view, but must not hook App Library controllers,
+          # actively trigger its visual-style method, or link SpringBoardHome.
+          grep -Fq 'SBHLibraryCategoryPodBackgroundView' Tweak.xm
+          grep -Fq 'GFCreateNativeAppLibraryPodVisual' Tweak.xm
 
-          # Beta3.0 Clear structure. Keep this intentionally structural so
-          # later optical tuning does not make CI reject valid source.
-          must_have 'GFClearOpenedBlurResponse' Tweak.xm
-          must_have 'GFClearOpenedPresenceResponse' Tweak.xm
-          must_have 'GFClearDetailResponse' Tweak.xm
-          must_have 'blurRadius = 40.0 * clearBlurResponse;' Tweak.xm
-          must_have 'sampleAlpha = clearPresence;' Tweak.xm
-          must_not_match 'GFClearHighOpticalResponse|clearHighOptical' Tweak.xm
+          # Regression guard: this one-shot activation was the source of the
+          # darker closed-folder material that Beta3.0 intentionally keeps removed.
+          if grep -Eq 'GFActivateNativeAppLibraryPodVisual|_updateVisualStyle' Tweak.xm; then
+            echo "ERROR: active App Library pod visual-style path reintroduced."
+            exit 1
+          fi
 
-          # Continuous opened-panel rail geometry.
-          must_have 'primaryQuadrantEnergy' Tweak.xm
-          must_have 'secondaryQuadrantEnergy' Tweak.xm
-          must_have 'topLeftFadeStart' Tweak.xm
-          must_have 'bottomRightFadeStart' Tweak.xm
-          must_have 'topLeftTailSmooth' Tweak.xm
-          must_have 'bottomRightTailSmooth' Tweak.xm
-          must_have 'primaryTurnGain' Tweak.xm
-          must_have 'secondaryTurnGain' Tweak.xm
+          # Exact closed Liquid Glass regression guard. These are the values
+          # from the earlier on-device reference that the user accepted.
+          grep -Fq 'brightness = 0.006 + (0.014 * materialResponse);' Tweak.xm
+          grep -Fq '? 0.030 + (0.060 * tintResponse)' Tweak.xm
+          grep -Fq 'podView.alpha = MIN(0.78, 0.42 + 0.36 * materialResponse);' Tweak.xm
 
-          # Old experimental / splice paths must stay out.
-          must_not_match '%hook[[:space:]]+SBHLibrary|AppLibraryPods|GFShouldUseAppLibraryPods|SpringBoardHome\.framework|MSHookMessageEx|SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView' Tweak.xm
-          must_not_match 'topLeftArcOwnership|bottomRightArcOwnership|topStraightOwnership|bottomStraightOwnership|leftCornerBridge|rightCornerBridge|sideRailGain|darkAxisWeight|pairedCorner' Tweak.xm
+          # Clear must remain a real wallpaper-owned shallow backdrop sample.
+          grep -Fq 'Clear reference target: a THIN wallpaper-owned material.' Tweak.xm
+          grep -Fq 'self.gfBackdropSampleView.hidden = NO;' Tweak.xm
+
+          # Beta3.0 opened-Clear contract: any non-zero Clear value starts
+          # from a bright neutral optical floor. ClearStrength primarily changes
+          # local blur and secondarily saturation/specular detail, not whiteness.
+          grep -Fq 'GFClearBlurResponse' Tweak.xm
+          grep -Fq 'GFClearActivationResponse' Tweak.xm
+          grep -Fq 'GFClearOpenedBlurResponse' Tweak.xm
+          grep -Fq 'GFClearOpenedPresenceResponse' Tweak.xm
+          grep -Fq 'GFClearDetailResponse' Tweak.xm
+          grep -Fq 'return pow(GFClamp01(strength), 1.15);' Tweak.xm
+          grep -Fq 'return (GFClamp01(strength) > 0.001) ? 1.0 : 0.0;' Tweak.xm
+          grep -Fq 'return pow(GFClamp01(strength), 0.95);' Tweak.xm
+          grep -Fq 'blurRadius = 40.0 * clearBlurResponse;' Tweak.xm
+          grep -Fq '? (1.075 + 0.025 * clearDetail)' Tweak.xm
+          grep -Fq ': (1.080 + 0.035 * clearDetail);' Tweak.xm
+          grep -Fq '? (0.060 + 0.005 * clearDetail)' Tweak.xm
+          grep -Fq ': (0.100 + 0.005 * clearDetail);' Tweak.xm
+          grep -Fq 'sampleAlpha = clearPresence;' Tweak.xm
+          grep -Fq '(darkAppearance ? 0.065 : 0.080);' Tweak.xm
+          grep -Fq '? (0.84 + 0.04 * clearDetail)' Tweak.xm
+          grep -Fq ': (0.80 + 0.08 * clearDetail));' Tweak.xm
+          grep -Fq '? (0.052 + 0.010 * clearDetail)' Tweak.xm
+          grep -Fq ': (0.048 + 0.014 * clearDetail));' Tweak.xm
+          grep -Fq '? (clearPresence * (0.38 + 0.30 * clearDetail))' Tweak.xm
+          grep -Fq 'blurRadius = 8.40 * clearBlurResponse;' Tweak.xm
+          grep -Fq 'saturation = 1.120 + (0.055 * clearActivation);' Tweak.xm
+          grep -Fq ': 0.010 * clearActivation;' Tweak.xm
+
+          if grep -Eq 'GFClearHighOpticalResponse|clearHighOptical' Tweak.xm; then
+            echo "ERROR: old strength-driven Clear body-luminance response remains."
+            exit 1
+          fi
+
+          if grep -Fq '0.55 + 1.70 * materialResponse' Tweak.xm || \
+             grep -Fq '0.45 + 1.50 * materialResponse' Tweak.xm || \
+             grep -Fq '1.8 + (6.0 * materialResponse)' Tweak.xm; then
+            echo "ERROR: old Clear blur curve reintroduced."
+            exit 1
+          fi
+
+          if grep -Eq '%hook[[:space:]]+SBHLibrary|AppLibraryPods|GFShouldUseAppLibraryPods|SpringBoardHome\.framework|MSHookMessageEx|SBFloatyFolderView|_newPageBackgroundView|setBackgroundAlpha:|SBFolderControllerBackgroundView' Tweak.xm; then
+            echo "ERROR: unsafe/obsolete experimental App Library code remains."
+            exit 1
+          fi
+
+          python - <<'PY'
+          import plistlib
+          from PIL import Image
+
+          plist = "layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist"
+          with open(plist, "rb") as f:
+              p = plistlib.load(f)
+
+          assert p["entry"]["bundle"] == "GlassFoldersPrefs"
+          assert p["entry"]["icon"] == "GlassFolders.png"
+
+          for path in (
+              "layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png",
+              "layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png",
+              "layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png",
+          ):
+              im = Image.open(path).convert("RGBA")
+              # Transparent external corners are intentional.
+              assert im.getpixel((0, 0))[3] < 16
+              assert im.getpixel((im.width - 1, 0))[3] < 16
+              assert im.getpixel((0, im.height - 1))[3] < 16
+              assert im.getpixel((im.width - 1, im.height - 1))[3] < 16
+
+          print("Rounded-alpha source icons verified.")
+          PY
+
+          echo "Checking Beta3.0 fixed bright-Clear floor + locked blur/Liquid baselines..."
+          # These names are unique to GFCreateOpenedPanelLightingImage in the
+          # Locked continuous-tangent model, so the gate cannot accidentally
+          # pass by finding similarly named closed-folder lighting variables.
+          grep -Fq 'Beta 3.0 — locked symmetric continuous tangent rails.' Tweak.xm
+          grep -Fq 'primaryQuadrantEnergy' Tweak.xm
+          grep -Fq 'secondaryQuadrantEnergy' Tweak.xm
+          grep -Fq 'tangentOverlap' Tweak.xm
+          grep -Fq 'sideTailLength' Tweak.xm
+          grep -Fq 'topLeftFadeStart' Tweak.xm
+          grep -Fq 'bottomRightFadeStart' Tweak.xm
+          grep -Fq 'primaryEnvelope' Tweak.xm
+          grep -Fq 'secondaryEnvelope' Tweak.xm
+          grep -Fq 'topLeftTailSmooth' Tweak.xm
+          grep -Fq 'bottomRightTailSmooth' Tweak.xm
+          grep -Fq 'primaryTurnGain' Tweak.xm
+          grep -Fq 'secondaryTurnGain' Tweak.xm
+          grep -Fq 'endpointRadius * 1.12' Tweak.xm
+          grep -Fq '@"P23-%@-%@-%zux%zu-r%.2f-s%ld"' Tweak.xm
+
+          if grep -Eq 'topLeftArcOwnership|bottomRightArcOwnership|topStraightOwnership|bottomStraightOwnership' Tweak.xm; then
+            echo "ERROR: old piecewise opened-rail splice model remains."
+            exit 1
+          fi
+
+          if grep -Eq 'leftCornerBridge|rightCornerBridge|sideRailGain|darkAxisWeight|pairedCorner' Tweak.xm; then
+            echo "ERROR: obsolete Beta1.5/older edge-distribution model remains."
+            exit 1
+          fi
+
+          echo "Checking Beta1.6.1 obsolete-variable cleanup..."
+          if grep -Eq 'CGFloat[[:space:]]+(highlightShoulderGain|highlightCoreGain|highlightFilamentGain|shoulderGain|coreGain|filamentGain|horizontalEdge)[[:space:]]*=' Tweak.xm; then
+            echo "ERROR: obsolete Beta1.6 unused-variable declaration remains."
+            grep -En 'CGFloat[[:space:]]+(highlightShoulderGain|highlightCoreGain|highlightFilamentGain|shoulderGain|coreGain|filamentGain|horizontalEdge)[[:space:]]*=' Tweak.xm || true
+            exit 1
+          fi
+
+          echo "Checking About / Author credit..."
+          python - <<'PY'
+          import plistlib
+
+          with open("prefs/Resources/Root.plist", "rb") as f:
+              p = plistlib.load(f)
+
+          items = p["items"]
+          about = [x for x in items if x.get("cell") == "PSGroupCell" and x.get("label") == "关于"]
+          author = [
+              x for x in items
+              if x.get("cell") == "PSTitleValueCell"
+              and x.get("label") == "作者"
+              and x.get("get") == "authorValue:"
+          ]
+
+          if len(about) != 1:
+              raise SystemExit(f"Expected exactly one 关于 group, got {len(about)}")
+          if len(author) != 1:
+              raise SystemExit(f"Expected exactly one 作者 PSTitleValueCell, got {len(author)}")
+
+          print("Author specifier OK: 作者 -> authorValue:")
+          PY
+
+          grep -Fq 'return @"kulinich";' prefs/GFRootListController.m
 
           echo "Source sanity gate passed."
 
@@ -268,7 +370,7 @@ jobs:
           grep -Fq 'SBFolderIconImageView' tweak.strings
           grep -Fq 'SBFolderBackgroundView' tweak.strings
 
-          # Exact native category-pod class is expected as a passive view in Beta2.9.
+          # Exact native category-pod class is expected as a passive view in Beta3.0.
           # Other App Library/controller experiments and direct framework references are not.
           grep -Fq 'SBHLibraryCategoryPodBackgroundView' tweak.strings
 
@@ -387,3 +489,4 @@ jobs:
           name: GlassFolders-0.7.4-Beta3.0-DEB
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
+          retention-days: 14
