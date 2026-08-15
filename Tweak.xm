@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 0.7.4 Beta 3.8 — App Library clean optical highlights
+ * GlassFolders 0.7.4 Beta 3.9 — Shared desktop/App Library material
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -973,6 +973,14 @@ typedef struct {
     CGFloat borderAlpha;
     CGFloat nativePodAlpha;
     CGFloat nativeSearchAlpha;
+
+    /*
+     * Compact derivatives of the already-proven desktop opened-folder
+     * optical responses. They drive local light, not a full outline.
+     */
+    CGFloat topSpecularAlpha;
+    CGFloat upperLeftBloomAlpha;
+    CGFloat lowerLeftGlintAlpha;
 } GFAppLibraryMaterialRecipe;
 
 
@@ -980,139 +988,277 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
     BOOL searchVariant,
     BOOL dark
 ) {
+    /*
+     * Beta 3.9: App Library no longer owns an unrelated material recipe.
+     *
+     * The formulas below are derived directly from GFPanelGlassView's
+     * accepted OPENED desktop-folder material:
+     *
+     * Clear light:
+     *   blur        = 28 * GFClearOpenedBlurResponse(s)
+     *   saturation  = 1.120 + 0.120 * GFClearStructureResponse(s)
+     *   brightness  = 0.075 + 0.035 * GFClearStructureResponse(s)
+     *   tint        = 0.022 + 0.006 * structure
+     *
+     * Liquid light:
+     *   blur        = 2.6 + 2.8 * GFMaterialResponse(s)
+     *   saturation  = 1.110 + 0.220 * material
+     *   brightness  = 0.026 + 0.030 * material
+     *   tint        = (0.002 + 0.006 * GFTintResponse(s)) * s
+     *
+     * App Library only scales BLUR/geometry for its smaller cards. Chroma,
+     * luminance and the edge-response family stay tied to the desktop model.
+     */
     GFAppLibraryMaterialRecipe r = {
         8.0, 1.10, 0.010, 0.020,
-        0.34, 0.14, 0.22, 0.08
+        0.24, 0.06, 0.18, 0.05,
+        0.18, 0.10, 0.08
     };
 
     if (GFAppLibraryStyle == 0) {
-        /*
-         * CLEAR
-         *
-         * The reference is intentionally bright and luminous. Unlike normal
-         * Clear folder strength, these are fixed design presets so the whole
-         * App Library remains visually coherent.
-         */
+        CGFloat referenceStrength;
+        CGFloat compactBlurScale;
+        CGFloat nativePodAlpha;
+
         switch (GFAppLibraryClearPreset) {
             case 1: // Balanced
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        9.4, 1.10, 0.022, 0.040,
-                        0.34, 0.130, 0.25, 0.08
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        9.2, 1.14, 0.042, 0.054,
-                        0.27, 0.095, 0.24, 0.065
-                    };
-                }
+                referenceStrength = 0.62;
+                compactBlurScale = 0.58;
+                nativePodAlpha = 0.20;
                 break;
 
             case 2: // Soft
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        11.8, 1.07, 0.018, 0.052,
-                        0.32, 0.115, 0.28, 0.09
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        12.6, 1.09, 0.034, 0.070,
-                        0.26, 0.090, 0.27, 0.075
-                    };
-                }
+                referenceStrength = 0.35;
+                compactBlurScale = 1.40;
+                nativePodAlpha = 0.24;
                 break;
 
             case 0:
             default: // Apple Bright
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        10.0, 1.12, 0.032, 0.050,
-                        0.36, 0.145, 0.24, 0.07
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        10.8, 1.16, 0.064, 0.080,
-                        0.28, 0.105, 0.23, 0.055
-                    };
-                }
+                referenceStrength = 0.90;
+                compactBlurScale = 0.44;
+                nativePodAlpha = 0.17;
                 break;
         }
 
+        CGFloat structure =
+            GFClearStructureResponse(
+                referenceStrength
+            );
+
+        CGFloat openedBlur =
+            (dark ? 40.0 : 28.0) *
+            GFClearOpenedBlurResponse(
+                referenceStrength
+            );
+
+        r.blur =
+            openedBlur *
+            compactBlurScale;
+
+        r.saturation = dark
+            ? (1.080 + 0.065 * structure)
+            : (1.120 + 0.120 * structure);
+
+        r.brightness = dark
+            ? (0.048 + 0.006 * structure)
+            : (0.075 + 0.035 * structure);
+
         /*
-         * Search is an interactive control, so lift it only a tiny amount.
-         * Beta 3.5 was deliberately much brighter and looked disconnected.
+         * Important shared-material correction:
+         * use the desktop Clear's THIN neutral lift instead of the old
+         * App-Library-specific milky 5–8% body tint.
          */
-        if (searchVariant) {
-            r.blur += 0.45;
-            r.saturation += dark ? 0.006 : 0.008;
-            r.brightness += dark ? 0.002 : 0.003;
-            r.tintAlpha += dark ? 0.002 : 0.003;
-            r.borderWidth += 0.01;
-            r.borderAlpha += 0.006;
-            r.nativeSearchAlpha = MAX(0.04, r.nativeSearchAlpha - 0.006);
-        }
+        r.tintAlpha = dark
+            ? MIN(
+                0.054,
+                0.050 + 0.004 * structure
+            )
+            : MIN(
+                0.028,
+                0.022 + 0.006 * structure
+            );
+
+        /*
+         * Desktop Clear uses a faint continuity floor and a broad/soft rail.
+         * Keep the continuity floor weak on the smaller cards.
+         */
+        r.borderWidth = 0.26;
+        r.borderAlpha = dark
+            ? (0.030 + 0.022 * structure)
+            : (0.032 + 0.026 * structure);
+
+        r.nativePodAlpha =
+            nativePodAlpha;
+
+        r.nativeSearchAlpha =
+            dark ? 0.055 : 0.045;
+
+        CGFloat clearEdgeDrive =
+            0.24 + 0.22 * structure;
+
+        CGFloat desktopPrimaryFilament =
+            dark
+                ? (0.010 + 0.075 * clearEdgeDrive)
+                : (0.008 + 0.055 * clearEdgeDrive);
+
+        /*
+         * The desktop texture is a broad SDF rail. A small CAGradient needs
+         * a larger alpha to produce the same perceived energy.
+         */
+        r.topSpecularAlpha =
+            MIN(
+                dark ? 0.22 : 0.19,
+                desktopPrimaryFilament * 4.6
+            );
+
+        r.upperLeftBloomAlpha =
+            r.topSpecularAlpha *
+            0.72;
+
+        r.lowerLeftGlintAlpha =
+            r.topSpecularAlpha *
+            0.32;
     } else {
-        /*
-         * LIQUID GLASS
-         *
-         * Lower blur and body tint. Wallpaper transmission stays strong and
-         * the object is identified mainly by the thin optical edge/native
-         * shading, matching the transparent Liquid Glass reference.
-         */
+        CGFloat referenceStrength;
+        CGFloat compactBlurScale;
+        CGFloat nativePodAlpha;
+
         switch (GFAppLibraryLiquidPreset) {
             case 1: // Balanced
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        7.8, 1.15, 0.010, 0.018,
-                        0.38, 0.145, 0.20, 0.07
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        7.2, 1.22, 0.018, 0.015,
-                        0.24, 0.075, 0.18, 0.052
-                    };
-                }
+                referenceStrength = 0.72;
+                compactBlurScale = 1.18;
+                nativePodAlpha = 0.14;
                 break;
 
             case 2: // Deep
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        9.6, 1.09, 0.002, 0.024,
-                        0.40, 0.155, 0.26, 0.09
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        9.0, 1.14, 0.008, 0.022,
-                        0.25, 0.080, 0.24, 0.072
-                    };
-                }
+                referenceStrength = 0.78;
+                compactBlurScale = 1.72;
+                nativePodAlpha = 0.21;
                 break;
 
             case 0:
-            default: // Crystal
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        6.0, 1.20, 0.014, 0.012,
-                        0.42, 0.175, 0.16, 0.05
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        5.4, 1.30, 0.026, 0.009,
-                        0.22, 0.070, 0.13, 0.032
-                    };
-                }
+            default: // Crystal = desktop high-strength Liquid language
+                referenceStrength = 0.95;
+                compactBlurScale = 0.96;
+                nativePodAlpha = 0.10;
                 break;
         }
 
-        if (searchVariant) {
-            r.blur += 0.35;
-            r.saturation += dark ? 0.006 : 0.008;
-            r.brightness += 0.002;
-            r.tintAlpha += 0.002;
-            r.borderWidth += 0.01;
-            r.borderAlpha += 0.006;
-            r.nativeSearchAlpha = MAX(0.025, r.nativeSearchAlpha - 0.006);
-        }
+        CGFloat material =
+            GFMaterialResponse(
+                referenceStrength
+            );
+
+        CGFloat tint =
+            GFTintResponse(
+                referenceStrength
+            );
+
+        CGFloat edge =
+            GFEdgeResponse(
+                referenceStrength
+            );
+
+        CGFloat openedBlur = dark
+            ? (4.6 + 4.8 * material)
+            : (2.6 + 2.8 * material);
+
+        r.blur =
+            openedBlur *
+            compactBlurScale;
+
+        r.saturation = dark
+            ? (1.070 + 0.120 * material)
+            : (1.110 + 0.220 * material);
+
+        r.brightness = dark
+            ? (0.015 + 0.025 * material)
+            : (0.026 + 0.030 * material);
+
+        CGFloat desktopNeutralLift = dark
+            ? (0.030 + 0.050 * tint) *
+                referenceStrength
+            : (0.002 + 0.006 * tint) *
+                referenceStrength;
+
+        r.tintAlpha = dark
+            ? MIN(0.055, desktopNeutralLift)
+            : MIN(0.008, desktopNeutralLift);
+
+        /*
+         * Match the desktop Liquid continuity floor, not a decorative
+         * App-Library outline.
+         */
+        r.borderWidth = dark
+            ? 0.34
+            : 0.26;
+
+        r.borderAlpha = dark
+            ? (0.025 + 0.040 * edge)
+            : (0.006 + 0.010 * edge);
+
+        r.nativePodAlpha =
+            nativePodAlpha;
+
+        r.nativeSearchAlpha =
+            dark ? 0.045 : 0.028;
+
+        /*
+         * These are the accepted desktop opened-panel Liquid gains:
+         * top/upper-left is dominant; lower-left is a compact glint.
+         */
+        CGFloat primaryFilament = dark
+            ? (0.036 + 0.300 * edge)
+            : (0.046 + 0.360 * edge);
+
+        CGFloat lowerLeftTransition = dark
+            ? (0.008 + 0.045 * edge)
+            : (0.018 + 0.095 * edge);
+
+        /*
+         * Compact CAGradient representation of the same desktop rail energy.
+         * No full perimeter / no inner ring.
+         */
+        r.topSpecularAlpha =
+            MIN(
+                dark ? 0.34 : 0.38,
+                primaryFilament * 0.92
+            );
+
+        r.upperLeftBloomAlpha =
+            r.topSpecularAlpha *
+            0.78;
+
+        r.lowerLeftGlintAlpha =
+            MIN(
+                dark ? 0.17 : 0.15,
+                lowerLeftTransition * 1.35
+            );
+    }
+
+    /*
+     * Search is the horizontal version of the SAME material.
+     * Only a tiny interaction lift survives.
+     */
+    if (searchVariant) {
+        r.blur *= 1.035;
+        r.saturation += dark ? 0.005 : 0.007;
+        r.brightness += dark ? 0.002 : 0.003;
+        r.tintAlpha = MIN(
+            dark ? 0.058 : 0.030,
+            r.tintAlpha + (dark ? 0.002 : 0.002)
+        );
+
+        r.topSpecularAlpha *= 1.04;
+        r.upperLeftBloomAlpha *= 0.96;
+        r.lowerLeftGlintAlpha *= 0.82;
+
+        r.nativeSearchAlpha =
+            MAX(
+                dark ? 0.035 : 0.020,
+                r.nativeSearchAlpha - 0.004
+            );
     }
 
     return r;
@@ -1124,6 +1270,7 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
 @interface GFAppLibraryGlassView : UIView
 @property (nonatomic, strong) UIView *gfTintView;
 @property (nonatomic, strong) CAGradientLayer *gfTopSpecularLayer;
+@property (nonatomic, strong) CAGradientLayer *gfUpperLeftBloomLayer;
 @property (nonatomic, strong) CAGradientLayer *gfLowerLeftGlintLayer;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
@@ -1165,6 +1312,16 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
         _gfTopSpecularLayer.endPoint = CGPointMake(1.0, 0.5);
         _gfTopSpecularLayer.cornerCurve = kCACornerCurveContinuous;
         [self.layer addSublayer:_gfTopSpecularLayer];
+
+        /*
+         * Broad upper-left optical bloom: this replaces the missing visual
+         * mass of the desktop rounded top-left rail without drawing a ring.
+         */
+        _gfUpperLeftBloomLayer = [CAGradientLayer layer];
+        _gfUpperLeftBloomLayer.startPoint = CGPointMake(0.0, 0.0);
+        _gfUpperLeftBloomLayer.endPoint = CGPointMake(1.0, 1.0);
+        _gfUpperLeftBloomLayer.cornerCurve = kCACornerCurveContinuous;
+        [self.layer addSublayer:_gfUpperLeftBloomLayer];
 
         _gfLowerLeftGlintLayer = [CAGradientLayer layer];
         _gfLowerLeftGlintLayer.startPoint = CGPointMake(0.0, 0.5);
@@ -1240,71 +1397,49 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
                           alpha:recipe.borderAlpha]
             .CGColor;
 
-    BOOL liquid =
-        (GFAppLibraryStyle == 1);
-
-    CGFloat presetWeight = 1.0;
-
-    if (liquid) {
-        switch (GFAppLibraryLiquidPreset) {
-            case 1: // Balanced
-                presetWeight = 0.82;
-                break;
-            case 2: // Deep
-                presetWeight = 0.66;
-                break;
-            case 0:
-            default: // Crystal
-                presetWeight = 1.0;
-                break;
-        }
-    } else {
-        switch (GFAppLibraryClearPreset) {
-            case 1: // Balanced
-                presetWeight = 0.72;
-                break;
-            case 2: // Soft
-                presetWeight = 0.52;
-                break;
-            case 0:
-            default: // Apple Bright
-                presetWeight = 0.78;
-                break;
-        }
-    }
-
+    /*
+     * Beta 3.9 shared optics:
+     * the alpha values come from the SAME edge/structure responses used by
+     * the desktop opened folder. The App Library only changes geometry.
+     */
     CGFloat topAlpha =
-        (liquid
-            ? (dark ? 0.20 : 0.27)
-            : (dark ? 0.11 : 0.15))
-        * presetWeight;
+        recipe.topSpecularAlpha;
+
+    CGFloat bloomAlpha =
+        recipe.upperLeftBloomAlpha;
 
     CGFloat glintAlpha =
-        (liquid
-            ? (dark ? 0.16 : 0.22)
-            : (dark ? 0.07 : 0.095))
-        * presetWeight;
-
-    if (self.gfSearchVariant) {
-        topAlpha *= 1.05;
-        glintAlpha *= 0.90;
-    }
+        recipe.lowerLeftGlintAlpha;
 
     self.gfTopSpecularLayer.colors = @[
         (id)[UIColor colorWithWhite:1.0
                               alpha:0.0].CGColor,
         (id)[UIColor colorWithWhite:1.0
-                              alpha:topAlpha * 0.70].CGColor,
+                              alpha:topAlpha * 0.74].CGColor,
         (id)[UIColor colorWithWhite:1.0
                               alpha:topAlpha].CGColor,
         (id)[UIColor colorWithWhite:1.0
-                              alpha:topAlpha * 0.35].CGColor,
+                              alpha:topAlpha * 0.48].CGColor,
         (id)[UIColor colorWithWhite:1.0
                               alpha:0.0].CGColor
     ];
 
     self.gfTopSpecularLayer.locations =
-        @[@0.00, @0.12, @0.42, @0.72, @1.00];
+        @[@0.00, @0.10, @0.38, @0.72, @1.00];
+
+    self.gfUpperLeftBloomLayer.colors = @[
+        (id)[UIColor colorWithWhite:1.0
+                              alpha:bloomAlpha].CGColor,
+        (id)[UIColor colorWithWhite:1.0
+                              alpha:bloomAlpha * 0.48].CGColor,
+        (id)[UIColor colorWithWhite:1.0
+                              alpha:bloomAlpha * 0.12].CGColor,
+        (id)[UIColor colorWithWhite:1.0
+                              alpha:0.0].CGColor
+    ];
+
+    self.gfUpperLeftBloomLayer.locations =
+        @[@0.00, @0.30, @0.62, @1.00];
 
     self.gfLowerLeftGlintLayer.colors = @[
         (id)[UIColor colorWithWhite:1.0
@@ -1312,13 +1447,14 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
         (id)[UIColor colorWithWhite:1.0
                               alpha:glintAlpha].CGColor,
         (id)[UIColor colorWithWhite:1.0
-                              alpha:glintAlpha * 0.42].CGColor,
+                              alpha:glintAlpha * 0.40].CGColor,
         (id)[UIColor colorWithWhite:1.0
                               alpha:0.0].CGColor
     ];
 
     self.gfLowerLeftGlintLayer.locations =
-        @[@0.00, @0.34, @0.60, @1.00];
+        @[@0.00, @0.32, @0.58, @1.00];
+
 }
 
 - (void)layoutSubviews {
@@ -1342,23 +1478,27 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
     }
 
     /*
-     * Soft top light: only the upper band. It does NOT follow the whole
-     * rounded perimeter, which avoids the Beta 3.7 double-outline look.
+     * Compact desktop topology:
+     * - a broad upper-left/top light band
+     * - a local rounded-corner bloom
+     * - a small lower-left glint
+     *
+     * None of these layers traces the whole perimeter.
      */
     CGFloat topHeight =
         MIN(
-            7.0,
-            MAX(3.6, radius * 0.20)
+            9.0,
+            MAX(4.4, radius * 0.26)
         );
 
     self.gfTopSpecularLayer.frame =
         CGRectMake(
-            MAX(3.0, radius * 0.15),
-            0.60,
+            MAX(2.0, radius * 0.08),
+            0.35,
             MAX(
                 0.0,
                 CGRectGetWidth(bounds) -
-                MAX(6.0, radius * 0.30)
+                MAX(4.0, radius * 0.16)
             ),
             topHeight
         );
@@ -1366,20 +1506,43 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
     self.gfTopSpecularLayer.cornerRadius =
         topHeight * 0.5;
 
+    CGFloat bloomSize =
+        MIN(
+            MIN(
+                CGRectGetWidth(bounds) * 0.48,
+                CGRectGetHeight(bounds) * 0.48
+            ),
+            MAX(48.0, radius * 2.35)
+        );
+
+    self.gfUpperLeftBloomLayer.frame =
+        CGRectMake(
+            0.0,
+            0.0,
+            bloomSize,
+            bloomSize
+        );
+
+    self.gfUpperLeftBloomLayer.cornerRadius =
+        MIN(
+            radius,
+            bloomSize * 0.50
+        );
+
     /*
      * Small lower-left glint only. Keep it local enough that it reads as a
      * light event, not another border.
      */
     CGFloat glintWidth =
         MIN(
-            CGRectGetWidth(bounds) * 0.25,
-            MAX(40.0, radius * 1.65)
+            CGRectGetWidth(bounds) * 0.30,
+            MAX(46.0, radius * 1.90)
         );
 
     CGFloat glintHeight =
         MIN(
-            5.0,
-            MAX(2.8, radius * 0.13)
+            5.5,
+            MAX(3.0, radius * 0.145)
         );
 
     self.gfLowerLeftGlintLayer.frame =
