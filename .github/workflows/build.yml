@@ -1,4 +1,4 @@
-name: GlassFolders 1.0.0 Commercial
+name: GlassFolders 1.0.0 Release
 
 on:
   workflow_dispatch:
@@ -66,8 +66,7 @@ jobs:
           set -euo pipefail
 
           # The repository historically uses ONE canonical nested entry.
-          # Remove accidental FIX4/FIX6 top-level duplicates if they still
-          # exist in the Git checkout.
+          # Remove obsolete top-level PreferenceLoader duplicates if present.
           rm -f \
             layout/Library/PreferenceLoader/Preferences/GlassFolders.plist \
             layout/Library/PreferenceLoader/Preferences/GlassFolders.png \
@@ -82,9 +81,8 @@ jobs:
           test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png
           test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png
 
-          # FIX12: because the entry declares bundle=GlassFoldersPrefs, the icon
-          # must also exist in the PreferenceBundle resources used by
-          # SpecifiersFromPlist / NSBundle resource lookup.
+          # The entry declares bundle=GlassFoldersPrefs, so icon resources
+          # are also shipped in the PreferenceBundle for NSBundle lookup.
           test -f prefs/Resources/GlassFolders.png
           test -f prefs/Resources/GlassFolders@2x.png
           test -f prefs/Resources/GlassFolders@3x.png
@@ -92,7 +90,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # RootHide commercial build keeps arm64e architecture.
+          # RootHide release build uses the arm64e package architecture.
           echo "Package scheme: roothide"
           sed -i '' 's/^Architecture:.*/Architecture: iphoneos-arm64e/' control
           make THEOS="$THEOS" THEOS_PACKAGE_SCHEME=roothide clean
@@ -284,8 +282,7 @@ jobs:
           set -euo pipefail
 
           # The repository historically uses ONE canonical nested entry.
-          # Remove accidental FIX4/FIX6 top-level duplicates if they still
-          # exist in the Git checkout.
+          # Remove obsolete top-level PreferenceLoader duplicates if present.
           rm -f \
             layout/Library/PreferenceLoader/Preferences/GlassFolders.plist \
             layout/Library/PreferenceLoader/Preferences/GlassFolders.png \
@@ -300,9 +297,8 @@ jobs:
           test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png
           test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png
 
-          # FIX12: because the entry declares bundle=GlassFoldersPrefs, the icon
-          # must also exist in the PreferenceBundle resources used by
-          # SpecifiersFromPlist / NSBundle resource lookup.
+          # The entry declares bundle=GlassFoldersPrefs, so icon resources
+          # are also shipped in the PreferenceBundle for NSBundle lookup.
           test -f prefs/Resources/GlassFolders.png
           test -f prefs/Resources/GlassFolders@2x.png
           test -f prefs/Resources/GlassFolders@3x.png
