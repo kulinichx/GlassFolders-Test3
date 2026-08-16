@@ -65,22 +65,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          # FIX9: keep exactly one nested PreferenceLoader entry plist, but
-          # keep the icon files at Preferences/ root. On the target devices
-          # PreferenceLoader resolves icon = GlassFolders.png from this root.
-          rm -f \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders.plist \
-            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png
+          # The repository historically uses ONE canonical nested entry.
+          # Remove accidental FIX4/FIX6 top-level duplicates if they still
+          # exist in the Git checkout.
+          rm -f             layout/Library/PreferenceLoader/Preferences/GlassFolders.plist             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png
 
           test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders.png
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders@2x.png
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders@3x.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png
       - name: Build RootHide package
         shell: bash
         run: |
@@ -131,9 +124,9 @@ jobs:
           ROOT_PLIST="$(find root -type f -path '*GlassFoldersPrefs.bundle/Root.plist' | head -n 1)"
           PREF_INFO="$(find root -type f -path '*GlassFoldersPrefs.bundle/Info.plist' | head -n 1)"
           PREF_ENTRY="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist' | head -n 1)"
-          PREF_ICON="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders.png' | head -n 1)"
-          PREF_ICON_2X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders@2x.png' | head -n 1)"
-          PREF_ICON_3X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders@3x.png' | head -n 1)"
+          PREF_ICON="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders.png' | head -n 1)"
+          PREF_ICON_2X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png' | head -n 1)"
+          PREF_ICON_3X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png' | head -n 1)"
           EN_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/en.lproj/Root.strings' | head -n 1)"
           ZH_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/zh-Hans.lproj/Root.strings' | head -n 1)"
 
@@ -258,22 +251,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          # FIX9: keep exactly one nested PreferenceLoader entry plist, but
-          # keep the icon files at Preferences/ root. On the target devices
-          # PreferenceLoader resolves icon = GlassFolders.png from this root.
-          rm -f \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders.plist \
-            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png \
-            layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png
+          # The repository historically uses ONE canonical nested entry.
+          # Remove accidental FIX4/FIX6 top-level duplicates if they still
+          # exist in the Git checkout.
+          rm -f             layout/Library/PreferenceLoader/Preferences/GlassFolders.plist             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon.png             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@2x.png             layout/Library/PreferenceLoader/Preferences/GlassFoldersIcon@3x.png
 
           test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders.png
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders@2x.png
-          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders@3x.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png
+          test -f layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png
       - name: Build standard rootless package
         shell: bash
         run: |
@@ -327,9 +313,9 @@ jobs:
           ROOT_PLIST="$(find root -type f -path '*GlassFoldersPrefs.bundle/Root.plist' | head -n 1)"
           PREF_INFO="$(find root -type f -path '*GlassFoldersPrefs.bundle/Info.plist' | head -n 1)"
           PREF_ENTRY="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist' | head -n 1)"
-          PREF_ICON="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders.png' | head -n 1)"
-          PREF_ICON_2X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders@2x.png' | head -n 1)"
-          PREF_ICON_3X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders@3x.png' | head -n 1)"
+          PREF_ICON="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders.png' | head -n 1)"
+          PREF_ICON_2X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders@2x.png' | head -n 1)"
+          PREF_ICON_3X="$(find root -type f -path '*PreferenceLoader/Preferences/GlassFolders/GlassFolders@3x.png' | head -n 1)"
           EN_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/en.lproj/Root.strings' | head -n 1)"
           ZH_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/zh-Hans.lproj/Root.strings' | head -n 1)"
 
