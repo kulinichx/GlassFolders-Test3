@@ -208,3 +208,23 @@ PreferenceLoader icon co-location fix:
   location changed.
 - No tweak logic, preference behavior, package identity, localization, or architecture
   settings were changed.
+
+## Commercial Candidate FIX13
+
+Final Settings icon visual refresh based on the approved Control Center glass study:
+
+- Replaces the previous Settings icon artwork with the approved programmatic
+  Control-Center-inspired frosted-glass design.
+- Uses a low-frequency blurred multicolor underlay (slate/blue/green/neutral warm)
+  beneath a cool frosted glass film to create visible transmitted color at small sizes.
+- Preserves the approved continuous directional edge-highlight treatment:
+  upper-left corner into the top edge and lower-right corner into the bottom edge,
+  with deliberately subtle left/right vertical edges.
+- Preserves the under-glass blurred `GF` mark, `Liquid Glass` title, switch geometry,
+  rounded-square geometry, and alpha-transparent outside corners.
+- Installs identical 29×29, 58×58, and 87×87 icon assets in both locations already
+  validated by FIX12: `GlassFoldersPrefs.bundle` resources and the nested
+  PreferenceLoader resource directory.
+- No tweak logic, preference behavior, package identity, localization, architecture,
+  or GitHub Actions lookup/verification logic was changed from FIX12.
+
