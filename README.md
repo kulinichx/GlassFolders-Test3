@@ -1,5 +1,11 @@
 # GlassFolders 1.0.0
 
+## Commercial Candidate FIX12 — PreferenceBundle Icon Resolution
+
+FIX12 fixes the Settings root icon without changing the approved Dock Glass artwork.
+The PreferenceLoader entry declares `bundle = GlassFoldersPrefs` and `icon = GlassFolders.png`; therefore the three icon PNGs are now also shipped inside `GlassFoldersPrefs.bundle` via `prefs/Resources/`. The nested PreferenceLoader copies are retained for compatibility, while stale top-level duplicates are removed during CI.
+
+
 A refined glass-material tweak for iOS folders and App Library.
 
 ## Features
