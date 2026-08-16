@@ -184,3 +184,21 @@ Final Settings icon material refresh:
   rounded icon body and neutral RGB in zero-alpha pixels to prevent dark edge halos.
 - No tweak logic, preference behavior, package identity, localization, architecture,
   or GitHub Actions build logic was changed from FIX9.
+
+## Commercial Candidate FIX11
+
+PreferenceLoader icon co-location fix:
+
+- Restores the canonical FIX7 PreferenceLoader resource layout.
+- Keeps the single entry plist at:
+  `Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist`.
+- Places all three Settings icon files beside that plist:
+  `GlassFolders.png`, `GlassFolders@2x.png`, and `GlassFolders@3x.png`.
+- Keeps `icon = GlassFolders.png` unchanged so the icon filename resolves within
+  the same PreferenceLoader resource directory as the entry plist.
+- GitHub Actions now verifies the nested icon paths in both RootHide and standard
+  rootless package outputs and continues to reject duplicate PreferenceLoader entries.
+- The approved FIX10 Dock-glass artwork is preserved byte-for-byte; only its package
+  location changed.
+- No tweak logic, preference behavior, package identity, localization, or architecture
+  settings were changed.
