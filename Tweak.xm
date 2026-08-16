@@ -6,7 +6,7 @@
 #import <math.h>
 
 /*
- * GlassFolders 1.0.0 — commercial release candidate
+ * GlassFolders 1.0.0 — release
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -41,11 +41,11 @@ static CGFloat GFGlassStrength = 0.0;        // active style strength for existi
 // App Library remains intentionally independent from normal folders.
 static BOOL GFAppLibraryGlassEnabled = NO;
 
-// Legacy Beta 3.6–4.4 value, retained for compatibility:
+// Legacy value retained for preference compatibility:
 // 0 = Clear, 1 = Liquid Glass
 static NSInteger GFAppLibraryStyle = 0;
 
-// Beta 4.5 public selector:
+// App Library public style selector:
 // 0 = Follow Folder, 1 = Clear, 2 = Liquid Glass
 static NSInteger GFAppLibraryStyleMode = 0;
 
@@ -56,8 +56,8 @@ static NSInteger GFAppLibraryClearPreset = 0;
 static NSInteger GFAppLibraryLiquidPreset = 0;
 
 /*
- * Kept only for source/backward compatibility with Beta 3.2–3.5 installs.
- * Beta 3.6 no longer exposes or uses an App Library percentage slider.
+ * Kept only for source/backward compatibility with older installs.
+ * The current UI no longer exposes or uses an App Library percentage slider.
  */
 static CGFloat GFAppLibraryGlassStrength = 0.55;
 
@@ -117,7 +117,7 @@ static void GFLoadPreferences(void) {
     GFStyle = GFReadInteger(CFSTR("Style"), 0);
 
     /*
-     * Beta 2.8 keeps the split-control migration contract: Clear and Liquid Glass keep independent strength
+     * The split-control migration contract keeps Clear and Liquid Glass independent strength
      * values. Existing installs inherit the legacy GlassStrength value the
      * first time these new keys are absent, so upgrading does not silently
      * change the user's current appearance.
@@ -142,7 +142,7 @@ static void GFLoadPreferences(void) {
         GFReadInteger(CFSTR("AppLibraryStyleMode"), 0);
 
     /*
-     * Beta 4.6 final UI:
+     * Release UI:
      * App Library preset pickers are intentionally hidden.
      * Lock the internal recipes to the accepted visual baselines:
      * Clear = Apple Bright, Liquid Glass = Crystal.
@@ -152,7 +152,7 @@ static void GFLoadPreferences(void) {
 
     /*
      * Read the legacy key only so old preferences remain harmless.
-     * It no longer controls the Beta 3.6 resource-library material.
+     * It no longer controls the current App Library material.
      */
     GFAppLibraryGlassStrength =
         GFReadPercent(CFSTR("AppLibraryGlassStrength"), 55.0);
@@ -1692,14 +1692,14 @@ static void GFUpdateRealAppLibraryPod(UIView *pod) {
 
 
 
-#pragma mark - Beta 3.5 App Library Search Glass
+#pragma mark - App Library Search Glass
 
 /*
- * Beta 3.4 required the candidate itself to look like a Search class.
+ * Earlier search detection required the candidate itself to look like a Search class.
  * On the tested SpringBoard the visible pill is a private wrapper, so the
  * category cards were hit but the search pill was never selected.
  *
- * Beta 3.5 resolves the search UI in two stages:
+ * Search UI resolution uses two stages:
  *
  * 1) locate a real UITextField / UISearchTextField / UISearchBar descendant,
  *    then walk UP to the wide rounded pill container;
