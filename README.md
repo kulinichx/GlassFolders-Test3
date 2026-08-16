@@ -148,3 +148,39 @@ Settings icon visual refresh:
 
 FIX7 single-entry PreferenceLoader cleanup and FIX5 universal
 `arm64 + arm64e` standard rootless build behavior remain unchanged.
+
+## Commercial Candidate FIX9
+
+PreferenceLoader icon lookup compatibility fix:
+
+- Keeps the single canonical PreferenceLoader entry plist at:
+  `Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist`.
+- Moves the three Settings icon resources to the PreferenceLoader root:
+  `Library/PreferenceLoader/Preferences/GlassFolders.png`,
+  `GlassFolders@2x.png`, and `GlassFolders@3x.png`.
+- Keeps `icon = GlassFolders.png` in the entry plist.
+- GitHub Actions removes stale nested icon copies before packaging and verifies
+  the root icon paths in both RootHide and standard rootless `.deb` outputs.
+- Uses the approved FIX8 frosted-glass icon artwork without changing tweak logic,
+  preference behavior, package identity, localization, or architecture settings.
+
+This matches the icon lookup behavior confirmed on the target device, where the
+PreferenceLoader entry is nested but the icon filename is resolved from the
+`Preferences/` root directory.
+
+## Commercial Candidate FIX10
+
+Final Settings icon material refresh:
+
+- Replaces the Settings icon artwork with the approved programmatic Dock-glass design.
+- Uses a clean neutral graphite glass body with directional continuous edge highlights:
+  upper-left corner into the top edge, and lower-right corner into the bottom edge.
+- Left and right vertical edges remain deliberately subtle.
+- Keeps the exact PreferenceLoader compatibility layout established in FIX9:
+  `GlassFolders.png`, `GlassFolders@2x.png`, and `GlassFolders@3x.png` live directly in
+  `Library/PreferenceLoader/Preferences/`, while the single entry plist remains at
+  `Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist`.
+- Icon sizes remain 29×29, 58×58, and 87×87 with RGBA transparency outside the
+  rounded icon body and neutral RGB in zero-alpha pixels to prevent dark edge halos.
+- No tweak logic, preference behavior, package identity, localization, architecture,
+  or GitHub Actions build logic was changed from FIX9.
