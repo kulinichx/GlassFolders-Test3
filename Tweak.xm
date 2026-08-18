@@ -2,333 +2,241 @@
 #import <CoreFoundation/CoreFoundation.h>
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
-#import <dispatch/dispatch.h>
+#import <objc/message.h>
 #import <math.h>
+#import <string.h>
 
-/*
- * GlassFolders 1.0.0 — release
- *
- * Scope:
- * - stable closed SpringBoard folder icon path
- * - opened panel attached only to SBFolderBackgroundView
- * - reuses SBHLibraryCategoryPodBackgroundView as a read-only visual layer
- * - no App Library controller / transition / page-factory hooks
- *
- * Optical model:
- * - wallpaper-only chroma: no purple/blue chromatic body tint
- * - Clear opened panel uses a thin neutral-white optical lift, never a hue tint
- * - oversized opened-folder backdrop sampling before final rounded clipping
- * - stronger CABackdropLayer for wallpaper color / blur / saturation
- * - native App Library category-pod view reused passively in closed folders
- * - cached rounded-rect SDF lighting
- * - one continuous equal-brightness upper-left -> top specular rail
- * - one continuous equal-brightness bottom -> lower-right specular rail
- * - positional endpoint gates before upper-right / lower-left corners
- * - deliberately quiet straight left/right side middles
- * - subtle upper-right / lower-left transition structure
- *
- * No daemon / DisplayLink / Timer / gyroscope / Metal render loop.
- */
+static CFStringRef const kB3MPrefsDomain = CFSTR("com.kulinichx.better3dmenus16rh");
+static CFStringRef const kB3MNotification = CFSTR("com.kulinichx.better3dmenus16rh/preferences.changed");
 
-static CFStringRef const GFPreferencesDomain = CFSTR("com.kulinich.glassfolders");
+static BOOL gB3MHideSeparators = YES;
+static BOOL gB3MReduceBlur = YES;
+static BOOL gB3MHideShareApp = YES;
+static BOOL gB3MHideRemoveApp = YES;
+static BOOL gB3MHideSectionGap = NO;
+static BOOL gB3MGlassMenuTint = NO;
+static BOOL gB3MGlassTextTint = NO;
+static CGFloat gB3MBlurFactor = 0.55;
+static UIColor *gB3MActiveIconColor = nil;
 
-static BOOL GFEnabled = YES;  // Folder glass only; legacy preference key: Enabled
-static NSInteger GFStyle = 0;          // 0 Clear, 1 Liquid Glass
-static CGFloat GFClearStrength = 0.0;        // 0.0 ... 1.0, Clear blur authority
-static CGFloat GFLiquidGlassStrength = 0.0;  // 0.0 ... 1.0, Liquid composite authority
-static CGFloat GFGlassStrength = 0.0;        // active style strength for existing rendering paths
+static char kB3MSeparatorCapturedKey;
+static char kB3MSeparatorHiddenKey;
+static char kB3MSeparatorAlphaKey;
+static char kB3MBlurCapturedKey;
+static char kB3MBlurAlphaKey;
+static char kB3MTextCapturedKey;
+static char kB3MTextColorKey;
+static char kB3MGlassMaterialKey;
+static char kB3MRootGlassMaterialKey;
+static char kB3MStockSubviewWasHiddenKey;
+static char kB3MStockSubviewOriginalHiddenKey;
 
-// App Library remains intentionally independent from normal folders.
-static BOOL GFAppLibraryGlassEnabled = NO;
-
-// Legacy value retained for preference compatibility:
-// 0 = Clear, 1 = Liquid Glass
-static NSInteger GFAppLibraryStyle = 0;
-
-// App Library public style selector:
-// 0 = Follow Folder, 1 = Clear, 2 = Liquid Glass
-static NSInteger GFAppLibraryStyleMode = 0;
-
-// Clear: 0 Apple Bright, 1 Balanced, 2 Soft
-static NSInteger GFAppLibraryClearPreset = 0;
-
-// Liquid Glass: 0 Crystal, 1 Balanced, 2 Deep
-static NSInteger GFAppLibraryLiquidPreset = 0;
-
-/*
- * Kept only for source/backward compatibility with older installs.
- * The current UI no longer exposes or uses an App Library percentage slider.
- */
-static CGFloat GFAppLibraryGlassStrength = 0.55;
-
-static BOOL GFReadBool(CFStringRef key, BOOL fallback) {
-    CFPropertyListRef value = CFPreferencesCopyAppValue(key, GFPreferencesDomain);
+static BOOL B3MReadBool(CFStringRef key, BOOL fallback)
+{
+    CFPropertyListRef value = CFPreferencesCopyAppValue(key, kB3MPrefsDomain);
     if (!value) return fallback;
 
     BOOL result = fallback;
+    CFTypeID type = CFGetTypeID(value);
 
-    if (CFGetTypeID(value) == CFBooleanGetTypeID()) {
+    if (type == CFBooleanGetTypeID()) {
         result = CFBooleanGetValue((CFBooleanRef)value);
-    } else if (CFGetTypeID(value) == CFNumberGetTypeID()) {
-        int n = 0;
-        CFNumberGetValue((CFNumberRef)value, kCFNumberIntType, &n);
-        result = (n != 0);
+    } else if (type == CFNumberGetTypeID()) {
+        int number = fallback ? 1 : 0;
+        if (CFNumberGetValue((CFNumberRef)value, kCFNumberIntType, &number)) {
+            result = (number != 0);
+        }
     }
 
     CFRelease(value);
     return result;
 }
 
-static NSInteger GFReadInteger(CFStringRef key, NSInteger fallback) {
-    CFPropertyListRef value = CFPreferencesCopyAppValue(key, GFPreferencesDomain);
+static double B3MReadDouble(CFStringRef key, double fallback, double minimum, double maximum)
+{
+    CFPropertyListRef value = CFPreferencesCopyAppValue(key, kB3MPrefsDomain);
     if (!value) return fallback;
 
-    long long n = fallback;
-
+    double result = fallback;
     if (CFGetTypeID(value) == CFNumberGetTypeID()) {
-        CFNumberGetValue((CFNumberRef)value, kCFNumberLongLongType, &n);
+        double number = fallback;
+        if (CFNumberGetValue((CFNumberRef)value, kCFNumberDoubleType, &number)) {
+            if (number < minimum) number = minimum;
+            if (number > maximum) number = maximum;
+            result = number;
+        }
     }
 
     CFRelease(value);
-    return (NSInteger)n;
+    return result;
 }
 
-static CGFloat GFReadPercent(CFStringRef key, CGFloat fallbackPercent) {
-    CFPropertyListRef value = CFPreferencesCopyAppValue(key, GFPreferencesDomain);
+static void B3MLoadPreferences(void)
+{
+    CFPreferencesAppSynchronize(kB3MPrefsDomain);
 
-    if (!value) {
-        return MIN(1.0, MAX(0.0, fallbackPercent / 100.0));
-    }
-
-    double n = fallbackPercent;
-
-    if (CFGetTypeID(value) == CFNumberGetTypeID()) {
-        CFNumberGetValue((CFNumberRef)value, kCFNumberDoubleType, &n);
-    }
-
-    CFRelease(value);
-    return MIN(1.0, MAX(0.0, (CGFloat)n / 100.0));
+    gB3MHideSeparators = B3MReadBool(CFSTR("HideSeparators"), YES);
+    gB3MReduceBlur = B3MReadBool(CFSTR("ReduceBlur"), YES);
+    gB3MHideShareApp = B3MReadBool(CFSTR("HideShareApp"), YES);
+    gB3MHideRemoveApp = B3MReadBool(CFSTR("HideRemoveApp"), YES);
+    gB3MHideSectionGap = B3MReadBool(CFSTR("HideSectionGap"), NO);
+    gB3MGlassMenuTint = B3MReadBool(CFSTR("GlassMenuTint"), NO);
+    gB3MGlassTextTint = B3MReadBool(CFSTR("GlassTextTint"), NO);
+    gB3MBlurFactor = (CGFloat)B3MReadDouble(CFSTR("BlurFactor"), 0.55, 0.20, 1.00);
 }
 
-static void GFLoadPreferences(void) {
-    CFPreferencesAppSynchronize(GFPreferencesDomain);
+static void B3MPreferencesChanged(CFNotificationCenterRef center,
+                                  void *observer,
+                                  CFStringRef name,
+                                  const void *object,
+                                  CFDictionaryRef userInfo)
+{
+    (void)center;
+    (void)observer;
+    (void)name;
+    (void)object;
+    (void)userInfo;
 
-    GFEnabled = GFReadBool(CFSTR("Enabled"), YES);
-    GFStyle = GFReadInteger(CFSTR("Style"), 0);
-
-    /*
-     * The split-control migration contract keeps Clear and Liquid Glass independent strength
-     * values. Existing installs inherit the legacy GlassStrength value the
-     * first time these new keys are absent, so upgrading does not silently
-     * change the user's current appearance.
-     */
-    CGFloat legacyStrength = GFReadPercent(CFSTR("GlassStrength"), 55.0);
-    GFClearStrength = GFReadPercent(
-        CFSTR("ClearStrength"),
-        legacyStrength * 100.0
-    );
-    GFLiquidGlassStrength = GFReadPercent(
-        CFSTR("LiquidGlassStrength"),
-        legacyStrength * 100.0
-    );
-
-    GFAppLibraryGlassEnabled =
-        GFReadBool(CFSTR("AppLibraryGlassEnabled"), NO);
-
-    GFAppLibraryStyle =
-        GFReadInteger(CFSTR("AppLibraryStyle"), 0);
-
-    GFAppLibraryStyleMode =
-        GFReadInteger(CFSTR("AppLibraryStyleMode"), 0);
-
-    /*
-     * Release UI:
-     * App Library preset pickers are intentionally hidden.
-     * Lock the internal recipes to the accepted visual baselines:
-     * Clear = Apple Bright, Liquid Glass = Crystal.
-     */
-    GFAppLibraryClearPreset = 0;
-    GFAppLibraryLiquidPreset = 0;
-
-    /*
-     * Read the legacy key only so old preferences remain harmless.
-     * It no longer controls the current App Library material.
-     */
-    GFAppLibraryGlassStrength =
-        GFReadPercent(CFSTR("AppLibraryGlassStrength"), 55.0);
-
-    if (GFAppLibraryStyle < 0 || GFAppLibraryStyle > 1) {
-        GFAppLibraryStyle = 0;
-    }
-
-    if (GFAppLibraryStyleMode < 0 ||
-        GFAppLibraryStyleMode > 2) {
-        GFAppLibraryStyleMode = 0;
-    }
-
-    if (GFAppLibraryClearPreset < 0 ||
-        GFAppLibraryClearPreset > 2) {
-        GFAppLibraryClearPreset = 0;
-    }
-
-    if (GFAppLibraryLiquidPreset < 0 ||
-        GFAppLibraryLiquidPreset > 2) {
-        GFAppLibraryLiquidPreset = 0;
-    }
-
-    if (GFStyle < 0 || GFStyle > 1) {
-        GFStyle = 0;
-    }
-
-    GFGlassStrength =
-        (GFStyle == 0) ? GFClearStrength : GFLiquidGlassStrength;
+    B3MLoadPreferences();
 }
 
+static void B3MApplySeparatorState(UIView *view)
+{
+    if (!view) return;
 
-/*
- * Avoid linking private classes directly.
- * Both CABackdropLayer and CAFilter are resolved at runtime.
- */
-static id GFCreateCAFilter(NSString *type) {
-    Class filterClass = NSClassFromString(@"CAFilter");
-    SEL selector = NSSelectorFromString(@"filterWithType:");
+    NSNumber *captured = objc_getAssociatedObject(view, &kB3MSeparatorCapturedKey);
 
-    if (!filterClass || ![filterClass respondsToSelector:selector]) {
-        return nil;
+    if (gB3MHideSeparators) {
+        if (![captured boolValue]) {
+            objc_setAssociatedObject(view, &kB3MSeparatorHiddenKey, @(view.hidden), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(view, &kB3MSeparatorAlphaKey, @(view.alpha), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(view, &kB3MSeparatorCapturedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+
+        if (!view.hidden) view.hidden = YES;
+        if (view.alpha != 0.0) view.alpha = 0.0;
+    } else if ([captured boolValue]) {
+        NSNumber *oldHidden = objc_getAssociatedObject(view, &kB3MSeparatorHiddenKey);
+        NSNumber *oldAlpha = objc_getAssociatedObject(view, &kB3MSeparatorAlphaKey);
+
+        if (oldHidden) view.hidden = oldHidden.boolValue;
+        if (oldAlpha) view.alpha = oldAlpha.doubleValue;
+
+        objc_setAssociatedObject(view, &kB3MSeparatorCapturedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, &kB3MSeparatorHiddenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, &kB3MSeparatorAlphaKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+}
+
+static BOOL B3MClassNameLooksLikeBackground(UIView *view)
+{
+    NSString *name = NSStringFromClass(view.class);
+    return [name rangeOfString:@"Background" options:NSCaseInsensitiveSearch].location != NSNotFound;
+}
+
+static void B3MApplyBlurRecursively(UIView *view, BOOL backgroundAncestor)
+{
+    if (!view) return;
+
+    BOOL isBackgroundBranch = backgroundAncestor || B3MClassNameLooksLikeBackground(view);
+
+    if ([view isKindOfClass:UIVisualEffectView.class] && isBackgroundBranch) {
+        NSNumber *captured = objc_getAssociatedObject(view, &kB3MBlurCapturedKey);
+
+        if (gB3MReduceBlur) {
+            if (![captured boolValue]) {
+                objc_setAssociatedObject(view, &kB3MBlurAlphaKey, @(view.alpha), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                objc_setAssociatedObject(view, &kB3MBlurCapturedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
+
+            NSNumber *original = objc_getAssociatedObject(view, &kB3MBlurAlphaKey);
+            CGFloat originalAlpha = original ? original.doubleValue : 1.0;
+            CGFloat wanted = originalAlpha * gB3MBlurFactor;
+
+            if (fabs(view.alpha - wanted) > 0.001) {
+                view.alpha = wanted;
+            }
+        } else if ([captured boolValue]) {
+            NSNumber *original = objc_getAssociatedObject(view, &kB3MBlurAlphaKey);
+            if (original) view.alpha = original.doubleValue;
+
+            objc_setAssociatedObject(view, &kB3MBlurCapturedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(view, &kB3MBlurAlphaKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
     }
 
-    IMP imp = [filterClass methodForSelector:selector];
-    typedef id (*GFFilterFactoryIMP)(id, SEL, id);
-    GFFilterFactoryIMP func = (GFFilterFactoryIMP)imp;
-    return func(filterClass, selector, type);
+    for (UIView *subview in view.subviews) {
+        B3MApplyBlurRecursively(subview, isBackgroundBranch);
+    }
 }
 
 
-static inline CGFloat GFClamp01(CGFloat value) {
+static inline CGFloat B3MClamp01(CGFloat value)
+{
     return MIN(1.0, MAX(0.0, value));
 }
 
-
-static BOOL GFUsesDarkAppearance(UIView *view);
-
-
 /*
- * Glass Strength is deliberately NOT mapped through one sqrt() curve.
- *
- * Material:
- *   slightly slower than linear -> 55% remains transparent instead of
- *   already behaving like ~74%.
- *
- * Specular:
- *   slightly faster -> edge reflection is visible without requiring a
- *   heavily blurred body.
- *
- * Tint:
- *   slower still -> high strength does not turn into a milky white card.
+ * GlassFolders 1.0 response curves, kept separate on purpose:
+ * - Material rises slightly slower than linear.
+ * - Specular rises faster so edges read without an opaque body.
+ * - Tint rises slower so high strength does not become a milky card.
+ * - Edge has its own optical authority curve.
  */
-static inline CGFloat GFMaterialResponse(CGFloat strength) {
-    return pow(GFClamp01(strength), 1.10);
+static inline CGFloat B3MMaterialResponse(CGFloat strength)
+{
+    return pow(B3MClamp01(strength), 1.10);
 }
 
-static inline CGFloat GFSpecularResponse(CGFloat strength) {
-    return pow(GFClamp01(strength), 0.80);
+static inline CGFloat B3MSpecularResponse(CGFloat strength)
+{
+    return pow(B3MClamp01(strength), 0.80);
 }
 
-static inline CGFloat GFTintResponse(CGFloat strength) {
-    return pow(GFClamp01(strength), 1.35);
+static inline CGFloat B3MTintResponse(CGFloat strength)
+{
+    return pow(B3MClamp01(strength), 1.35);
 }
 
-
-/*
- * Dedicated optical-edge response.
- *
- * 25%  -> ~0.10
- * 50%  -> ~0.29
- * 55%  -> ~0.35
- * 75%  -> ~0.62
- * 100% -> 1.00
- *
- * This gives the slider visible optical authority: high percentages now
- * increase specular brightness much more clearly instead of mostly changing
- * the glass body.
- */
-static inline CGFloat GFEdgeResponse(CGFloat strength) {
-    CGFloat s = GFClamp01(strength);
+static inline CGFloat B3MEdgeResponse(CGFloat strength)
+{
+    CGFloat s = B3MClamp01(strength);
     return 0.12 * s + 0.88 * pow(s, 1.80);
 }
 
+static BOOL B3MUsesDarkAppearance(UIView *view)
+{
+    UIUserInterfaceStyle style = UIUserInterfaceStyleUnspecified;
 
-/*
- * Clear has a different slider contract from Liquid Glass.
- *
- * In Clear, Glass Strength is primarily the LOCAL BLUR amount.  The white
- * transmission/highlight system reaches its normal Clear appearance early
- * and then stays almost constant, so raising the slider does not turn Clear
- * into a brighter/whiter version of itself.
- *
- * 0%   -> no local Clear blur
- * 25%  -> ~29% of the Clear blur ceiling
- * 50%  -> ~54%
- * 55%  -> ~58%
- * 75%  -> ~77%
- * 100% -> full Clear blur ceiling
- */
-static inline CGFloat GFClearBlurResponse(CGFloat strength) {
-    /*
-     * Closed Clear keeps the accepted Beta2.4 response unchanged. Do not let
-     * opened-panel calibration silently move the closed-folder baseline.
-     */
-    return pow(GFClamp01(strength), 0.90);
-}
+    if (view) {
+        style = view.traitCollection.userInterfaceStyle;
+    }
 
-/*
- * Opened folders already sit over SpringBoard's full-screen blur, therefore
- * small 2–8 pt local kernels are visually swallowed by the host blur. Beta2.8
- * keeps ClearStrength as an intentionally high-authority blur control while
- * keeping the material itself colorless and thin:
- *   0%   ->  0.0 pt
- *   10%  -> ~2.8 pt
- *   25%  -> ~8.1 pt
- *   50%  -> ~18.0 pt
- *   55%  -> ~20.1 pt
- *   75%  -> ~28.7 pt
- *   100% -> 40.0 pt
- *
- * The 1.15 exponent keeps the very bottom usable but deliberately opens the
- * low/middle range sooner. This is important because SpringBoard has already
- * blurred the full-screen background before the folder-local material samples
- * it; a timid local kernel is visually swallowed. Closed Clear retains its
- * separately locked response.
- */
-static inline CGFloat GFClearOpenedBlurResponse(CGFloat strength) {
-    return pow(GFClamp01(strength), 1.15);
+    if (style == UIUserInterfaceStyleUnspecified) {
+        style = UIScreen.mainScreen.traitCollection.userInterfaceStyle;
+    }
+
+    return style == UIUserInterfaceStyleDark;
 }
 
 
 /*
- * Clear strength no longer owns the basic "is this transparent/clean?" state.
+ * GlassFolders-Test3 Liquid Glass optical model.
  *
- * The Clear mode itself establishes the high-transmission baseline, including
- * at 0%. The slider then adds structure: local blur, chroma separation and
- * optical-edge definition. This prevents low Clear values from falling back
- * to the host's dull/grey opened-folder blur.
+ * The menu uses the same rounded-rect SDF topology as the opened folder panel:
+ * one continuous upper-left -> top primary rail, one continuous bottom ->
+ * lower-right secondary rail, a compact lower-left glint, and a shallow
+ * far-side thickness shoulder.
  *
- * 0%   -> 0.00 structure
- * 25%  -> 0.156 structure
- * 50%  -> 0.50 structure
- * 75%  -> 0.844 structure
- * 100% -> 1.00 structure
+ * The texture is static for a given size/radius/appearance/strength and cached.
+ * No per-frame drawing is performed.
  */
-static inline CGFloat GFClearStructureResponse(CGFloat strength) {
-    CGFloat s = GFClamp01(strength);
-    return s * s * (3.0 - 2.0 * s);
-}
-
-static inline CGFloat GFRoundedRectSDF(CGFloat x,
-                                      CGFloat y,
-                                      CGFloat width,
-                                      CGFloat height,
-                                      CGFloat radius) {
+static inline CGFloat B3MRoundedRectSDF(CGFloat x,
+                                       CGFloat y,
+                                       CGFloat width,
+                                       CGFloat height,
+                                       CGFloat radius)
+{
     CGFloat halfW = width * 0.5;
     CGFloat halfH = height * 0.5;
 
@@ -348,2654 +256,97 @@ static inline CGFloat GFRoundedRectSDF(CGFloat x,
     return outside + inside - radius;
 }
 
-static NSCache *GFOpticalLightingCache(void) {
+static NSCache *B3MOpticalLightingCache(void)
+{
     static NSCache *cache = nil;
     static dispatch_once_t onceToken;
 
     dispatch_once(&onceToken, ^{
         cache = [[NSCache alloc] init];
         cache.countLimit = 24;
-        cache.totalCostLimit = 20 * 1024 * 1024;
+        cache.totalCostLimit = 12 * 1024 * 1024;
     });
 
     return cache;
 }
 
-/*
- * Generate a static optical-lighting texture.
- *
- * This is NOT a blurred stroke and NOT a diagonal gradient.
- *
- * Each pixel derives from:
- * - distance to the rounded edge,
- * - local edge normal,
- * - fixed upper-left light direction.
- *
- * Therefore the rounded corner naturally carries the highlight through it.
- */
-static UIImage *GFCreateOpticalLightingImage(CGSize size,
-                                             CGFloat cornerRadius,
-                                             CGFloat strength) {
-    if (size.width < 2.0 || size.height < 2.0) return nil;
-
-    CGFloat renderScale = MIN(UIScreen.mainScreen.scale, 3.0);
-    size_t pixelWidth = (size_t)MAX(2.0, floor(size.width * renderScale + 0.5));
-    size_t pixelHeight = (size_t)MAX(2.0, floor(size.height * renderScale + 0.5));
-    NSInteger strengthStep = MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
-
-    NSString *cacheKey = [NSString stringWithFormat:@"C-%zux%zu-r%.2f-s%ld",
-        pixelWidth, pixelHeight, cornerRadius, (long)strengthStep];
-
-    NSCache *cache = GFOpticalLightingCache();
-    UIImage *cached = [cache objectForKey:cacheKey];
-    if (cached) return cached;
-
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    size_t bytesPerRow = pixelWidth * 4;
-    CGContextRef context = CGBitmapContextCreate(
-        NULL, pixelWidth, pixelHeight, 8, bytesPerRow, colorSpace,
-        kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
-    CGColorSpaceRelease(colorSpace);
-    if (!context) return nil;
-
-    unsigned char *pixels = (unsigned char *)CGBitmapContextGetData(context);
-    if (!pixels) { CGContextRelease(context); return nil; }
-
-    CGFloat width = (CGFloat)pixelWidth;
-    CGFloat height = (CGFloat)pixelHeight;
-    CGFloat radius = MAX(0.0, cornerRadius * renderScale);
-
-    /*
-     * Beta5: the desktop folder now uses the SAME dedicated percentage
-     * response as the opened panel. This is the important correction:
-     * 75% and 100% must no longer collapse into nearly the same appearance.
-     */
-    CGFloat edgeDrive = GFEdgeResponse(strength);
-
-    /* Geometry changes only a little; luminance changes strongly. */
-    CGFloat shoulderWidth =
-        (4.1 + 1.0 * edgeDrive) * renderScale;
-
-    CGFloat coreWidth =
-        (0.78 + 0.20 * edgeDrive) * renderScale;
-
-    CGFloat filamentWidth =
-        (0.43 + 0.10 * edgeDrive) * renderScale;
-
-    /*
-     * Far-side rim remains, but vertical straight edges will be attenuated
-     * below. Bottom and bottom-right are allowed to stay bright.
-     */
-    CGFloat secondaryRimWidth =
-        (0.58 + 0.12 * edgeDrive) * renderScale;
-
-    CGFloat secondaryRimGain =
-        0.022 + 0.150 * edgeDrive;
-
-    /*
-     * Dark thickness starts inside the white edge. Its growth is restrained
-     * so 100% gets brighter, not merely darker/thicker.
-     */
-    CGFloat shadowCenter =
-        (2.15 + 0.30 * edgeDrive) * renderScale;
-
-    CGFloat shadowWidth =
-        (1.55 + 0.22 * edgeDrive) * renderScale;
-
-    CGFloat shadowGain =
-        0.006 + 0.008 * edgeDrive;
-
-    const CGFloat invSqrt2 = 0.70710678118;
-    CGFloat lightX = -invSqrt2;
-    CGFloat lightY = -invSqrt2;
-    CGFloat epsilon = MAX(0.65, renderScale * 0.55);
-
-    for (size_t py = 0; py < pixelHeight; py++) {
-        for (size_t px = 0; px < pixelWidth; px++) {
-            CGFloat x = (CGFloat)px + 0.5;
-            CGFloat y = (CGFloat)py + 0.5;
-
-            CGFloat sdf = GFRoundedRectSDF(x, y, width, height, radius);
-            CGFloat aaWidth = MAX(0.85, renderScale * 0.72);
-            CGFloat edgeCoverage = GFClamp01(0.5 - sdf / aaWidth);
-            if (edgeCoverage <= 0.001) continue;
-
-            CGFloat insideDepth = MAX(0.0, -sdf);
-
-            CGFloat u = x / MAX(1.0, width);
-            CGFloat v = y / MAX(1.0, height);
-            CGFloat diagonal = GFClamp01(1.0 - (u + v) * 0.5);
-
-            /* Only a broad light direction; never a diagonal white stripe. */
-            CGFloat signedLight =
-                pow(diagonal, 2.60) * 0.0040 -
-                pow(1.0 - diagonal, 2.80) * 0.0030;
-
-            CGFloat maxBand = MAX(
-                shoulderWidth * 3.0,
-                shadowCenter + shadowWidth * 3.0
-            );
-
-            if (insideDepth <= maxBand) {
-                CGFloat dx =
-                    GFRoundedRectSDF(x + epsilon, y, width, height, radius) -
-                    GFRoundedRectSDF(x - epsilon, y, width, height, radius);
-                CGFloat dy =
-                    GFRoundedRectSDF(x, y + epsilon, width, height, radius) -
-                    GFRoundedRectSDF(x, y - epsilon, width, height, radius);
-
-                CGFloat normalLength = hypot(dx, dy);
-                if (normalLength > 0.0001) {
-                    CGFloat nx = dx / normalLength;
-                    CGFloat ny = dy / normalLength;
-
-                    CGFloat ndotl = nx * lightX + ny * lightY;
-                    CGFloat facing = MAX(0.0, ndotl);
-                    CGFloat opposite = MAX(0.0, -ndotl);
-
-                    CGFloat shoulderRatio = insideDepth / MAX(0.001, shoulderWidth);
-                    CGFloat coreRatio = insideDepth / MAX(0.001, coreWidth);
-                    CGFloat filamentRatio = insideDepth / MAX(0.001, filamentWidth);
-                    CGFloat secondaryRatio = insideDepth / MAX(0.001, secondaryRimWidth);
-
-                    CGFloat shoulder = exp(-(shoulderRatio * shoulderRatio));
-                    CGFloat core = exp(-(coreRatio * coreRatio * 1.35));
-                    CGFloat filament = exp(-pow(filamentRatio, 2.65));
-                    CGFloat secondaryFilament = exp(-pow(secondaryRatio, 2.35));
-
-                    /*
-                     * Beta 1.6 continuous specular rails.
-                     *
-                     * Apple-like topology:
-                     *
-                     *   PRIMARY RAIL
-                     *     upper-left rounded corner -> entire top edge
-                     *
-                     *   SECONDARY RAIL
-                     *     entire bottom edge -> lower-right rounded corner
-                     *
-                     * Each pair shares ONE mask and ONE luminance gain. This
-                     * removes the "bright corner + separate bright line"
-                     * appearance. The highlight now visually turns through the
-                     * radius as one continuous piece of glass.
-                     *
-                     * Straight left/right side middles remain deliberately
-                     * quiet and receive only a low structural floor.
-                     */
-                    CGFloat verticalEdge =
-                        pow(fabs(nx), 2.30);
-
-                    CGFloat topFacing =
-                        MAX(0.0, -ny);
-
-                    CGFloat bottomFacing =
-                        MAX(0.0, ny);
-
-                    CGFloat leftFacing =
-                        MAX(0.0, -nx);
-
-                    CGFloat rightFacing =
-                        MAX(0.0, nx);
-
-                    /*
-                     * Saturate near the middle of the target corner so the
-                     * curved portion reaches the SAME peak as its adjoining
-                     * straight rail instead of becoming an isolated hotspot.
-                     */
-                    CGFloat topLeftCornerSelector =
-                        GFClamp01(
-                            2.10 * leftFacing * topFacing
-                        );
-
-                    CGFloat bottomRightCornerSelector =
-                        GFClamp01(
-                            2.10 * rightFacing * bottomFacing
-                        );
-
-                    CGFloat topRightCornerSelector =
-                        GFClamp01(
-                            2.05 * rightFacing * topFacing
-                        );
-
-                    CGFloat bottomLeftCornerSelector =
-                        GFClamp01(
-                            2.05 * leftFacing * bottomFacing
-                        );
-
-                    CGFloat topLeftCornerBridge =
-                        pow(topLeftCornerSelector, 0.58);
-
-                    CGFloat bottomRightCornerBridge =
-                        pow(bottomRightCornerSelector, 0.58);
-
-                    CGFloat topRightTransition =
-                        pow(topRightCornerSelector, 0.88);
-
-                    CGFloat bottomLeftTransition =
-                        pow(bottomLeftCornerSelector, 0.88);
-
-                    /*
-                     * ONE continuous equal-brightness mask:
-                     *
-                     * - topFacing is 1.0 on the straight top edge;
-                     * - topLeftCornerBridge rises to ~1.0 through the TL arc;
-                     * - MAX() makes the joint behave as one rail.
-                     *
-                     * Same construction for bottom -> lower-right.
-                     */
-                    /*
-                     * Raw joined rails before endpoint ownership is applied.
-                     * The TL/top pair and bottom/BR pair still share exactly
-                     * one geometric mask and one luminance gain.
-                     */
-                    CGFloat primaryRailRaw =
-                        GFClamp01(
-                            MAX(
-                                pow(topFacing, 1.08),
-                                topLeftCornerBridge
-                            )
-                        );
-
-                    CGFloat secondaryRailRaw =
-                        GFClamp01(
-                            MAX(
-                                pow(bottomFacing, 1.08),
-                                bottomRightCornerBridge
-                            )
-                        );
-
-                    /*
-                     * Beta 1.7 endpoint ownership.
-                     *
-                     * Normal direction alone cannot distinguish "top straight"
-                     * from the upper-right radius: both still have -ny.
-                     * Use pixel position to detect entry into the opposite
-                     * corner radius, then smoothly attenuate only that end.
-                     *
-                     * Primary:
-                     *   TL corner + full top = 100%
-                     *   entering TR radius   = fade
-                     *   far TR end           = 12%
-                     *
-                     * Secondary:
-                     *   far BL end           = 12%
-                     *   leaving BL radius    = fade up
-                     *   full bottom + BR     = 100%
-                     */
-                    CGFloat endpointRadius =
-                        MAX(
-                            1.0,
-                            MIN(
-                                radius,
-                                0.5 * MIN(width, height)
-                            )
-                        );
-
-                    CGFloat rightArcProgress =
-                        GFClamp01(
-                            (
-                                x -
-                                (width - endpointRadius)
-                            ) /
-                            endpointRadius
-                        );
-
-                    CGFloat leftArcProgress =
-                        GFClamp01(
-                            (
-                                endpointRadius - x
-                            ) /
-                            endpointRadius
-                        );
-
-                    CGFloat rightArcSmooth =
-                        rightArcProgress *
-                        rightArcProgress *
-                        (
-                            3.0 -
-                            2.0 * rightArcProgress
-                        );
-
-                    CGFloat leftArcSmooth =
-                        leftArcProgress *
-                        leftArcProgress *
-                        (
-                            3.0 -
-                            2.0 * leftArcProgress
-                        );
-
-                    CGFloat primaryEndpointGate =
-                        1.0 -
-                        0.88 * rightArcSmooth;
-
-                    CGFloat secondaryEndpointGate =
-                        1.0 -
-                        0.88 * leftArcSmooth;
-
-                    CGFloat primaryRailMask =
-                        primaryRailRaw *
-                        primaryEndpointGate;
-
-                    CGFloat secondaryRailMask =
-                        secondaryRailRaw *
-                        secondaryEndpointGate;
-
-                    /*
-                     * Remove rail-owned regions from the straight vertical
-                     * side mask. The endpoint-faded TR/BL areas are permitted
-                     * to retain only a small structural side cue.
-                     */
-                    CGFloat coveredByRails =
-                        MAX(
-                            primaryRailMask,
-                            secondaryRailMask
-                        );
-
-                    CGFloat sideMiddleMask =
-                        verticalEdge *
-                        pow(
-                            MAX(0.0, 1.0 - coveredByRails),
-                            1.55
-                        );
-
-                    CGFloat perimeterFloor =
-                        0.0040 + 0.0060 * edgeDrive;
-
-                    /*
-                     * Primary rail = top + upper-left, same gain everywhere.
-                     * Secondary rail = bottom + lower-right, same gain
-                     * everywhere. Secondary remains slightly softer than
-                     * primary, but there is no discontinuity inside either
-                     * pair.
-                     */
-                    CGFloat primaryFilamentGain =
-                        0.030 + 0.360 * edgeDrive;
-
-                    CGFloat primaryCoreGain =
-                        0.010 + 0.110 * edgeDrive;
-
-                    CGFloat primaryShoulderGain =
-                        0.005 + 0.038 * edgeDrive;
-
-                    CGFloat secondaryFilamentGain =
-                        0.018 + 0.270 * edgeDrive;
-
-                    CGFloat secondaryCoreGain =
-                        0.007 + 0.078 * edgeDrive;
-
-                    CGFloat secondaryShoulderGain =
-                        0.0035 + 0.025 * edgeDrive;
-
-                    /*
-                     * Straight sides are now only a silhouette cue.
-                     */
-                    CGFloat sideMiddleGain =
-                        0.0010 + 0.0090 * edgeDrive;
-
-                    /*
-                     * Upper-right and lower-left are non-dominant transition
-                     * corners. They remain visible enough to keep the rounded
-                     * shape coherent, without becoming a third/fourth hotspot.
-                     */
-                    CGFloat transitionCornerGain =
-                        0.0015 + 0.010 * edgeDrive;
-
-                    /*
-                     * Keep directional physics only as a very small micro
-                     * modulation. The 4% range is intentionally too small to
-                     * make the upper-left brighter than the top rail, so the
-                     * joined rail still reads as one brightness.
-                     */
-                    CGFloat primaryDirectionalMicro =
-                        0.96 + 0.04 * pow(facing, 1.20);
-
-                    CGFloat secondaryDirectionalMicro =
-                        0.96 + 0.04 * pow(opposite, 1.20);
-
-                    CGFloat white =
-                        filament * perimeterFloor +
-
-                        shoulder * primaryRailMask *
-                            primaryShoulderGain +
-                        core * primaryRailMask *
-                            primaryCoreGain +
-                        filament * primaryRailMask *
-                            primaryFilamentGain *
-                            primaryDirectionalMicro +
-
-                        shoulder * secondaryRailMask *
-                            secondaryShoulderGain +
-                        core * secondaryRailMask *
-                            secondaryCoreGain +
-                        filament * secondaryRailMask *
-                            secondaryFilamentGain *
-                            secondaryDirectionalMicro +
-
-                        filament * sideMiddleMask *
-                            sideMiddleGain +
-
-                        filament *
-                            (topRightTransition +
-                             bottomLeftTransition) *
-                            transitionCornerGain +
-
-                        /*
-                         * A thin far-side filament follows the SAME secondary
-                         * bottom/lower-right rail rather than lighting the
-                         * entire right wall.
-                         */
-                        secondaryFilament *
-                            secondaryRimGain *
-                            secondaryRailMask *
-                            0.36;
-
-                    CGFloat shadowOffset =
-                        (insideDepth - shadowCenter) /
-                        MAX(0.001, shadowWidth);
-
-                    CGFloat shadowBand =
-                        exp(-(shadowOffset * shadowOffset * 1.20));
-
-                    CGFloat darkStructureMask =
-                        0.78 * secondaryRailMask +
-                        0.18 * sideMiddleMask +
-                        0.04 * (
-                            topRightTransition +
-                            bottomLeftTransition
-                        );
-
-                    CGFloat dark =
-                        shadowBand *
-                        shadowGain *
-                        (0.92 + 0.08 * pow(opposite, 1.20)) *
-                        darkStructureMask;
-
-                    signedLight += white - dark;
-                }
-            }
-
-            /*
-             * High percentages are intentionally allowed a much brighter
-             * optical peak. The clamp itself now participates in the slider
-             * response instead of capping 75% and 100% at the same ceiling.
-             */
-            CGFloat closedEdgePeak =
-                0.160 + 0.500 * edgeDrive;
-
-            signedLight =
-                MIN(
-                    closedEdgePeak,
-                    MAX(-0.045, signedLight)
-                );
-            CGFloat alpha = fabs(signedLight) * edgeCoverage;
-            if (alpha < 0.001) continue;
-
-            size_t index = py * bytesPerRow + px * 4;
-            unsigned char a =
-                (unsigned char)lround(GFClamp01(alpha) * 255.0);
-
-            if (signedLight >= 0.0) {
-                pixels[index + 0] = a;
-                pixels[index + 1] = a;
-                pixels[index + 2] = a;
-                pixels[index + 3] = a;
-            } else {
-                pixels[index + 0] = 0;
-                pixels[index + 1] = 0;
-                pixels[index + 2] = 0;
-                pixels[index + 3] = a;
-            }
-        }
-    }
-
-    CGImageRef cgImage = CGBitmapContextCreateImage(context);
-    CGContextRelease(context);
-    if (!cgImage) return nil;
-
-    UIImage *image =
-        [UIImage imageWithCGImage:cgImage
-                            scale:renderScale
-                      orientation:UIImageOrientationUp];
-
-    if (image) {
-        [cache setObject:image
-                  forKey:cacheKey
-                    cost:pixelWidth * pixelHeight * 4];
-    }
-
-    CGImageRelease(cgImage);
-    return image;
-}
-
-
-
-
-
-static char kGFInternalAppLibraryPodVisualKey;
-static char kGFAppLibraryOverlayAssociationKey;
-static char kGFAppLibraryOriginalAlphaKey;
-static char kGFAppLibraryRootMarkerKey;
-
-// Beta 3.4: App Library search field shares the App Library glass setting.
-static char kGFAppLibrarySearchOverlayAssociationKey;
-static char kGFAppLibrarySearchOriginalBackgroundColorKey;
-static char kGFAppLibrarySearchNativeBackgroundAlphaKey;
-
-static BOOL GFIsInternalAppLibraryPodVisual(UIView *view) {
-    NSNumber *marker = objc_getAssociatedObject(
-        view,
-        &kGFInternalAppLibraryPodVisualKey
-    );
-    return marker.boolValue;
-}
-
-static void GFMarkInternalAppLibraryPodVisual(UIView *view) {
-    if (!view) return;
-
-    objc_setAssociatedObject(
-        view,
-        &kGFInternalAppLibraryPodVisualKey,
-        @YES,
-        OBJC_ASSOCIATION_RETAIN_NONATOMIC
-    );
-}
-
-
-#pragma mark - Native App Library category-pod visual reuse
-
-/*
- * This is the targeted path for matching Apple's App Library card body.
- *
- * SBHLibraryCategoryPodBackgroundView is the actual SpringBoardHome class
- * used for App Library category backgrounds.  Rather than guessing its
- * private MaterialKit recipe, we instantiate a separate copy and let
- * SpringBoard's own SBHVisualStylingView machinery configure it.
- *
- * Important: this does NOT hook or alter the real App Library.  It only
- * creates an independent visual view of the same class inside our folder
- * background container.  If the class cannot be created, the stronger
- * CABackdrop fallback remains fully functional.
- */
-static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
-    Class podClass = NSClassFromString(@"SBHLibraryCategoryPodBackgroundView");
-
-    if (!podClass || ![podClass isSubclassOfClass:[UIView class]]) {
-        return nil;
-    }
-
-    UIView *podView = nil;
-
-    @try {
-        podView = [[podClass alloc] initWithFrame:CGRectZero];
-    } @catch (__unused NSException *exception) {
-        podView = nil;
-    }
-
-    if (![podView isKindOfClass:[UIView class]]) {
-        return nil;
-    }
-
-    /*
-     * This object is a private copy used only inside our normal folder
-     * material. Mark it before UIKit can lay it out so the Beta 3.2 real
-     * App Library hook will always ignore it.
-     */
-    GFMarkInternalAppLibraryPodVisual(podView);
-
-    podView.userInteractionEnabled = NO;
-    podView.clipsToBounds = YES;
-    podView.layer.masksToBounds = YES;
-
-    /*
-     * The native App Library visual sits over our wallpaper-preserving
-     * CABackdrop body.  Partial alpha intentionally makes the desktop folder
-     * a little more luminous than the older stock folder while avoiding an
-     * opaque card.  Strength still has visible authority.
-     */
-    CGFloat materialResponse = GFMaterialResponse(strength);
-
-    /*
-     * Beta 2.1: restore the lighter closed-folder Liquid Glass appearance.
-     * The stronger native pod participation introduced later made the closed
-     * icon read visibly darker on-device.  This is the earlier, proven blend
-     * used by the lighter reference: no hue tint, just less native material
-     * stacked over the wallpaper backdrop.
-     */
-    BOOL darkAppearance = GFUsesDarkAppearance(podView);
-
-    /*
-     * Beta 3.1:
-     * Light-mode closed folders were reading as bright pink/white cards.
-     * Keep the accepted dark blend, but in light appearance let the wallpaper
-     * dominate and use the native pod only as a restrained material cue.
-     */
-    podView.alpha = darkAppearance
-        ? MIN(0.54, 0.24 + 0.30 * materialResponse)
-        : MIN(0.34, 0.12 + 0.18 * materialResponse);
-
-    return podView;
-}
-
-
-#pragma mark - Beta 3.6 App Library Fixed Material Recipes
-
-typedef struct {
-    CGFloat blur;
-    CGFloat saturation;
-    CGFloat brightness;
-    CGFloat tintAlpha;
-    CGFloat borderWidth;
-    CGFloat borderAlpha;
-    CGFloat nativePodAlpha;
-    CGFloat nativeSearchAlpha;
-} GFAppLibraryMaterialRecipe;
-
-
-static NSInteger GFResolvedAppLibraryStyle(void) {
-    /*
-     * Beta 4.5:
-     * 0 Follow Folder -> use normal folder GFStyle
-     * 1 Clear         -> force Clear
-     * 2 Liquid Glass  -> force Liquid Glass
-     *
-     * GFStyle already uses 0 = Clear, 1 = Liquid Glass.
-     */
-    switch (GFAppLibraryStyleMode) {
-        case 1:
-            return 0;
-
-        case 2:
-            return 1;
-
-        case 0:
-        default:
-            return (GFStyle == 1) ? 1 : 0;
-    }
-}
-
-
-static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
-    BOOL searchVariant,
-    BOOL dark
-) {
-    GFAppLibraryMaterialRecipe r = {
-        8.0, 1.10, 0.010, 0.020,
-        0.34, 0.14, 0.22, 0.08
-    };
-
-    NSInteger resolvedStyle = GFResolvedAppLibraryStyle();
-
-    if (resolvedStyle == 0) {
-        /*
-         * CLEAR
-         *
-         * The reference is intentionally bright and luminous. Unlike normal
-         * Clear folder strength, these are fixed design presets so the whole
-         * App Library remains visually coherent.
-         */
-        switch (GFAppLibraryClearPreset) {
-            case 1: // Balanced
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        9.3, 1.13, 0.032, 0.038,
-                        0.34, 0.145, 0.22, 0.065
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        9.2, 1.13, 0.038, 0.052,
-                        0.34, 0.155, 0.25, 0.07
-                    };
-                }
-                break;
-
-            case 2: // Soft
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        11.6, 1.09, 0.026, 0.049,
-                        0.32, 0.130, 0.25, 0.075
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        12.6, 1.08, 0.030, 0.068,
-                        0.32, 0.140, 0.28, 0.08
-                    };
-                }
-                break;
-
-            case 0:
-            default: // Apple Bright
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        9.9, 1.15, 0.043, 0.047,
-                        0.36, 0.160, 0.21, 0.058
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        10.8, 1.15, 0.058, 0.076,
-                        0.36, 0.175, 0.24, 0.06
-                    };
-                }
-                break;
-        }
-
-        /*
-         * Search is an interactive control, so lift it only a tiny amount.
-         * Beta 3.5 was deliberately much brighter and looked disconnected.
-         */
-        /*
-         * Beta 4.4:
-         * searchVariant intentionally does NOT alter the material recipe.
-         * Search is the same Clear material as a category card.
-         */
-    } else {
-        /*
-         * LIQUID GLASS
-         *
-         * Lower blur and body tint. Wallpaper transmission stays strong and
-         * the object is identified mainly by the thin optical edge/native
-         * shading, matching the transparent Liquid Glass reference.
-         */
-        switch (GFAppLibraryLiquidPreset) {
-            case 1: // Balanced
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        7.4, 1.21, 0.019, 0.015,
-                        0.35, 0.155, 0.15, 0.052
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        7.2, 1.23, 0.019, 0.014,
-                        0.34, 0.155, 0.17, 0.052
-                    };
-                }
-                break;
-
-            case 2: // Deep
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        9.2, 1.14, 0.010, 0.020,
-                        0.37, 0.160, 0.21, 0.070
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        9.0, 1.15, 0.009, 0.020,
-                        0.35, 0.150, 0.22, 0.070
-                    };
-                }
-                break;
-
-            case 0:
-            default: // Crystal
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        5.6, 1.27, 0.024, 0.0095,
-                        0.37, 0.180, 0.11, 0.036
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        5.4, 1.30, 0.027, 0.0085,
-                        0.36, 0.175, 0.12, 0.032
-                    };
-                }
-                break;
-        }
-
-        /*
-         * Beta 4.4:
-         * searchVariant intentionally does NOT alter the material recipe.
-         * Search is the same Liquid Glass material as a category card.
-         */
-    }
-
-    return r;
-}
-
-
-#pragma mark - Beta 3.2 App Library Glass
-
-@interface GFAppLibraryGlassView : UIView
-@property (nonatomic, strong) UIView *gfTintView;
-@property (nonatomic, strong) CAGradientLayer *gfUpperLeftBloomLayer;
-@property (nonatomic, strong) CAShapeLayer *gfPartialRimLayer;
-@property (nonatomic, strong) CAGradientLayer *gfLowerLeftGlintLayer;
-@property (nonatomic, assign) CGFloat gfStrength;
-@property (nonatomic, assign) CGFloat gfPreferredRadius;
-@property (nonatomic, assign) BOOL gfSearchVariant;
-- (instancetype)initWithStrength:(CGFloat)strength;
-- (void)setPreferredRadius:(CGFloat)radius;
-- (void)gfRefreshMaterial;
-@end
-
-@implementation GFAppLibraryGlassView
-
-+ (Class)layerClass {
-    Class backdropClass = NSClassFromString(@"CABackdropLayer");
-    return backdropClass ?: [CALayer class];
-}
-
-- (instancetype)initWithStrength:(CGFloat)strength {
-    self = [super initWithFrame:CGRectZero];
-
-    if (self) {
-        _gfStrength = GFClamp01(strength);
-        self.userInteractionEnabled = NO;
-        self.backgroundColor = UIColor.clearColor;
-        self.clipsToBounds = YES;
-        self.layer.masksToBounds = YES;
-        self.layer.cornerCurve = kCACornerCurveContinuous;
-
-        _gfTintView = [[UIView alloc] initWithFrame:CGRectZero];
-        _gfTintView.userInteractionEnabled = NO;
-        _gfTintView.backgroundColor = UIColor.whiteColor;
-        [self addSubview:_gfTintView];
-
-        /*
-         * Beta 4.2 starts from the proven Beta 3.6 visual base.
-         * These are intentionally LOCAL optical cues:
-         *
-         * - broad upper-left luminosity bloom
-         * - a thin rim only around the upper corners/top
-         * - a tiny lower-left reflection
-         *
-         * No horizontal white cap. No full second outline.
-         */
-        _gfUpperLeftBloomLayer =
-            [CAGradientLayer layer];
-        _gfUpperLeftBloomLayer.startPoint =
-            CGPointMake(0.0, 0.0);
-        _gfUpperLeftBloomLayer.endPoint =
-            CGPointMake(1.0, 1.0);
-        _gfUpperLeftBloomLayer.cornerCurve =
-            kCACornerCurveContinuous;
-        [self.layer addSublayer:_gfUpperLeftBloomLayer];
-
-        _gfPartialRimLayer =
-            [CAShapeLayer layer];
-        _gfPartialRimLayer.fillColor =
-            UIColor.clearColor.CGColor;
-        _gfPartialRimLayer.lineCap =
-            kCALineCapRound;
-        _gfPartialRimLayer.lineJoin =
-            kCALineJoinRound;
-        [self.layer addSublayer:_gfPartialRimLayer];
-
-        _gfLowerLeftGlintLayer =
-            [CAGradientLayer layer];
-        _gfLowerLeftGlintLayer.startPoint =
-            CGPointMake(0.0, 0.5);
-        _gfLowerLeftGlintLayer.endPoint =
-            CGPointMake(1.0, 0.5);
-        _gfLowerLeftGlintLayer.cornerCurve =
-            kCACornerCurveContinuous;
-        [self.layer addSublayer:_gfLowerLeftGlintLayer];
-
-        [self gfRefreshMaterial];
-    }
-
-    return self;
-}
-
-- (void)setPreferredRadius:(CGFloat)radius {
-    _gfPreferredRadius = MAX(0.0, radius);
-    self.layer.cornerRadius = _gfPreferredRadius;
-    self.layer.cornerCurve = kCACornerCurveContinuous;
-    [self setNeedsLayout];
-}
-
-- (void)gfRefreshMaterial {
-    BOOL dark = GFUsesDarkAppearance(self);
-
-    BOOL isBackdropLayer =
-        [NSStringFromClass(self.layer.class) containsString:@"Backdrop"];
-
-    GFAppLibraryMaterialRecipe recipe =
-        GFAppLibraryRecipe(
-            self.gfSearchVariant,
-            dark
-        );
-
-    CGFloat blurRadius = recipe.blur;
-    CGFloat saturation = recipe.saturation;
-    CGFloat brightness = recipe.brightness;
-
-    if (isBackdropLayer) {
-        id saturate = GFCreateCAFilter(@"colorSaturate");
-        id brighten = GFCreateCAFilter(@"colorBrightness");
-        id blur = GFCreateCAFilter(@"gaussianBlur");
-
-        NSMutableArray *filters = [NSMutableArray array];
-
-        if (saturate) {
-            [saturate setValue:@(saturation) forKey:@"inputAmount"];
-            [filters addObject:saturate];
-        }
-
-        if (brighten) {
-            [brighten setValue:@(brightness) forKey:@"inputAmount"];
-            [filters addObject:brighten];
-        }
-
-        if (blur) {
-            [blur setValue:@(blurRadius) forKey:@"inputRadius"];
-            [blur setValue:@YES forKey:@"inputNormalizeEdges"];
-            [blur setValue:@YES forKey:@"inputHardEdges"];
-            [filters addObject:blur];
-        }
-
-        [self.layer setValue:filters forKey:@"filters"];
-        [self.layer setValue:@1.0 forKey:@"scale"];
-    }
-
-    self.gfTintView.alpha =
-        recipe.tintAlpha;
-
-    self.layer.borderWidth =
-        recipe.borderWidth;
-
-    self.layer.borderColor =
-        [UIColor colorWithWhite:1.0
-                          alpha:recipe.borderAlpha]
-            .CGColor;
-
-    BOOL liquid =
-        (GFResolvedAppLibraryStyle() == 1);
-
-    CGFloat bloomAlpha = 0.0;
-    CGFloat rimAlpha = 0.0;
-    CGFloat glintAlpha = 0.0;
-
-    if (liquid) {
-        switch (GFAppLibraryLiquidPreset) {
-            case 1: // Balanced
-                bloomAlpha = dark ? 0.108 : 0.105;
-                rimAlpha = dark ? 0.132 : 0.130;
-                glintAlpha = dark ? 0.048 : 0.050;
-                break;
-
-            case 2: // Deep
-                bloomAlpha = dark ? 0.082 : 0.080;
-                rimAlpha = dark ? 0.112 : 0.110;
-                glintAlpha = dark ? 0.038 : 0.040;
-                break;
-
-            case 0:
-            default: // Crystal
-                bloomAlpha = dark ? 0.132 : 0.135;
-                rimAlpha = dark ? 0.156 : 0.155;
-                glintAlpha = dark ? 0.058 : 0.060;
-                break;
-        }
-    } else {
-        /*
-         * Clear keeps its Beta3.6 luminous/frosted body. Only very subtle
-         * corner light is added so Clear does not turn into Liquid Glass.
-         */
-        switch (GFAppLibraryClearPreset) {
-            case 1:
-                bloomAlpha = dark ? 0.050 : 0.050;
-                rimAlpha = dark ? 0.056 : 0.055;
-                glintAlpha = dark ? 0.021 : 0.018;
-                break;
-
-            case 2:
-                bloomAlpha = dark ? 0.038 : 0.040;
-                rimAlpha = dark ? 0.044 : 0.045;
-                glintAlpha = dark ? 0.017 : 0.014;
-                break;
-
-            case 0:
-            default:
-                bloomAlpha = dark ? 0.057 : 0.060;
-                rimAlpha = dark ? 0.063 : 0.065;
-                glintAlpha = dark ? 0.024 : 0.020;
-                break;
-        }
-    }
-
-    /*
-     * Beta 4.4:
-     * search and category cards use the same optical alpha values.
-     * No search-specific bloom/rim/glint suppression or amplification.
-     */
-
-    self.gfUpperLeftBloomLayer.colors = @[
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:bloomAlpha * 0.82].CGColor,
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:bloomAlpha * 0.48].CGColor,
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:bloomAlpha * 0.18].CGColor,
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:0.0].CGColor
-    ];
-
-    self.gfUpperLeftBloomLayer.locations =
-        @[@0.00, @0.28, @0.58, @1.00];
-
-    self.gfPartialRimLayer.strokeColor =
-        [UIColor colorWithWhite:1.0
-                          alpha:rimAlpha]
-            .CGColor;
-
-    self.gfPartialRimLayer.lineWidth =
-        liquid ? 0.68 : 0.52;
-
-    self.gfLowerLeftGlintLayer.colors = @[
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:0.0].CGColor,
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:glintAlpha].CGColor,
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:glintAlpha * 0.34].CGColor,
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:0.0].CGColor
-    ];
-
-    self.gfLowerLeftGlintLayer.locations =
-        @[@0.00, @0.34, @0.60, @1.00];
-}
-
-- (void)layoutSubviews {
-    [super layoutSubviews];
-
-    self.gfTintView.frame =
-        self.bounds;
-
-    CGRect bounds =
-        self.bounds;
-
-    CGFloat radius =
-        self.gfPreferredRadius;
-
-    if (radius <= 0.0) {
-        radius =
-            MIN(
-                CGRectGetWidth(bounds),
-                CGRectGetHeight(bounds)
-            ) * 0.18;
-    }
-
-    BOOL liquid =
-        (GFResolvedAppLibraryStyle() == 1);
-
-    /*
-     * Broad corner luminosity. It occupies AREA, not an edge strip.
-     */
-    CGFloat bloomWidth =
-        CGRectGetWidth(bounds) *
-        (self.gfSearchVariant
-            ? (liquid ? 0.52 : 0.46)
-            : (liquid ? 0.52 : 0.46));
-
-    CGFloat bloomHeight =
-        CGRectGetHeight(bounds) *
-        (self.gfSearchVariant
-            ? (liquid ? 0.48 : 0.42)
-            : (liquid ? 0.48 : 0.42));
-
-    self.gfUpperLeftBloomLayer.frame =
-        CGRectMake(
-            -radius * 0.10,
-            -radius * 0.08,
-            MAX(1.0, bloomWidth),
-            MAX(1.0, bloomHeight)
-        );
-
-    self.gfUpperLeftBloomLayer.cornerRadius =
-        MIN(
-            radius,
-            MIN(bloomWidth, bloomHeight) * 0.44
-        );
-
-    /*
-     * A single partial rim follows ONLY the upper corners/top.
-     * The existing Beta3.6 base border remains the only full silhouette.
-     */
-    CGRect rimRect =
-        CGRectInset(bounds, 0.80, 0.80);
-
-    CGFloat rimRadius =
-        MIN(
-            MAX(0.0, radius - 0.80),
-            MIN(
-                CGRectGetWidth(rimRect),
-                CGRectGetHeight(rimRect)
-            ) * 0.50
-        );
-
-    UIBezierPath *rimPath =
-        [UIBezierPath bezierPath];
-
-    CGFloat minX = CGRectGetMinX(rimRect);
-    CGFloat maxX = CGRectGetMaxX(rimRect);
-    CGFloat minY = CGRectGetMinY(rimRect);
-
-    [rimPath moveToPoint:
-        CGPointMake(
-            minX,
-            minY + rimRadius * 1.15
-        )];
-
-    [rimPath addArcWithCenter:
-        CGPointMake(
-            minX + rimRadius,
-            minY + rimRadius
-        )
-        radius:rimRadius
-        startAngle:(CGFloat)M_PI
-        endAngle:(CGFloat)(M_PI * 1.5)
-        clockwise:YES];
-
-    [rimPath addLineToPoint:
-        CGPointMake(
-            maxX - rimRadius,
-            minY
-        )];
-
-    [rimPath addArcWithCenter:
-        CGPointMake(
-            maxX - rimRadius,
-            minY + rimRadius
-        )
-        radius:rimRadius
-        startAngle:(CGFloat)(M_PI * 1.5)
-        endAngle:0.0
-        clockwise:YES];
-
-    self.gfPartialRimLayer.frame =
-        bounds;
-    self.gfPartialRimLayer.path =
-        rimPath.CGPath;
-
-    /*
-     * Very small lower-left reflection.
-     */
-    CGFloat glintWidth =
-        MIN(
-            CGRectGetWidth(bounds) * 0.18,
-            MAX(
-                28.0,
-                radius * 1.12
-            )
-        );
-
-    CGFloat glintHeight =
-        MIN(
-            3.6,
-            MAX(
-                2.0,
-                radius * 0.095
-            )
-        );
-
-    self.gfLowerLeftGlintLayer.frame =
-        CGRectMake(
-            MAX(4.0, radius * 0.30),
-            MAX(
-                0.0,
-                CGRectGetHeight(bounds) -
-                glintHeight -
-                1.0
-            ),
-            glintWidth,
-            glintHeight
-        );
-
-    self.gfLowerLeftGlintLayer.cornerRadius =
-        glintHeight * 0.5;
-}
-
-- (void)traitCollectionDidChange:
-    (UITraitCollection *)previousTraitCollection {
-
-    [super traitCollectionDidChange:previousTraitCollection];
-    [self gfRefreshMaterial];
-}
-
-@end
-
-
-static GFAppLibraryGlassView *GFAppLibraryOverlayForPod(UIView *pod) {
-    return (GFAppLibraryGlassView *)
-        objc_getAssociatedObject(
-            pod,
-            &kGFAppLibraryOverlayAssociationKey
-        );
-}
-
-static void GFSetAppLibraryOverlayForPod(
-    UIView *pod,
-    GFAppLibraryGlassView *overlay
-) {
-    objc_setAssociatedObject(
-        pod,
-        &kGFAppLibraryOverlayAssociationKey,
-        overlay,
-        OBJC_ASSOCIATION_RETAIN_NONATOMIC
-    );
-}
-
-static void GFRestoreNativeAppLibraryPod(UIView *pod) {
-    GFAppLibraryGlassView *overlay =
-        GFAppLibraryOverlayForPod(pod);
-
-    if (overlay) {
-        [overlay removeFromSuperview];
-        GFSetAppLibraryOverlayForPod(pod, nil);
-    }
-
-    NSNumber *originalAlpha =
-        objc_getAssociatedObject(
-            pod,
-            &kGFAppLibraryOriginalAlphaKey
-        );
-
-    if (originalAlpha) {
-        pod.alpha = originalAlpha.doubleValue;
-
-        objc_setAssociatedObject(
-            pod,
-            &kGFAppLibraryOriginalAlphaKey,
-            nil,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
-        );
-    }
-}
-
-static void GFUpdateRealAppLibraryPod(UIView *pod) {
-    if (!pod || GFIsInternalAppLibraryPodVisual(pod)) {
-        return;
-    }
-
-    BOOL enabled =
-        GFAppLibraryGlassEnabled;
-
-    if (!enabled) {
-        GFRestoreNativeAppLibraryPod(pod);
-        return;
-    }
-
-    UIView *host = pod.superview;
-    if (!host) {
-        return;
-    }
-
-    NSNumber *originalAlpha =
-        objc_getAssociatedObject(
-            pod,
-            &kGFAppLibraryOriginalAlphaKey
-        );
-
-    if (!originalAlpha) {
-        objc_setAssociatedObject(
-            pod,
-            &kGFAppLibraryOriginalAlphaKey,
-            @(pod.alpha),
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
-        );
-    }
-
-    GFAppLibraryGlassView *overlay =
-        GFAppLibraryOverlayForPod(pod);
-
-    if (!overlay) {
-        overlay =
-            [[GFAppLibraryGlassView alloc]
-                initWithStrength:1.0];
-
-        GFSetAppLibraryOverlayForPod(
-            pod,
-            overlay
-        );
-    }
-
-    if (overlay.superview != host) {
-        [overlay removeFromSuperview];
-        [host insertSubview:overlay
-               belowSubview:pod];
-    } else {
-        [host insertSubview:overlay
-               belowSubview:pod];
-    }
-
-    overlay.bounds = pod.bounds;
-    overlay.center = pod.center;
-    overlay.transform = pod.transform;
-    overlay.hidden = pod.hidden;
-
-    CGFloat radius = pod.layer.cornerRadius;
-    if (radius <= 0.0) {
-        radius =
-            MIN(pod.bounds.size.width,
-                pod.bounds.size.height) * 0.18;
-    }
-
-    [overlay setPreferredRadius:radius];
-
-    /*
-     * Keep just enough of Apple's native background to preserve its visual
-     * identity, while the new sibling overlay supplies the real wallpaper
-     * transmission. This view is background-only; app icons are not children
-     * of SBHLibraryCategoryPodBackgroundView.
-     */
-    BOOL dark = GFUsesDarkAppearance(pod);
-
-    GFAppLibraryMaterialRecipe recipe =
-        GFAppLibraryRecipe(
-            NO,
-            dark
-        );
-
-    pod.alpha =
-        recipe.nativePodAlpha;
-}
-
-
-
-#pragma mark - App Library Search Glass
-
-/*
- * Earlier search detection required the candidate itself to look like a Search class.
- * On the tested SpringBoard the visible pill is a private wrapper, so the
- * category cards were hit but the search pill was never selected.
- *
- * Search UI resolution uses two stages:
- *
- * 1) locate a real UITextField / UISearchTextField / UISearchBar descendant,
- *    then walk UP to the wide rounded pill container;
- * 2) if that UIKit input is hidden behind private wrappers, fall back to the
- *    unique wide + shallow + rounded view near the top of SBLibraryViewController.
- */
-
-static BOOL GFAppLibrarySearchGeometryMatches(
-    UIView *view,
-    UIView *root
-) {
-    if (!view ||
-        !root ||
-        view == root ||
-        view.hidden ||
-        view.alpha <= 0.01) {
-        return NO;
-    }
-
-    CGRect rect =
-        [view convertRect:view.bounds
-                   toView:root];
-
-    CGFloat rootWidth =
-        CGRectGetWidth(root.bounds);
-    CGFloat rootHeight =
-        CGRectGetHeight(root.bounds);
-
-    CGFloat width =
-        CGRectGetWidth(rect);
-    CGFloat height =
-        CGRectGetHeight(rect);
-
-    if (rootWidth <= 1.0 ||
-        rootHeight <= 1.0 ||
-        width <= 1.0 ||
-        height <= 1.0) {
-        return NO;
-    }
-
-    /*
-     * Intentionally broad enough for iPhone display-scale/layout variants.
-     * The real App Library pill occupies roughly 65–92% of the page width,
-     * is shallow, and lives in the first quarter of the page.
-     */
-    BOOL wideEnough =
-        width >= rootWidth * 0.52 &&
-        width <= rootWidth * 0.98;
-
-    BOOL shallowEnough =
-        height >= 34.0 &&
-        height <= 104.0;
-
-    BOOL nearTop =
-        CGRectGetMinY(rect) >= -12.0 &&
-        CGRectGetMidY(rect) <= rootHeight * 0.28;
-
-    BOOL pillAspect =
-        width / MAX(height, 1.0) >= 3.2;
-
-    return wideEnough &&
-           shallowEnough &&
-           nearTop &&
-           pillAspect;
-}
-
-
-static BOOL GFIsUIKitSearchInputView(
-    UIView *view
-) {
-    if (!view) return NO;
-
-    if ([view isKindOfClass:[UISearchBar class]] ||
-        [view isKindOfClass:[UITextField class]]) {
-        return YES;
-    }
-
-    Class searchTextFieldClass =
-        NSClassFromString(@"UISearchTextField");
-
-    if (searchTextFieldClass &&
-        [view isKindOfClass:searchTextFieldClass]) {
-        return YES;
-    }
-
-    return NO;
-}
-
-
-static BOOL GFClassNameLooksSearchRelated(
-    UIView *view
-) {
-    if (!view) return NO;
-
-    NSString *name =
-        NSStringFromClass(view.class);
-
-    NSArray<NSString *> *tokens = @[
-        @"Search",
-        @"Spotlight",
-        @"Query"
-    ];
-
-    for (NSString *token in tokens) {
-        if ([name rangeOfString:token
-                        options:NSCaseInsensitiveSearch].location
-                != NSNotFound) {
-            return YES;
-        }
-    }
-
-    return NO;
-}
-
-
-static void GFFindBestAppLibrarySearchInput(
-    UIView *view,
-    UIView *root,
-    UIView **bestView,
-    CGFloat *bestScore
-) {
-    if (!view ||
-        !root ||
-        !bestView ||
-        !bestScore) {
-        return;
-    }
-
-    if (view != root &&
-        !view.hidden &&
-        view.alpha > 0.01) {
-
-        CGFloat score = -CGFLOAT_MAX;
-
-        if (GFIsUIKitSearchInputView(view)) {
-            score = 200.0;
-        } else if (GFClassNameLooksSearchRelated(view)) {
-            score = 100.0;
-        }
-
-        if (score > -CGFLOAT_MAX / 2.0) {
-            CGRect rect =
-                [view convertRect:view.bounds
-                           toView:root];
-
-            CGFloat rootHeight =
-                MAX(
-                    CGRectGetHeight(root.bounds),
-                    1.0
-                );
-
-            /*
-             * Prefer actual visible search inputs near the top.
-             * Width is intentionally NOT required here; the real text field
-             * can be narrower than its outer glass pill.
-             */
-            if (CGRectGetMidY(rect) <=
-                    rootHeight * 0.30 &&
-                CGRectGetHeight(rect) >= 20.0 &&
-                CGRectGetHeight(rect) <= 110.0) {
-
-                if ([view isKindOfClass:[UITextField class]]) {
-                    score += 60.0;
-                }
-
-                if ([view isKindOfClass:[UISearchBar class]]) {
-                    score += 30.0;
-                }
-
-                score +=
-                    MIN(
-                        25.0,
-                        CGRectGetWidth(rect) * 0.04
-                    );
-
-                if (score > *bestScore) {
-                    *bestScore = score;
-                    *bestView = view;
-                }
-            }
-        }
-    }
-
-    for (UIView *child in [view.subviews copy]) {
-        GFFindBestAppLibrarySearchInput(
-            child,
-            root,
-            bestView,
-            bestScore
-        );
-    }
-}
-
-
-static CGFloat GFAppLibrarySearchContainerScore(
-    UIView *view,
-    UIView *root
-) {
-    if (!GFAppLibrarySearchGeometryMatches(
-            view,
-            root
-        )) {
-        return -CGFLOAT_MAX;
-    }
-
-    if ([view isKindOfClass:[UILabel class]] ||
-        [view isKindOfClass:[UIImageView class]] ||
-        [view isKindOfClass:[UIButton class]] ||
-        [view isKindOfClass:[UIWindow class]]) {
-        return -CGFLOAT_MAX;
-    }
-
-    CGRect rect =
-        [view convertRect:view.bounds
-                   toView:root];
-
-    CGFloat rootWidth =
-        MAX(
-            CGRectGetWidth(root.bounds),
-            1.0
-        );
-
-    CGFloat rootHeight =
-        MAX(
-            CGRectGetHeight(root.bounds),
-            1.0
-        );
-
-    CGFloat width =
-        CGRectGetWidth(rect);
-
-    CGFloat height =
-        MAX(
-            CGRectGetHeight(rect),
-            1.0
-        );
-
-    CGFloat radius =
-        view.layer.cornerRadius;
-
-    CGFloat score = 0.0;
-
-    /*
-     * Geometry dominates the fallback: very wide, close to the top, and
-     * pill-shaped. This avoids requiring any particular private class name.
-     */
-    score +=
-        70.0 *
-        MIN(
-            1.0,
-            width / rootWidth
-        );
-
-    score -=
-        24.0 *
-        (CGRectGetMidY(rect) /
-         rootHeight);
-
-    CGFloat expectedHeight = 56.0;
-    score -=
-        MIN(
-            20.0,
-            fabs(height - expectedHeight) * 0.25
-        );
-
-    if (radius >= height * 0.30) {
-        score += 24.0;
-    } else if (radius >= height * 0.18) {
-        score += 12.0;
-    }
-
-    if (view.clipsToBounds ||
-        view.layer.masksToBounds) {
-        score += 6.0;
-    }
-
-    if (GFClassNameLooksSearchRelated(view)) {
-        score += 35.0;
-    }
-
-    NSString *name =
-        NSStringFromClass(view.class);
-
-    NSArray<NSString *> *materialTokens = @[
-        @"Platter",
-        @"Pill",
-        @"Material",
-        @"Backdrop",
-        @"Background"
-    ];
-
-    for (NSString *token in materialTokens) {
-        if ([name rangeOfString:token
-                        options:NSCaseInsensitiveSearch].location
-                != NSNotFound) {
-            score += 8.0;
-            break;
-        }
-    }
-
-    return score;
-}
-
-
-static UIView *GFResolveAppLibrarySearchContainerFromInput(
-    UIView *input,
-    UIView *root
-) {
-    if (!input || !root) {
-        return nil;
-    }
-
-    UIView *best = nil;
-    CGFloat bestScore = -CGFLOAT_MAX;
-
-    UIView *node = input;
-
-    /*
-     * Start at the input and climb only a few wrappers. This is the key
-     * Beta 3.5 fix: the visible pill can be a private parent whose own class
-     * name contains no "Search" token at all.
-     */
-    for (NSInteger depth = 0;
-         node &&
-         node != root &&
-         depth < 9;
-         depth++) {
-
-        CGFloat score =
-            GFAppLibrarySearchContainerScore(
-                node,
-                root
-            );
-
-        if (score > bestScore) {
-            bestScore = score;
-            best = node;
-        }
-
-        node = node.superview;
-    }
-
-    return best;
-}
-
-
-static void GFFindGeometrySearchContainer(
-    UIView *view,
-    UIView *root,
-    UIView **bestView,
-    CGFloat *bestScore
-) {
-    if (!view ||
-        !root ||
-        !bestView ||
-        !bestScore) {
-        return;
-    }
-
-    if (view != root) {
-        CGFloat score =
-            GFAppLibrarySearchContainerScore(
-                view,
-                root
-            );
-
-        if (score > *bestScore) {
-            *bestScore = score;
-            *bestView = view;
-        }
-    }
-
-    for (UIView *child in [view.subviews copy]) {
-        GFFindGeometrySearchContainer(
-            child,
-            root,
-            bestView,
-            bestScore
-        );
-    }
-}
-
-
-static UIView *GFFindAppLibrarySearchContainer(
-    UIView *root
-) {
-    if (!root) return nil;
-
-    UIView *input = nil;
-    CGFloat inputScore = -CGFLOAT_MAX;
-
-    GFFindBestAppLibrarySearchInput(
-        root,
-        root,
-        &input,
-        &inputScore
-    );
-
-    UIView *fromInput =
-        GFResolveAppLibrarySearchContainerFromInput(
-            input,
-            root
-        );
-
-    if (fromInput) {
-        return fromInput;
-    }
-
-    /*
-     * Last-resort geometry fallback.
-     *
-     * This intentionally does NOT require Search/UISearch* class names.
-     * It runs only inside the already-confirmed SBLibraryViewController root.
-     */
-    UIView *geometryCandidate = nil;
-    CGFloat geometryScore = -CGFLOAT_MAX;
-
-    GFFindGeometrySearchContainer(
-        root,
-        root,
-        &geometryCandidate,
-        &geometryScore
-    );
-
-    /*
-     * Reject weak geometry matches rather than touching a random header.
-     */
-    if (geometryScore < 42.0) {
-        return nil;
-    }
-
-    return geometryCandidate;
-}
-
-
-static BOOL GFLooksLikeNativeSearchBackgroundView(
-    UIView *view
-) {
-    if (!view ||
-        [view isKindOfClass:[GFAppLibraryGlassView class]]) {
-        return NO;
-    }
-
-    NSString *name =
-        NSStringFromClass(view.class);
-
-    NSArray<NSString *> *tokens = @[
-        @"Background",
-        @"Backdrop",
-        @"Material",
-        @"Platter",
-        @"Pill"
-    ];
-
-    for (NSString *token in tokens) {
-        if ([name rangeOfString:token
-                        options:NSCaseInsensitiveSearch].location
-                != NSNotFound) {
-            return YES;
-        }
-    }
-
-    return NO;
-}
-
-
-static void GFSetNativeSearchBackgroundsDimmed(
-    UIView *view,
-    BOOL dimmed
-) {
-    if (!view) return;
-
-    for (UIView *child in [view.subviews copy]) {
-        if ([child isKindOfClass:[GFAppLibraryGlassView class]]) {
-            continue;
-        }
-
-        if (GFLooksLikeNativeSearchBackgroundView(child)) {
-            NSNumber *original =
-                objc_getAssociatedObject(
-                    child,
-                    &kGFAppLibrarySearchNativeBackgroundAlphaKey
-                );
-
-            if (dimmed) {
-                if (!original) {
-                    objc_setAssociatedObject(
-                        child,
-                        &kGFAppLibrarySearchNativeBackgroundAlphaKey,
-                        @(child.alpha),
-                        OBJC_ASSOCIATION_RETAIN_NONATOMIC
-                    );
-                }
-
-                /*
-                 * Keep a trace of Apple's original search material so its
-                 * internal shading still participates, but remove the dark
-                 * opaque slab that was visible in Beta 3.3.
-                 */
-                GFAppLibraryMaterialRecipe searchRecipe =
-                    GFAppLibraryRecipe(
-                        YES,
-                        GFUsesDarkAppearance(view)
-                    );
-
-                /*
-                 * Beta 4.4: keep native search material participation aligned
-                 * with the category-card material, not independently reduced.
-                 */
-                child.alpha =
-                    searchRecipe.nativePodAlpha;
-            } else if (original) {
-                child.alpha = original.doubleValue;
-
-                objc_setAssociatedObject(
-                    child,
-                    &kGFAppLibrarySearchNativeBackgroundAlphaKey,
-                    nil,
-                    OBJC_ASSOCIATION_RETAIN_NONATOMIC
-                );
-            }
-        }
-
-        GFSetNativeSearchBackgroundsDimmed(
-            child,
-            dimmed
-        );
-    }
-}
-
-
-static GFAppLibraryGlassView *GFAppLibrarySearchOverlay(
-    UIView *searchView
-) {
-    return (GFAppLibraryGlassView *)
-        objc_getAssociatedObject(
-            searchView,
-            &kGFAppLibrarySearchOverlayAssociationKey
-        );
-}
-
-
-static void GFRestoreAppLibrarySearchView(
-    UIView *searchView
-) {
-    if (!searchView) return;
-
-    GFAppLibraryGlassView *overlay =
-        GFAppLibrarySearchOverlay(searchView);
-
-    if (overlay) {
-        [overlay removeFromSuperview];
-
-        objc_setAssociatedObject(
-            searchView,
-            &kGFAppLibrarySearchOverlayAssociationKey,
-            nil,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
-        );
-    }
-
-    id originalBackground =
-        objc_getAssociatedObject(
-            searchView,
-            &kGFAppLibrarySearchOriginalBackgroundColorKey
-        );
-
-    if (originalBackground) {
-        searchView.backgroundColor =
-            (originalBackground == [NSNull null])
-                ? nil
-                : (UIColor *)originalBackground;
-
-        objc_setAssociatedObject(
-            searchView,
-            &kGFAppLibrarySearchOriginalBackgroundColorKey,
-            nil,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
-        );
-    }
-
-    GFSetNativeSearchBackgroundsDimmed(
-        searchView,
-        NO
-    );
-}
-
-
-static void GFUpdateAppLibrarySearchView(
-    UIView *root
-) {
-    if (!root) return;
-
-    UIView *candidate =
-        GFFindAppLibrarySearchContainer(
-            root
-        );
-
-    if (!candidate) {
-        return;
-    }
-
-    BOOL enabled =
-        GFAppLibraryGlassEnabled;
-
-    if (!enabled) {
-        GFRestoreAppLibrarySearchView(candidate);
-        return;
-    }
-
-    id savedBackground =
-        objc_getAssociatedObject(
-            candidate,
-            &kGFAppLibrarySearchOriginalBackgroundColorKey
-        );
-
-    if (!savedBackground) {
-        UIColor *originalColor =
-            candidate.backgroundColor;
-
-        objc_setAssociatedObject(
-            candidate,
-            &kGFAppLibrarySearchOriginalBackgroundColorKey,
-            originalColor ?: (id)[NSNull null],
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
-        );
-    }
-
-    candidate.backgroundColor =
-        UIColor.clearColor;
-
-    GFSetNativeSearchBackgroundsDimmed(
-        candidate,
-        YES
-    );
-
-    GFAppLibraryGlassView *overlay =
-        GFAppLibrarySearchOverlay(candidate);
-
-    if (!overlay) {
-        overlay =
-            [[GFAppLibraryGlassView alloc]
-                initWithStrength:1.0];
-
-        overlay.gfSearchVariant = YES;
-        overlay.gfStrength = 1.0;
-        [overlay gfRefreshMaterial];
-
-        objc_setAssociatedObject(
-            candidate,
-            &kGFAppLibrarySearchOverlayAssociationKey,
-            overlay,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
-        );
-
-        [candidate insertSubview:overlay
-                         atIndex:0];
-    } else {
-        overlay.gfSearchVariant = YES;
-        overlay.gfStrength = 1.0;
-        [overlay gfRefreshMaterial];
-
-        if (overlay.superview != candidate) {
-            [overlay removeFromSuperview];
-            [candidate insertSubview:overlay
-                             atIndex:0];
-        } else {
-            [candidate sendSubviewToBack:overlay];
-        }
-    }
-
-    overlay.frame = candidate.bounds;
-    overlay.autoresizingMask =
-        UIViewAutoresizingFlexibleWidth |
-        UIViewAutoresizingFlexibleHeight;
-
-    CGFloat radius =
-        candidate.layer.cornerRadius;
-
-    if (radius <= 0.0) {
-        radius =
-            CGRectGetHeight(candidate.bounds) * 0.50;
-    }
-
-    [overlay setPreferredRadius:radius];
-}
-
-
-/*
- * Normal folder icons and App Library mini-clusters both pass through
- * SBFolderIconImageView. The old all-or-nothing hook therefore painted our
- * desktop folder glass onto the mini-clusters inside App Library.
- *
- * Beta 3.2 explicitly separates that hierarchy: if a folder icon is under
- * any SpringBoard Library/CategoryPod container, leave Apple's original
- * background untouched. On stock iOS this is the transparent mini-folder
- * presentation the user expects.
- */
-static BOOL GFViewIsInsideAppLibrary(UIView *view) {
-    UIResponder *node = view;
-
-    for (NSInteger depth = 0;
-         node && depth < 28;
-         depth++) {
-
-        if ([node isKindOfClass:[UIView class]]) {
-            UIView *v = (UIView *)node;
-
-            NSNumber *rootMarker =
-                objc_getAssociatedObject(
-                    v,
-                    &kGFAppLibraryRootMarkerKey
-                );
-
-            if (rootMarker.boolValue) {
-                return YES;
-            }
-        }
-
-        NSString *className =
-            NSStringFromClass(node.class);
-
-        BOOL looksLikeLibrary =
-            [className containsString:@"SBHLibrary"] ||
-            [className containsString:@"SBLibrary"] ||
-            [className containsString:@"LibraryCategory"] ||
-            [className containsString:@"CategoryPod"];
-
-        if (looksLikeLibrary) {
-            return YES;
-        }
-
-        if ([node isKindOfClass:[UIView class]]) {
-            UIView *v = (UIView *)node;
-
-            if (v.superview) {
-                node = v.superview;
-                continue;
-            }
-        }
-
-        node = node.nextResponder;
-    }
-
-    return NO;
-}
-
-
-/*
- * Beta 3.3 no longer depends on the category-background class already being
- * hookable during tweak construction.
- *
- * SBLibraryViewController is the page-level App Library controller. Every
- * time the page lays out, walk only that controller's hierarchy and locate
- * category background candidates there.
- */
-static BOOL GFLooksLikeRealAppLibraryCategoryBackground(UIView *view) {
-    if (!view || GFIsInternalAppLibraryPodVisual(view)) {
-        return NO;
-    }
-
-    Class exactClass =
-        NSClassFromString(
-            @"SBHLibraryCategoryPodBackgroundView"
-        );
-
-    if (exactClass &&
-        [view isKindOfClass:exactClass]) {
-        return YES;
-    }
-
-    NSString *name =
-        NSStringFromClass(view.class);
-
-    BOOL categoryBackgroundName =
-        ([name containsString:@"Library"] &&
-         [name containsString:@"Category"] &&
-         [name containsString:@"Background"]);
-
-    BOOL podBackgroundName =
-        ([name containsString:@"CategoryPod"] &&
-         [name containsString:@"Background"]);
-
-    return categoryBackgroundName ||
-           podBackgroundName;
-}
-
-
-static void GFRefreshAppLibraryDescendants(UIView *view) {
-    if (!view) return;
-
-    if (GFLooksLikeRealAppLibraryCategoryBackground(view)) {
-        GFUpdateRealAppLibraryPod(view);
-    }
-
-    NSArray<UIView *> *children =
-        [view.subviews copy];
-
-    for (UIView *child in children) {
-        GFRefreshAppLibraryDescendants(child);
-    }
-}
-
-
-static void GFRefreshAppLibraryController(
-    UIViewController *controller
-) {
-    if (!controller.isViewLoaded) {
-        return;
-    }
-
-    UIView *root = controller.view;
-    if (!root) {
-        return;
-    }
-
-    objc_setAssociatedObject(
-        root,
-        &kGFAppLibraryRootMarkerKey,
-        @YES,
-        OBJC_ASSOCIATION_RETAIN_NONATOMIC
-    );
-
-    GFRefreshAppLibraryDescendants(root);
-
-    /*
-     * Beta 3.4: the top App Library search pill shares the same independent
-     * App Library glass switch/strength as the category cards.
-     */
-    GFUpdateAppLibrarySearchView(root);
-}
-
-
-@interface SBHLibraryCategoryPodBackgroundView : UIView
-@end
-
-@interface SBLibraryViewController : UIViewController
-@end
-
-%group GFAppLibraryControllerHooks
-
-%hook SBLibraryViewController
-
-- (void)viewWillAppear:(BOOL)animated {
-    %orig(animated);
-    GFRefreshAppLibraryController(self);
-}
-
-- (void)viewDidAppear:(BOOL)animated {
-    %orig(animated);
-    GFRefreshAppLibraryController(self);
-
-    /*
-     * Some category pods are recycled/attached immediately after the first
-     * appearance callback. One next-runloop refresh catches that path without
-     * polling or globally hooking UIView.
-     */
-    __weak UIViewController *weakSelf = self;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        UIViewController *strongSelf = weakSelf;
-        if (strongSelf) {
-            GFRefreshAppLibraryController(strongSelf);
-        }
-    });
-
-    /*
-     * The search wrapper can be attached one layout phase later than category
-     * pods. A single short delayed refresh is cheap and avoids a global hook.
-     */
-    dispatch_after(
-        dispatch_time(
-            DISPATCH_TIME_NOW,
-            (int64_t)(0.18 * NSEC_PER_SEC)
-        ),
-        dispatch_get_main_queue(),
-        ^{
-            UIViewController *strongSelf = weakSelf;
-            if (strongSelf) {
-                GFRefreshAppLibraryController(strongSelf);
-            }
-        }
-    );
-}
-
-- (void)viewDidLayoutSubviews {
-    %orig;
-    GFRefreshAppLibraryController(self);
-}
-
-- (void)traitCollectionDidChange:
-    (UITraitCollection *)previousTraitCollection {
-
-    %orig(previousTraitCollection);
-    GFRefreshAppLibraryController(self);
-}
-
-%end
-
-%end
-
-
-%group GFAppLibraryHooks
-
-%hook SBHLibraryCategoryPodBackgroundView
-
-- (void)didMoveToSuperview {
-    %orig;
-    GFUpdateRealAppLibraryPod(self);
-}
-
-- (void)didMoveToWindow {
-    %orig;
-    GFUpdateRealAppLibraryPod(self);
-}
-
-- (void)layoutSubviews {
-    %orig;
-    GFUpdateRealAppLibraryPod(self);
-}
-
-- (void)traitCollectionDidChange:
-    (UITraitCollection *)previousTraitCollection {
-
-    %orig(previousTraitCollection);
-
-    GFAppLibraryGlassView *overlay =
-        GFAppLibraryOverlayForPod(self);
-
-    if (overlay) {
-        [overlay gfRefreshMaterial];
-    }
-
-    GFUpdateRealAppLibraryPod(self);
-}
-
-%end
-
-%end
-
-
-@interface GFBackdropGlassView : UIView
-@property (nonatomic, strong) UIView *gfTintView;
-@property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
-@property (nonatomic, strong) UIView *gfAppLibraryPodVisual;
-@property (nonatomic, strong) CALayer *gfOpticalLightingLayer;
-@property (nonatomic, assign) CGSize gfLightingSize;
-@property (nonatomic, assign) CGFloat gfLightingRadius;
-@property (nonatomic, assign) CGFloat gfStrength;
-@property (nonatomic, assign) NSInteger gfStyle;
-@property (nonatomic, assign) CGFloat gfPreferredRadius;
-- (instancetype)initWithStyle:(NSInteger)style
-                     strength:(CGFloat)strength
-              preferredRadius:(CGFloat)radius;
-@end
-
-@implementation GFBackdropGlassView
-
-+ (Class)layerClass {
-    Class backdropClass = NSClassFromString(@"CABackdropLayer");
-    return backdropClass ?: [CALayer class];
-}
-
-- (instancetype)initWithStyle:(NSInteger)style
-                     strength:(CGFloat)strength
-              preferredRadius:(CGFloat)radius {
-    self = [super initWithFrame:CGRectZero];
-
-    if (self) {
-        _gfStyle = style;
-        _gfStrength = MIN(1.0, MAX(0.0, strength));
-        _gfPreferredRadius = MAX(0.0, radius);
-
-        self.backgroundColor = UIColor.clearColor;
-        self.userInteractionEnabled = NO;
-        self.clipsToBounds = YES;
-        self.layer.masksToBounds = YES;
-
-        BOOL isBackdropLayer =
-            [NSStringFromClass(self.layer.class) containsString:@"Backdrop"];
-
-        CGFloat materialResponse = GFMaterialResponse(_gfStrength);
-        CGFloat tintResponse = GFTintResponse(_gfStrength);
-        CGFloat clearBlurResponse = GFClearBlurResponse(_gfStrength);
-        CGFloat clearStructure = GFClearStructureResponse(_gfStrength);
-        BOOL clearStyle = (_gfStyle == 0);
-        BOOL darkAppearance = GFUsesDarkAppearance(self);
-        BOOL materialRequested = clearStyle || (_gfStrength > 0.001);
-
-        if (materialRequested && isBackdropLayer) {
-            /*
-             * Preserve wallpaper color instead of whitening it.
-             * At 45–55%, blur stays moderate while saturation is boosted.
-             */
-            CGFloat blurRadius;
-            CGFloat saturation;
-            CGFloat brightness;
-
-            if (_gfStyle == 1) {
-                /*
-                 * Liquid Glass closed-folder body: keep Apple's App Library
-                 * pod identity, but let the wallpaper own most of the color.
-                 * The native pod is now a thin material cue rather than the
-                 * main opaque body.
-                 */
-                blurRadius = darkAppearance
-                    ? (4.2 + 5.8 * materialResponse)
-                    : (3.6 + 4.4 * materialResponse);
-
-                saturation = darkAppearance
-                    ? (1.10 + 0.18 * materialResponse)
-                    : (1.06 + 0.10 * materialResponse);
-
-                brightness = darkAppearance
-                    ? (0.010 + 0.018 * materialResponse)
-                    : (0.001 + 0.006 * materialResponse);
-            } else {
-                /*
-                 * Clear starts clean even at 0%.  The slider keeps blur as its
-                 * largest change, while color separation and a very small
-                 * neutral luminance lift grow with structure.  Do not use the
-                 * slider as the gate for Clear transparency.
-                 */
-                blurRadius = 8.40 * clearBlurResponse;
-                saturation = 1.105 + (0.070 * clearStructure);
-                brightness = 0.014 + (0.008 * clearStructure);
-            }
-
-            id saturate = GFCreateCAFilter(@"colorSaturate");
-            id brighten = GFCreateCAFilter(@"colorBrightness");
-            id blur = GFCreateCAFilter(@"gaussianBlur");
-
-            NSMutableArray *filters = [NSMutableArray array];
-
-            if (saturate) {
-                [saturate setValue:@(saturation) forKey:@"inputAmount"];
-                [filters addObject:saturate];
-            }
-
-            if (brighten && brightness > 0.0001) {
-                [brighten setValue:@(brightness) forKey:@"inputAmount"];
-                [filters addObject:brighten];
-            }
-
-            if (blur && blurRadius > 0.001) {
-                [blur setValue:@(blurRadius) forKey:@"inputRadius"];
-                [blur setValue:@YES forKey:@"inputNormalizeEdges"];
-                [blur setValue:@YES forKey:@"inputHardEdges"];
-                [filters addObject:blur];
-            }
-
-            if (filters.count > 0) {
-                [self.layer setValue:filters forKey:@"filters"];
-                [self.layer setValue:@1.0 forKey:@"scale"];
-            }
-        } else if (materialRequested) {
-            /*
-             * Conservative fallback for systems where CABackdropLayer cannot
-             * be resolved. This is not the primary iOS 16 path.
-             */
-            UIBlurEffectStyle fallbackStyle =
-                (_gfStyle == 1)
-                    ? UIBlurEffectStyleSystemThinMaterial
-                    : UIBlurEffectStyleSystemUltraThinMaterial;
-
-            UIBlurEffect *effect =
-                [UIBlurEffect effectWithStyle:fallbackStyle];
-
-            _gfFallbackBlurView =
-                [[UIVisualEffectView alloc] initWithEffect:effect];
-
-            _gfFallbackBlurView.userInteractionEnabled = NO;
-            _gfFallbackBlurView.alpha =
-                (_gfStyle == 1)
-                    ? (darkAppearance
-                        ? MIN(0.66, 0.38 + 0.28 * materialResponse)
-                        : MIN(0.38, 0.18 + 0.20 * materialResponse))
-                    : (0.20 + 0.08 * clearStructure);
-
-            [self addSubview:_gfFallbackBlurView];
-        }
-
-        /*
-         * Neutral optical transmission only. No hue is introduced here:
-         * wallpaper/backdrop remains the sole color source. Liquid Glass
-         * restores the proven Beta1.8 light-body lift that produced the
-         * user's accepted closed-folder reference.
-         */
-        CGFloat tintAlpha = 0.0;
-
-        if (_gfStyle == 0) {
-            tintAlpha = 0.012 + (0.006 * clearStructure);
-        } else if (_gfStrength > 0.001) {
-            tintAlpha = darkAppearance
-                ? (0.010 + 0.028 * tintResponse)
-                : (0.002 + 0.010 * tintResponse);
-        }
-
-        if (tintAlpha > 0.001) {
-            _gfTintView = [[UIView alloc] initWithFrame:CGRectZero];
-            _gfTintView.userInteractionEnabled = NO;
-            _gfTintView.backgroundColor = UIColor.whiteColor;
-            _gfTintView.alpha = tintAlpha;
-            [self addSubview:_gfTintView];
-        }
-
-        if (_gfStyle == 1 && _gfStrength > 0.001) {
-            _gfAppLibraryPodVisual =
-                GFCreateNativeAppLibraryPodVisual(_gfStrength);
-
-
-            if (_gfAppLibraryPodVisual) {
-                if (_gfTintView) {
-                    [self insertSubview:_gfAppLibraryPodVisual
-                           belowSubview:_gfTintView];
-                } else {
-                    [self addSubview:_gfAppLibraryPodVisual];
-                }
-            }
-
-            _gfOpticalLightingLayer = [CALayer layer];
-            _gfOpticalLightingLayer.contentsGravity = kCAGravityResize;
-            _gfOpticalLightingLayer.magnificationFilter = kCAFilterLinear;
-            _gfOpticalLightingLayer.minificationFilter = kCAFilterLinear;
-            _gfOpticalLightingLayer.opaque = NO;
-            _gfOpticalLightingLayer.opacity = darkAppearance ? 1.0 : 0.82;
-
-            [self.layer addSublayer:_gfOpticalLightingLayer];
-        }
-    }
-
-    return self;
-}
-
-- (void)layoutSubviews {
-    [super layoutSubviews];
-
-    self.gfFallbackBlurView.frame = self.bounds;
-    self.gfAppLibraryPodVisual.frame = self.bounds;
-    self.gfTintView.frame = self.bounds;
-
-    /*
-     * Resolve the folder radius before constructing the continuous edge mask.
-     */
-    CGFloat radius = self.gfPreferredRadius;
-
-    if (radius <= 0.0 && self.superview) {
-        radius = self.superview.layer.cornerRadius;
-    }
-
-    if (radius > 0.0) {
-        self.layer.cornerRadius = radius;
-        self.layer.cornerCurve = kCACornerCurveContinuous;
-
-        if (self.gfAppLibraryPodVisual) {
-            self.gfAppLibraryPodVisual.layer.cornerRadius = radius;
-            self.gfAppLibraryPodVisual.layer.cornerCurve = kCACornerCurveContinuous;
-            self.gfAppLibraryPodVisual.layer.masksToBounds = YES;
-
-        }
-    }
-
-
-    if (self.gfOpticalLightingLayer) {
-        self.gfOpticalLightingLayer.frame = self.bounds;
-
-        CGSize currentSize = self.bounds.size;
-        CGFloat effectiveRadius = radius;
-
-        if (effectiveRadius <= 0.0) {
-            effectiveRadius =
-                MIN(currentSize.width, currentSize.height) * 0.22;
-        }
-
-        BOOL sizeChanged =
-            fabs(self.gfLightingSize.width - currentSize.width) > 0.50 ||
-            fabs(self.gfLightingSize.height - currentSize.height) > 0.50;
-
-        BOOL radiusChanged =
-            fabs(self.gfLightingRadius - effectiveRadius) > 0.25;
-
-        if (sizeChanged ||
-            radiusChanged ||
-            self.gfOpticalLightingLayer.contents == nil) {
-
-            UIImage *lighting =
-                GFCreateOpticalLightingImage(
-                    currentSize,
-                    effectiveRadius,
-                    self.gfStrength
-                );
-
-            self.gfOpticalLightingLayer.contents =
-                lighting ? (id)lighting.CGImage : nil;
-
-            self.gfOpticalLightingLayer.contentsScale =
-                lighting
-                    ? lighting.scale
-                    : UIScreen.mainScreen.scale;
-
-            self.gfLightingSize = currentSize;
-            self.gfLightingRadius = effectiveRadius;
-        }
-    }
-
-}
-
-@end
-
-
-#pragma mark - Opened folder panel: conservative material takeover
-
-/*
- * IMPORTANT STABILITY BOUNDARY
- *
- * We deliberately do NOT hook:
- * - parent folder container hooks
- * - page-background factory hooks
- * - background-alpha transition hooks
- * - outside wallpaper-background hooks
- *
- * SBFolderBackgroundView is already the actual visual panel.  We let
- * SpringBoard create and animate it normally, then replace only its material.
- * The parent view's native alpha / transform animation therefore also drives
- * this child without a separate transition hook.
- */
-
-static BOOL GFUsesDarkAppearance(UIView *view) {
-    UIUserInterfaceStyle style = UIUserInterfaceStyleUnspecified;
-
-    if (view) {
-        style = view.traitCollection.userInterfaceStyle;
-    }
-
-    if (style == UIUserInterfaceStyleUnspecified) {
-        style = UIScreen.mainScreen.traitCollection.userInterfaceStyle;
-    }
-
-    return style == UIUserInterfaceStyleDark;
-}
-
-
-static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
-                                                 CGFloat cornerRadius,
-                                                 CGFloat strength,
-                                                 NSInteger style,
-                                                 BOOL darkAppearance) {
+static UIImage *B3MCreateMenuOpticalLightingImage(CGSize size,
+                                                   CGFloat cornerRadius,
+                                                   CGFloat strength,
+                                                   BOOL darkAppearance)
+{
     if (size.width < 2.0 ||
         size.height < 2.0 ||
-        (style != 0 && strength <= 0.001)) {
+        strength <= 0.001) {
         return nil;
     }
 
     /*
-     * The opened panel uses broader light bands than the desktop icon.
-     * 1.5x is enough for the thin filament while avoiding a multi-megabyte
-     * 3x render for every large folder page.
+     * GlassFolders uses 1.5x for the large opened panel. Keep that exact
+     * sampling scale here: it resolves the thin filament well on @3x devices
+     * while keeping the cached Context Menu texture inexpensive.
      */
-    CGFloat renderScale = MIN(UIScreen.mainScreen.scale, 1.50);
+    CGFloat renderScale =
+        MIN(UIScreen.mainScreen.scale, 1.50);
 
     size_t pixelWidth =
-        (size_t)MAX(2.0, floor(size.width * renderScale + 0.5));
+        (size_t)MAX(
+            2.0,
+            floor(size.width * renderScale + 0.5)
+        );
+
     size_t pixelHeight =
-        (size_t)MAX(2.0, floor(size.height * renderScale + 0.5));
+        (size_t)MAX(
+            2.0,
+            floor(size.height * renderScale + 0.5)
+        );
 
     NSInteger strengthStep =
-        MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
+        MAX(
+            0,
+            MIN(
+                20,
+                (NSInteger)lround(strength * 20.0)
+            )
+        );
 
-    NSString *cacheKey = [NSString stringWithFormat:
-        @"P24-%@-%@-%zux%zu-r%.2f-s%ld",
-        (style == 1) ? @"LG" : @"CL",
-        darkAppearance ? @"D" : @"L",
-        pixelWidth,
-        pixelHeight,
-        cornerRadius,
-        (long)strengthStep
-    ];
+    NSString *cacheKey =
+        [NSString stringWithFormat:
+            @"B3M-LG-P24-%@-%zux%zu-r%.2f-s%ld",
+            darkAppearance ? @"D" : @"L",
+            pixelWidth,
+            pixelHeight,
+            cornerRadius,
+            (long)strengthStep
+        ];
 
-    NSCache *cache = GFOpticalLightingCache();
-    UIImage *cached = [cache objectForKey:cacheKey];
+    NSCache *cache =
+        B3MOpticalLightingCache();
+
+    UIImage *cached =
+        [cache objectForKey:cacheKey];
 
     if (cached) {
         return cached;
     }
 
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    size_t bytesPerRow = pixelWidth * 4;
+    CGColorSpaceRef colorSpace =
+        CGColorSpaceCreateDeviceRGB();
 
-    CGContextRef context = CGBitmapContextCreate(
-        NULL,
-        pixelWidth,
-        pixelHeight,
-        8,
-        bytesPerRow,
-        colorSpace,
-        kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big
-    );
+    size_t bytesPerRow =
+        pixelWidth * 4;
+
+    CGContextRef context =
+        CGBitmapContextCreate(
+            NULL,
+            pixelWidth,
+            pixelHeight,
+            8,
+            bytesPerRow,
+            colorSpace,
+            kCGImageAlphaPremultipliedLast |
+                kCGBitmapByteOrder32Big
+        );
 
     CGColorSpaceRelease(colorSpace);
 
@@ -3011,113 +362,111 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         return nil;
     }
 
-    CGFloat width = (CGFloat)pixelWidth;
-    CGFloat height = (CGFloat)pixelHeight;
-    CGFloat radius = MAX(0.0, cornerRadius * renderScale);
+    CGFloat width =
+        (CGFloat)pixelWidth;
 
-    BOOL clearStyle = (style == 0);
-    CGFloat clearStructure = clearStyle
-        ? GFClearStructureResponse(strength)
-        : 1.0;
+    CGFloat height =
+        (CGFloat)pixelHeight;
 
-    /*
-     * Clear always has a visible thin-glass edge, including at 0%.  Strength
-     * now adds edge definition instead of deciding whether the edge exists.
-     * The base remains softer than Liquid Glass.
-     */
-    CGFloat e = clearStyle
-        ? (0.50 + 0.20 * clearStructure)
-        : GFSpecularResponse(strength);
+    CGFloat radius =
+        MAX(
+            0.0,
+            cornerRadius * renderScale
+        );
 
     /*
-     * Clear and Liquid Glass intentionally use different edge optics.
-     * Clear is a thin transparent sheet: a broader, softer white shoulder,
-     * very little hard filament, and almost no dark thickness shoulder.
-     * Liquid Glass keeps the existing narrower/high-energy rail.
-     *
-     * These are neutral-white optics only. No hue is introduced here.
+     * Liquid Glass coefficients are taken from GlassFolders-Test3's opened
+     * panel path (style == 1). Geometry is not approximated with a stroke.
      */
+    CGFloat e =
+        B3MSpecularResponse(strength);
+
     CGFloat shoulderWidth =
-        (clearStyle
-            ? (10.4 + 2.6 * e)
-            : (6.2 + 1.8 * e)) * renderScale;
+        (6.2 + 1.8 * e) * renderScale;
 
     CGFloat coreWidth =
-        (clearStyle
-            ? (2.00 + 0.40 * e)
-            : (1.30 + 0.34 * e)) * renderScale;
+        (1.30 + 0.34 * e) * renderScale;
 
     CGFloat filamentWidth =
-        (clearStyle
-            ? (0.82 + 0.12 * e)
-            : (0.62 + 0.12 * e)) * renderScale;
+        (0.62 + 0.12 * e) * renderScale;
 
     CGFloat secondaryRimWidth =
-        (clearStyle
-            ? (1.02 + 0.15 * e)
-            : (0.78 + 0.12 * e)) * renderScale;
+        (0.78 + 0.12 * e) * renderScale;
 
-    CGFloat secondaryRimGain;
-    if (clearStyle) {
-        secondaryRimGain = darkAppearance
-            ? (0.034 + 0.014 * e)
-            : (0.026 + 0.011 * e);
-    } else {
-        secondaryRimGain = darkAppearance
+    CGFloat secondaryRimGain =
+        darkAppearance
             ? (0.092 + 0.032 * e)
             : (0.082 + 0.030 * e);
-    }
 
     CGFloat darkShoulderCenter =
-        (clearStyle
-            ? (3.15 + 0.55 * e)
-            : (2.8 + 0.5 * e)) * renderScale;
+        (2.8 + 0.5 * e) * renderScale;
 
     CGFloat darkShoulderWidth =
-        (clearStyle
-            ? (3.00 + 0.60 * e)
-            : (2.4 + 0.5 * e)) * renderScale;
+        (2.4 + 0.5 * e) * renderScale;
 
-    CGFloat darkShoulderGain;
-    if (clearStyle) {
-        darkShoulderGain = darkAppearance
-            ? (0.0010 + 0.0010 * e)
-            : (0.0030 + 0.0015 * e);
-    } else {
-        darkShoulderGain = darkAppearance
+    CGFloat darkShoulderGain =
+        darkAppearance
             ? (0.008 + 0.003 * e)
             : (0.010 + 0.005 * e);
-    }
 
-    const CGFloat invSqrt2 = 0.70710678118;
-    const CGFloat lightX = -invSqrt2;
-    const CGFloat lightY = -invSqrt2;
+    const CGFloat invSqrt2 =
+        0.70710678118;
 
-    CGFloat epsilon = MAX(0.70, renderScale * 0.60);
-    CGFloat aaWidth = MAX(0.90, renderScale * 0.75);
+    const CGFloat lightX =
+        -invSqrt2;
+
+    const CGFloat lightY =
+        -invSqrt2;
+
+    CGFloat epsilon =
+        MAX(
+            0.70,
+            renderScale * 0.60
+        );
+
+    CGFloat aaWidth =
+        MAX(
+            0.90,
+            renderScale * 0.75
+        );
+
+    CGFloat edgeDrive =
+        B3MEdgeResponse(strength);
 
     for (size_t py = 0; py < pixelHeight; py++) {
         for (size_t px = 0; px < pixelWidth; px++) {
-            CGFloat x = (CGFloat)px + 0.5;
-            CGFloat y = (CGFloat)py + 0.5;
+            CGFloat x =
+                (CGFloat)px + 0.5;
+
+            CGFloat y =
+                (CGFloat)py + 0.5;
 
             CGFloat sdf =
-                GFRoundedRectSDF(
-                    x, y, width, height, radius
+                B3MRoundedRectSDF(
+                    x,
+                    y,
+                    width,
+                    height,
+                    radius
                 );
 
             CGFloat edgeCoverage =
-                GFClamp01(0.5 - sdf / aaWidth);
+                B3MClamp01(
+                    0.5 - sdf / aaWidth
+                );
 
             if (edgeCoverage <= 0.001) {
                 continue;
             }
 
-            CGFloat insideDepth = MAX(0.0, -sdf);
+            CGFloat insideDepth =
+                MAX(0.0, -sdf);
+
             CGFloat maxBand =
                 MAX(
                     shoulderWidth * 3.0,
-                    darkShoulderCenter + darkShoulderWidth * 3.0
+                    darkShoulderCenter +
+                        darkShoulderWidth * 3.0
                 );
 
             if (insideDepth > maxBand) {
@@ -3125,94 +474,123 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             }
 
             CGFloat dx =
-                GFRoundedRectSDF(
-                    x + epsilon, y, width, height, radius
+                B3MRoundedRectSDF(
+                    x + epsilon,
+                    y,
+                    width,
+                    height,
+                    radius
                 ) -
-                GFRoundedRectSDF(
-                    x - epsilon, y, width, height, radius
+                B3MRoundedRectSDF(
+                    x - epsilon,
+                    y,
+                    width,
+                    height,
+                    radius
                 );
 
             CGFloat dy =
-                GFRoundedRectSDF(
-                    x, y + epsilon, width, height, radius
+                B3MRoundedRectSDF(
+                    x,
+                    y + epsilon,
+                    width,
+                    height,
+                    radius
                 ) -
-                GFRoundedRectSDF(
-                    x, y - epsilon, width, height, radius
+                B3MRoundedRectSDF(
+                    x,
+                    y - epsilon,
+                    width,
+                    height,
+                    radius
                 );
 
-            CGFloat normalLength = hypot(dx, dy);
+            CGFloat normalLength =
+                hypot(dx, dy);
 
             if (normalLength <= 0.0001) {
                 continue;
             }
 
-            CGFloat nx = dx / normalLength;
-            CGFloat ny = dy / normalLength;
+            CGFloat nx =
+                dx / normalLength;
 
-            CGFloat ndotl = nx * lightX + ny * lightY;
-            CGFloat opposite = MAX(0.0, -ndotl);
+            CGFloat ny =
+                dy / normalLength;
+
+            CGFloat ndotl =
+                nx * lightX + ny * lightY;
+
+            CGFloat opposite =
+                MAX(0.0, -ndotl);
 
             CGFloat shoulderRatio =
-                insideDepth / MAX(0.001, shoulderWidth);
+                insideDepth /
+                MAX(0.001, shoulderWidth);
 
             CGFloat coreRatio =
-                insideDepth / MAX(0.001, coreWidth);
+                insideDepth /
+                MAX(0.001, coreWidth);
 
             /*
-             * Beta 2.1: keep the directional optical filament slightly
-             * INSIDE the host's native continuous-corner clip.  The host is
-             * kCACornerCurveContinuous (a squircle-like curve), while this
-             * lightweight CPU texture uses an analytic rounded-rect field.
-             * Centering the filament ~0.6-0.8 pt inward prevents the raster
-             * highlight from grazing the clip exactly at corner/edge tangents.
-             * A very low native CALayer border below provides the exact
-             * continuous-curve continuity floor.
+             * Keep the filament slightly inside the native continuous-corner
+             * clip, matching GlassFolders-Test3's Liquid Glass opened panel.
              */
             CGFloat filamentInset =
-                ((style == 1) ? 0.78 : 0.58) * renderScale;
+                0.78 * renderScale;
 
             CGFloat secondaryInset =
-                ((style == 1) ? 0.82 : 0.60) * renderScale;
+                0.82 * renderScale;
 
             CGFloat filamentRatio =
-                fabs(insideDepth - filamentInset) /
+                fabs(
+                    insideDepth -
+                    filamentInset
+                ) /
                 MAX(0.001, filamentWidth);
 
             CGFloat secondaryRatio =
-                fabs(insideDepth - secondaryInset) /
-                MAX(0.001, secondaryRimWidth);
+                fabs(
+                    insideDepth -
+                    secondaryInset
+                ) /
+                MAX(
+                    0.001,
+                    secondaryRimWidth
+                );
 
             CGFloat shoulder =
-                exp(-(shoulderRatio * shoulderRatio));
+                exp(
+                    -(
+                        shoulderRatio *
+                        shoulderRatio
+                    )
+                );
 
             CGFloat core =
-                exp(-(coreRatio * coreRatio * 1.30));
+                exp(
+                    -(
+                        coreRatio *
+                        coreRatio *
+                        1.30
+                    )
+                );
 
             CGFloat filament =
-                exp(-pow(filamentRatio, 2.55));
+                exp(
+                    -pow(
+                        filamentRatio,
+                        2.55
+                    )
+                );
 
             CGFloat secondary =
-                exp(-pow(secondaryRatio, 2.30));
-
-            /*
-             * Beta 1.6 opened-panel continuous rails.
-             *
-             * The larger opened surface uses exactly the same optical
-             * topology as the closed folder:
-             *
-             *   primary:
-             *     upper-left rounded corner -> full top rail
-             *
-             *   secondary:
-             *     full bottom rail -> lower-right rounded corner
-             *
-             * Corner and straight segment inside each pair use one shared
-             * mask/gain so their brightness is continuous through the radius.
-             * The large panel is broader/softer, not differently organized.
-             */
-            CGFloat edgeDrive = clearStyle
-                ? (0.24 + 0.22 * clearStructure)
-                : GFEdgeResponse(strength);
+                exp(
+                    -pow(
+                        secondaryRatio,
+                        2.30
+                    )
+                );
 
             CGFloat verticalEdge =
                 pow(fabs(nx), 2.32);
@@ -3230,90 +608,125 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 MAX(0.0, nx);
 
             CGFloat topRightCornerSelector =
-                GFClamp01(
-                    2.05 * rightFacing * topFacing
+                B3MClamp01(
+                    2.05 *
+                    rightFacing *
+                    topFacing
                 );
 
             CGFloat bottomLeftCornerSelector =
-                GFClamp01(
-                    2.05 * leftFacing * bottomFacing
+                B3MClamp01(
+                    2.05 *
+                    leftFacing *
+                    bottomFacing
                 );
 
             CGFloat topRightTransition =
-                pow(topRightCornerSelector, 0.90);
+                pow(
+                    topRightCornerSelector,
+                    0.90
+                );
 
             CGFloat bottomLeftTransition =
-                pow(bottomLeftCornerSelector, 0.90);
+                pow(
+                    bottomLeftCornerSelector,
+                    0.90
+                );
 
             CGFloat endpointRadius =
                 MAX(
                     1.0,
                     MIN(
                         radius,
-                        0.5 * MIN(width, height)
+                        0.5 *
+                        MIN(width, height)
                     )
                 );
 
             /*
-             * Beta 2.8 — locked symmetric continuous tangent rails.
-             *
-             * Do not splice a "corner mask" into a separate straight-edge
-             * mask. The SDF normal is already unit length, so in the owned
-             * upper-left quadrant:
-             *
-             *     hypot(topFacing, leftFacing) == 1
-             *
-             * from the top straight, through every point of the TL arc, to
-             * the left straight. The same identity holds for the mirrored
-             * lower-right quadrant. Using that invariant gives one energy-flat
-             * optical rail across BOTH tangents instead of pieces which only
-             * happen to overlap.
-             *
-             * Geometry is an exact 180-degree mirror:
-             *
-             *   primary   : top -> TL arc -> left tail
-             *   secondary : bottom -> BR arc -> right tail
-             *
-             * Dark/light appearance may change gain later, but never this
-             * geometry. The connection/fade relationship is therefore
-             * identical in both appearance modes.
+             * Symmetric continuous tangent rails:
+             *   primary   : top -> upper-left arc -> left tail
+             *   secondary : bottom -> lower-right arc -> right tail
              */
             CGFloat primaryQuadrantEnergy =
-                GFClamp01(
-                    hypot(topFacing, leftFacing)
+                B3MClamp01(
+                    hypot(
+                        topFacing,
+                        leftFacing
+                    )
                 );
 
             CGFloat secondaryQuadrantEnergy =
-                GFClamp01(
-                    hypot(bottomFacing, rightFacing)
+                B3MClamp01(
+                    hypot(
+                        bottomFacing,
+                        rightFacing
+                    )
                 );
 
-            /*
-             * Do not hold the side tangent at exactly the same energy as the
-             * top/bottom rail and then suddenly begin fading.  Ease the last
-             * part of each owned corner by only 6%, then continue that same
-             * value into the long side tail.  This makes top->TL->left and
-             * bottom->BR->right feel like one reflection turning a corner.
-             */
-            CGFloat primaryTurn = leftFacing /
-                MAX(0.001, topFacing + leftFacing);
-            CGFloat secondaryTurn = rightFacing /
-                MAX(0.001, bottomFacing + rightFacing);
+            CGFloat primaryTurn =
+                leftFacing /
+                MAX(
+                    0.001,
+                    topFacing +
+                    leftFacing
+                );
+
+            CGFloat secondaryTurn =
+                rightFacing /
+                MAX(
+                    0.001,
+                    bottomFacing +
+                    rightFacing
+                );
 
             CGFloat primaryTurnT =
-                GFClamp01((primaryTurn - 0.48) / 0.52);
+                B3MClamp01(
+                    (primaryTurn - 0.48) /
+                    0.52
+                );
+
             CGFloat secondaryTurnT =
-                GFClamp01((secondaryTurn - 0.48) / 0.52);
+                B3MClamp01(
+                    (secondaryTurn - 0.48) /
+                    0.52
+                );
 
             CGFloat primaryTurnSmooth =
-                primaryTurnT * primaryTurnT * primaryTurnT *
-                (primaryTurnT * (primaryTurnT * 6.0 - 15.0) + 10.0);
-            CGFloat secondaryTurnSmooth =
-                secondaryTurnT * secondaryTurnT * secondaryTurnT *
-                (secondaryTurnT * (secondaryTurnT * 6.0 - 15.0) + 10.0);
+                primaryTurnT *
+                primaryTurnT *
+                primaryTurnT *
+                (
+                    primaryTurnT *
+                    (
+                        primaryTurnT * 6.0 -
+                        15.0
+                    ) +
+                    10.0
+                );
 
-            CGFloat primaryTurnGain = 1.0 - 0.060 * primaryTurnSmooth;
-            CGFloat secondaryTurnGain = 1.0 - 0.060 * secondaryTurnSmooth;
+            CGFloat secondaryTurnSmooth =
+                secondaryTurnT *
+                secondaryTurnT *
+                secondaryTurnT *
+                (
+                    secondaryTurnT *
+                    (
+                        secondaryTurnT * 6.0 -
+                        15.0
+                    ) +
+                    10.0
+                );
+
+            CGFloat primaryTurnGain =
+                1.0 -
+                0.060 *
+                primaryTurnSmooth;
+
+            CGFloat secondaryTurnGain =
+                1.0 -
+                0.060 *
+                secondaryTurnSmooth;
 
             CGFloat tangentOverlap =
                 MAX(
@@ -3321,124 +734,189 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                     endpointRadius * 0.032
                 );
 
-            /*
-             * Apple-like turn-off: after the TL/BR tangent the reflection
-             * must breathe along the side instead of collapsing within half
-             * a radius.  The two sides are exact mirrors.
-             */
             CGFloat sideTailLength =
                 MAX(
                     22.0 * renderScale,
                     endpointRadius * 1.12
                 );
 
-            /*
-             * Keep full energy for a tiny distance AFTER each tangent. The
-             * fade begins only outside that overlap, so the tangent itself can
-             * never be a fade endpoint. This removes the hairline dip at
-             * TL<->top and BR<->bottom while preserving a natural side fade.
-             */
             CGFloat topEnvelope =
-                (y <= endpointRadius + tangentOverlap)
+                (y <=
+                    endpointRadius +
+                    tangentOverlap)
                     ? 1.0
                     : 0.0;
 
             CGFloat bottomEnvelope =
-                (y >= height - endpointRadius - tangentOverlap)
+                (y >=
+                    height -
+                    endpointRadius -
+                    tangentOverlap)
                     ? 1.0
                     : 0.0;
 
             CGFloat topLeftFadeStart =
-                endpointRadius + tangentOverlap;
+                endpointRadius +
+                tangentOverlap;
 
             CGFloat bottomRightFadeStart =
-                height - endpointRadius - tangentOverlap;
+                height -
+                endpointRadius -
+                tangentOverlap;
 
             CGFloat topLeftTailProgress =
-                GFClamp01(
-                    (y - topLeftFadeStart) /
-                    MAX(1.0, sideTailLength)
+                B3MClamp01(
+                    (
+                        y -
+                        topLeftFadeStart
+                    ) /
+                    MAX(
+                        1.0,
+                        sideTailLength
+                    )
                 );
 
             CGFloat bottomRightTailProgress =
-                GFClamp01(
-                    (bottomRightFadeStart - y) /
-                    MAX(1.0, sideTailLength)
+                B3MClamp01(
+                    (
+                        bottomRightFadeStart -
+                        y
+                    ) /
+                    MAX(
+                        1.0,
+                        sideTailLength
+                    )
                 );
 
-            /* C2-continuous smootherstep: 6t^5 - 15t^4 + 10t^3. */
-            CGFloat tlT = topLeftTailProgress;
-            CGFloat brT = bottomRightTailProgress;
+            CGFloat tlT =
+                topLeftTailProgress;
+
+            CGFloat brT =
+                bottomRightTailProgress;
 
             CGFloat topLeftTailSmooth =
                 tlT * tlT * tlT *
-                (tlT * (tlT * 6.0 - 15.0) + 10.0);
+                (
+                    tlT *
+                    (
+                        tlT * 6.0 -
+                        15.0
+                    ) +
+                    10.0
+                );
 
             CGFloat bottomRightTailSmooth =
                 brT * brT * brT *
-                (brT * (brT * 6.0 - 15.0) + 10.0);
+                (
+                    brT *
+                    (
+                        brT * 6.0 -
+                        15.0
+                    ) +
+                    10.0
+                );
 
             CGFloat leftTailEnvelope =
                 (y <= topLeftFadeStart)
                     ? 1.0
-                    : ((y <= topLeftFadeStart + sideTailLength)
-                        ? (1.0 - topLeftTailSmooth)
-                        : 0.0);
+                    : (
+                        (y <=
+                            topLeftFadeStart +
+                            sideTailLength)
+                            ? (
+                                1.0 -
+                                topLeftTailSmooth
+                            )
+                            : 0.0
+                    );
 
             CGFloat rightTailEnvelope =
                 (y >= bottomRightFadeStart)
                     ? 1.0
-                    : ((y >= bottomRightFadeStart - sideTailLength)
-                        ? (1.0 - bottomRightTailSmooth)
-                        : 0.0);
+                    : (
+                        (y >=
+                            bottomRightFadeStart -
+                            sideTailLength)
+                            ? (
+                                1.0 -
+                                bottomRightTailSmooth
+                            )
+                            : 0.0
+                    );
 
-            /*
-             * At TL the top and left envelopes overlap at exactly 1.0; at BR
-             * the bottom and right envelopes do the same. MAX cannot create a
-             * valley at an internal join. Only the true side tail may fade.
-             */
             CGFloat primaryEnvelope =
-                MAX(topEnvelope, leftTailEnvelope);
+                MAX(
+                    topEnvelope,
+                    leftTailEnvelope
+                );
 
             CGFloat secondaryEnvelope =
-                MAX(bottomEnvelope, rightTailEnvelope);
+                MAX(
+                    bottomEnvelope,
+                    rightTailEnvelope
+                );
 
-            /*
-             * Free endpoints remain soft: primary rolls away through the TR
-             * arc, secondary through the BL arc. Use a C2 gate here too so the
-             * opposite corners never introduce a hard shoulder.
-             */
             CGFloat rightArcProgress =
-                GFClamp01(
-                    (x - (width - endpointRadius)) /
+                B3MClamp01(
+                    (
+                        x -
+                        (
+                            width -
+                            endpointRadius
+                        )
+                    ) /
                     endpointRadius
                 );
 
             CGFloat leftArcProgress =
-                GFClamp01(
-                    (endpointRadius - x) /
+                B3MClamp01(
+                    (
+                        endpointRadius -
+                        x
+                    ) /
                     endpointRadius
                 );
 
-            CGFloat rr = rightArcProgress;
-            CGFloat lr = leftArcProgress;
+            CGFloat rr =
+                rightArcProgress;
+
+            CGFloat lr =
+                leftArcProgress;
 
             CGFloat rightArcSmooth =
                 rr * rr * rr *
-                (rr * (rr * 6.0 - 15.0) + 10.0);
+                (
+                    rr *
+                    (
+                        rr * 6.0 -
+                        15.0
+                    ) +
+                    10.0
+                );
 
             CGFloat leftArcSmooth =
                 lr * lr * lr *
-                (lr * (lr * 6.0 - 15.0) + 10.0);
+                (
+                    lr *
+                    (
+                        lr * 6.0 -
+                        15.0
+                    ) +
+                    10.0
+                );
 
             CGFloat primaryEndpointGate =
-                1.0 - 0.88 * rightArcSmooth;
+                1.0 -
+                0.88 *
+                rightArcSmooth;
 
             CGFloat secondaryEndpointGate =
-                1.0 - 0.88 * leftArcSmooth;
+                1.0 -
+                0.88 *
+                leftArcSmooth;
 
             CGFloat primaryRailMask =
-                GFClamp01(
+                B3MClamp01(
                     primaryQuadrantEnergy *
                     primaryTurnGain *
                     primaryEnvelope *
@@ -3446,7 +924,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 );
 
             CGFloat secondaryRailMask =
-                GFClamp01(
+                B3MClamp01(
                     secondaryQuadrantEnergy *
                     secondaryTurnGain *
                     secondaryEnvelope *
@@ -3462,215 +940,273 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             CGFloat sideMiddleMask =
                 verticalEdge *
                 pow(
-                    MAX(0.0, 1.0 - coveredByRails),
+                    MAX(
+                        0.0,
+                        1.0 -
+                        coveredByRails
+                    ),
                     1.60
                 );
 
-            CGFloat perimeterFloor = darkAppearance
-                ? 0.0048
-                : 0.0035;
+            CGFloat perimeterFloor =
+                darkAppearance
+                    ? 0.0048
+                    : 0.0035;
 
-            /*
-             * Liquid Glass keeps the existing high-energy rail. Clear gets a
-             * separate broad/soft rail so it does not read as "Liquid Glass
-             * with less blur".  Dark appearance needs more white definition;
-             * light appearance deliberately backs it off.
-             */
-            CGFloat primaryFilamentGain;
-            CGFloat primaryCoreGain;
-            CGFloat primaryShoulderGain;
-            CGFloat secondaryFilamentGain;
-            CGFloat secondaryCoreGain;
-            CGFloat secondaryShoulderGain;
-            CGFloat sideMiddleGain;
-            CGFloat topRightTransitionGain;
-            CGFloat bottomLeftTransitionGain;
+            CGFloat primaryFilamentGain =
+                darkAppearance
+                    ? (
+                        0.036 +
+                        0.300 *
+                        edgeDrive
+                    )
+                    : (
+                        0.046 +
+                        0.360 *
+                        edgeDrive
+                    );
 
-            if (clearStyle) {
-                primaryFilamentGain = darkAppearance
-                    ? (0.010 + 0.075 * edgeDrive)
-                    : (0.008 + 0.055 * edgeDrive);
+            CGFloat primaryCoreGain =
+                darkAppearance
+                    ? (
+                        0.014 +
+                        0.090 *
+                        edgeDrive
+                    )
+                    : (
+                        0.016 +
+                        0.100 *
+                        edgeDrive
+                    );
 
-                primaryCoreGain = darkAppearance
-                    ? (0.014 + 0.055 * edgeDrive)
-                    : (0.010 + 0.040 * edgeDrive);
+            CGFloat primaryShoulderGain =
+                darkAppearance
+                    ? (
+                        0.008 +
+                        0.035 *
+                        edgeDrive
+                    )
+                    : (
+                        0.010 +
+                        0.040 *
+                        edgeDrive
+                    );
 
-                primaryShoulderGain = darkAppearance
-                    ? (0.015 + 0.045 * edgeDrive)
-                    : (0.011 + 0.034 * edgeDrive);
+            CGFloat secondaryFilamentGain =
+                darkAppearance
+                    ? (
+                        0.024 +
+                        0.220 *
+                        edgeDrive
+                    )
+                    : (
+                        0.016 +
+                        0.150 *
+                        edgeDrive
+                    );
 
-                secondaryFilamentGain = darkAppearance
-                    ? (0.007 + 0.052 * edgeDrive)
-                    : (0.005 + 0.038 * edgeDrive);
+            CGFloat secondaryCoreGain =
+                darkAppearance
+                    ? (
+                        0.009 +
+                        0.064 *
+                        edgeDrive
+                    )
+                    : (
+                        0.006 +
+                        0.045 *
+                        edgeDrive
+                    );
 
-                secondaryCoreGain = darkAppearance
-                    ? (0.009 + 0.038 * edgeDrive)
-                    : (0.006 + 0.028 * edgeDrive);
+            CGFloat secondaryShoulderGain =
+                darkAppearance
+                    ? (
+                        0.005 +
+                        0.023 *
+                        edgeDrive
+                    )
+                    : (
+                        0.004 +
+                        0.016 *
+                        edgeDrive
+                    );
 
-                secondaryShoulderGain = darkAppearance
-                    ? (0.009 + 0.032 * edgeDrive)
-                    : (0.006 + 0.023 * edgeDrive);
+            CGFloat sideMiddleGain =
+                darkAppearance
+                    ? (
+                        0.0018 +
+                        0.010 *
+                        edgeDrive
+                    )
+                    : (
+                        0.0008 +
+                        0.0035 *
+                        edgeDrive
+                    );
 
-                sideMiddleGain = darkAppearance
-                    ? (0.0010 + 0.0040 * edgeDrive)
-                    : (0.0008 + 0.0030 * edgeDrive);
+            CGFloat topRightTransitionGain =
+                darkAppearance
+                    ? (
+                        0.0025 +
+                        0.010 *
+                        edgeDrive
+                    )
+                    : (
+                        0.0010 +
+                        0.004 *
+                        edgeDrive
+                    );
 
-                topRightTransitionGain = darkAppearance
-                    ? (0.0013 + 0.0050 * edgeDrive)
-                    : (0.0010 + 0.0038 * edgeDrive);
-
-                bottomLeftTransitionGain = topRightTransitionGain;
-            } else {
-                primaryFilamentGain = darkAppearance
-                    ? (0.036 + 0.300 * edgeDrive)
-                    : (0.046 + 0.360 * edgeDrive);
-
-                primaryCoreGain = darkAppearance
-                    ? (0.014 + 0.090 * edgeDrive)
-                    : (0.016 + 0.100 * edgeDrive);
-
-                primaryShoulderGain = darkAppearance
-                    ? (0.008 + 0.035 * edgeDrive)
-                    : (0.010 + 0.040 * edgeDrive);
-
-                secondaryFilamentGain = darkAppearance
-                    ? (0.024 + 0.220 * edgeDrive)
-                    : (0.016 + 0.150 * edgeDrive);
-
-                secondaryCoreGain = darkAppearance
-                    ? (0.009 + 0.064 * edgeDrive)
-                    : (0.006 + 0.045 * edgeDrive);
-
-                secondaryShoulderGain = darkAppearance
-                    ? (0.005 + 0.023 * edgeDrive)
-                    : (0.004 + 0.016 * edgeDrive);
-
-                sideMiddleGain = darkAppearance
-                    ? (0.0018 + 0.010 * edgeDrive)
-                    : (0.0008 + 0.0035 * edgeDrive);
-
-                /*
-                 * Apple-reference opened Liquid Glass: the top/upper-left
-                 * filament stays dominant, while the lower-left corner gets
-                 * a compact specular glint instead of a uniformly bright
-                 * perimeter.  The upper-right remains only a transition cue.
-                 */
-                topRightTransitionGain = darkAppearance
-                    ? (0.0025 + 0.010 * edgeDrive)
-                    : (0.0010 + 0.004 * edgeDrive);
-
-                bottomLeftTransitionGain = darkAppearance
-                    ? (0.008 + 0.045 * edgeDrive)
-                    : (0.018 + 0.095 * edgeDrive);
-            }
-
-            /*
-             * Only a tiny directional micro-variation survives. This keeps
-             * the TL arc and top segment visually equal instead of making the
-             * 45-degree corner peak brighter.
-             */
-            /*
-             * The opened panel rail is intentionally energy-flat through an
-             * internal tangent.  Direction still shapes the non-owned corner
-             * transitions, but it must not create a 1-4% dip exactly where a
-             * curved rail becomes a straight one.
-             */
-            CGFloat primaryDirectionalMicro = 1.0;
-            CGFloat secondaryDirectionalMicro = 1.0;
+            CGFloat bottomLeftTransitionGain =
+                darkAppearance
+                    ? (
+                        0.008 +
+                        0.045 *
+                        edgeDrive
+                    )
+                    : (
+                        0.018 +
+                        0.095 *
+                        edgeDrive
+                    );
 
             CGFloat white =
-                filament * perimeterFloor +
+                filament *
+                    perimeterFloor +
 
-                shoulder * primaryRailMask *
+                shoulder *
+                    primaryRailMask *
                     primaryShoulderGain +
-                core * primaryRailMask *
+
+                core *
+                    primaryRailMask *
                     primaryCoreGain +
-                filament * primaryRailMask *
-                    primaryFilamentGain *
-                    primaryDirectionalMicro +
 
-                shoulder * secondaryRailMask *
+                filament *
+                    primaryRailMask *
+                    primaryFilamentGain +
+
+                shoulder *
+                    secondaryRailMask *
                     secondaryShoulderGain +
-                core * secondaryRailMask *
-                    secondaryCoreGain +
-                filament * secondaryRailMask *
-                    secondaryFilamentGain *
-                    secondaryDirectionalMicro +
 
-                filament * sideMiddleMask *
+                core *
+                    secondaryRailMask *
+                    secondaryCoreGain +
+
+                filament *
+                    secondaryRailMask *
+                    secondaryFilamentGain +
+
+                filament *
+                    sideMiddleMask *
                     sideMiddleGain +
 
-                filament * topRightTransition *
+                filament *
+                    topRightTransition *
                     topRightTransitionGain +
 
-                filament * bottomLeftTransition *
+                filament *
+                    bottomLeftTransition *
                     bottomLeftTransitionGain +
 
-                /* A small soft bloom under the lower-left Liquid glint. */
-                (clearStyle ? 0.0 :
-                    (core * bottomLeftTransition *
-                        bottomLeftTransitionGain * 0.36 +
-                     shoulder * bottomLeftTransition *
-                        bottomLeftTransitionGain * 0.14)) +
+                core *
+                    bottomLeftTransition *
+                    bottomLeftTransitionGain *
+                    0.36 +
 
-                /*
-                 * Far-side white reflection is confined to the secondary
-                 * bottom/lower-right rail, not the straight right wall.
-                 */
+                shoulder *
+                    bottomLeftTransition *
+                    bottomLeftTransitionGain *
+                    0.14 +
+
                 secondary *
                     secondaryRimGain *
                     secondaryRailMask *
-                    (0.32 + 0.18 * edgeDrive);
+                    (
+                        0.32 +
+                        0.18 *
+                        edgeDrive
+                    );
 
-            /*
-             * Far-side thickness starts inside the edge.  It never occupies
-             * the same pixels as the secondary white filament.
-             */
             CGFloat shadowOffset =
-                (insideDepth - darkShoulderCenter) /
-                MAX(0.001, darkShoulderWidth);
-
-            CGFloat darkStructureMask =
-                0.78 * secondaryRailMask +
-                0.18 * sideMiddleMask +
-                0.04 * (
-                    topRightTransition +
-                    bottomLeftTransition
+                (
+                    insideDepth -
+                    darkShoulderCenter
+                ) /
+                MAX(
+                    0.001,
+                    darkShoulderWidth
                 );
 
+            CGFloat darkStructureMask =
+                0.78 *
+                    secondaryRailMask +
+                0.18 *
+                    sideMiddleMask +
+                0.04 *
+                    (
+                        topRightTransition +
+                        bottomLeftTransition
+                    );
+
             CGFloat dark =
-                exp(-(shadowOffset * shadowOffset * 1.10)) *
+                exp(
+                    -(
+                        shadowOffset *
+                        shadowOffset *
+                        1.10
+                    )
+                ) *
                 darkShoulderGain *
-                (0.92 + 0.08 * pow(opposite, 1.15)) *
+                (
+                    0.92 +
+                    0.08 *
+                    pow(
+                        opposite,
+                        1.15
+                    )
+                ) *
                 darkStructureMask;
 
-            CGFloat edgePeak;
-            if (clearStyle) {
-                edgePeak = darkAppearance
-                    ? (0.130 + 0.140 * edgeDrive)
-                    : (0.100 + 0.100 * edgeDrive);
-            } else {
-                edgePeak = darkAppearance
-                    ? (0.215 + 0.275 * edgeDrive)
-                    : (0.220 + 0.320 * edgeDrive);
-            }
+            CGFloat edgePeak =
+                darkAppearance
+                    ? (
+                        0.215 +
+                        0.275 *
+                        edgeDrive
+                    )
+                    : (
+                        0.220 +
+                        0.320 *
+                        edgeDrive
+                    );
 
             CGFloat signedLight =
-                MIN(edgePeak, MAX(-0.045, white - dark));
+                MIN(
+                    edgePeak,
+                    MAX(
+                        -0.045,
+                        white - dark
+                    )
+                );
 
             CGFloat alpha =
-                fabs(signedLight) * edgeCoverage;
+                fabs(signedLight) *
+                edgeCoverage;
 
             if (alpha < 0.001) {
                 continue;
             }
 
             size_t index =
-                py * bytesPerRow + px * 4;
+                py * bytesPerRow +
+                px * 4;
 
             unsigned char a =
                 (unsigned char)lround(
-                    GFClamp01(alpha) * 255.0
+                    B3MClamp01(alpha) *
+                    255.0
                 );
 
             if (signedLight >= 0.0) {
@@ -3704,59 +1240,367 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     if (image) {
         [cache setObject:image
                   forKey:cacheKey
-                    cost:pixelWidth * pixelHeight * 4];
+                    cost:
+                        pixelWidth *
+                        pixelHeight *
+                        4];
     }
 
     CGImageRelease(cgImage);
+
     return image;
 }
 
 
-@interface GFPanelBackdropSampleView : UIView
+/*
+ * Resolve CAFilter at runtime exactly like GlassFolders.
+ * This avoids linking private QuartzCore classes directly.
+ */
+static id B3MCreateCAFilter(NSString *type)
+{
+    Class filterClass = NSClassFromString(@"CAFilter");
+    SEL selector = NSSelectorFromString(@"filterWithType:");
+
+    if (!filterClass || ![filterClass respondsToSelector:selector]) {
+        return nil;
+    }
+
+    IMP imp = [filterClass methodForSelector:selector];
+    typedef id (*B3MFilterFactoryIMP)(id, SEL, id);
+    B3MFilterFactoryIMP func = (B3MFilterFactoryIMP)imp;
+
+    return func(filterClass, selector, type);
+}
+
+static UIColor *B3MFallbackIconColor(void)
+{
+    // Neutral cool fallback only when the current icon cannot be sampled.
+    return [UIColor colorWithHue:0.58 saturation:0.42 brightness:0.72 alpha:1.0];
+}
+
+static UIImage *B3MImageSnapshotFromIconView(UIView *view)
+{
+    if (!view) return nil;
+
+    BOOL active = NO;
+
+    SEL showingSEL = NSSelectorFromString(@"isShowingContextMenu");
+    if ([view respondsToSelector:showingSEL]) {
+        BOOL (*msgBool)(id, SEL) = (BOOL (*)(id, SEL))objc_msgSend;
+        active = msgBool(view, showingSEL);
+    }
+
+    if (!active) {
+        SEL activeSEL =
+            NSSelectorFromString(@"isContextMenuInteractionActiveOrPending");
+
+        if ([view respondsToSelector:activeSEL]) {
+            BOOL (*msgBool)(id, SEL) = (BOOL (*)(id, SEL))objc_msgSend;
+            active = msgBool(view, activeSEL);
+        }
+    }
+
+    if (!active) return nil;
+
+    SEL snapshotSEL = NSSelectorFromString(@"iconImageSnapshot");
+    if (![view respondsToSelector:snapshotSEL]) return nil;
+
+    id (*msgObject)(id, SEL) = (id (*)(id, SEL))objc_msgSend;
+    id snapshot = msgObject(view, snapshotSEL);
+
+    return [snapshot isKindOfClass:UIImage.class] ? (UIImage *)snapshot : nil;
+}
+
+static UIImage *B3MFindActiveIconSnapshotInView(UIView *view)
+{
+    if (!view) return nil;
+
+    Class iconViewClass = NSClassFromString(@"SBIconView");
+
+    if (iconViewClass && [view isKindOfClass:iconViewClass]) {
+        UIImage *snapshot = B3MImageSnapshotFromIconView(view);
+        if (snapshot) return snapshot;
+    }
+
+    for (UIView *subview in view.subviews) {
+        UIImage *snapshot = B3MFindActiveIconSnapshotInView(subview);
+        if (snapshot) return snapshot;
+    }
+
+    return nil;
+}
+
+static UIImage *B3MFindActiveIconSnapshot(void)
+{
+    UIApplication *application = UIApplication.sharedApplication;
+
+    for (UIScene *scene in application.connectedScenes) {
+        if (![scene isKindOfClass:UIWindowScene.class]) {
+            continue;
+        }
+
+        UIWindowScene *windowScene = (UIWindowScene *)scene;
+
+        if (windowScene.activationState != UISceneActivationStateForegroundActive &&
+            windowScene.activationState != UISceneActivationStateForegroundInactive) {
+            continue;
+        }
+
+        for (UIWindow *window in windowScene.windows.reverseObjectEnumerator) {
+            UIImage *snapshot = B3MFindActiveIconSnapshotInView(window);
+            if (snapshot) return snapshot;
+        }
+    }
+
+    return nil;
+}
+
+static UIColor *B3MDominantColorFromImage(UIImage *image)
+{
+    CGImageRef cgImage = image.CGImage;
+    if (!cgImage) return B3MFallbackIconColor();
+
+    const size_t width = 24;
+    const size_t height = 24;
+    const size_t bytesPerPixel = 4;
+    const size_t bytesPerRow = width * bytesPerPixel;
+
+    unsigned char pixels[width * height * bytesPerPixel];
+    memset(pixels, 0, sizeof(pixels));
+
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = CGBitmapContextCreate(
+        pixels,
+        width,
+        height,
+        8,
+        bytesPerRow,
+        colorSpace,
+        kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big
+    );
+
+    CGColorSpaceRelease(colorSpace);
+
+    if (!context) return B3MFallbackIconColor();
+
+    CGContextSetInterpolationQuality(context, kCGInterpolationMedium);
+    CGContextDrawImage(context, CGRectMake(0, 0, width, height), cgImage);
+    CGContextRelease(context);
+
+    enum { kHueBins = 24 };
+
+    CGFloat weights[kHueBins] = {0};
+    CGFloat redSums[kHueBins] = {0};
+    CGFloat greenSums[kHueBins] = {0};
+    CGFloat blueSums[kHueBins] = {0};
+
+    for (size_t i = 0; i < width * height; i++) {
+        unsigned char *p = pixels + i * 4;
+
+        CGFloat r = p[0] / 255.0;
+        CGFloat g = p[1] / 255.0;
+        CGFloat b = p[2] / 255.0;
+        CGFloat a = p[3] / 255.0;
+
+        if (a < 0.18) continue;
+
+        CGFloat maxC = MAX(r, MAX(g, b));
+        CGFloat minC = MIN(r, MIN(g, b));
+        CGFloat delta = maxC - minC;
+        CGFloat brightness = maxC;
+        CGFloat saturation = maxC > 0.001 ? delta / maxC : 0.0;
+
+        if (saturation < 0.16 || brightness < 0.12 || brightness > 0.97) {
+            continue;
+        }
+
+        CGFloat hue = 0.0;
+
+        if (delta > 0.0001) {
+            if (maxC == r) {
+                hue = fmod((g - b) / delta, 6.0);
+            } else if (maxC == g) {
+                hue = ((b - r) / delta) + 2.0;
+            } else {
+                hue = ((r - g) / delta) + 4.0;
+            }
+
+            hue /= 6.0;
+            if (hue < 0.0) hue += 1.0;
+        }
+
+        NSInteger bin = (NSInteger)floor(hue * kHueBins) % kHueBins;
+
+        CGFloat middlePreference =
+            1.0 - MIN(1.0, fabs(brightness - 0.58) / 0.58);
+
+        CGFloat weight =
+            a *
+            (0.28 + 0.72 * saturation) *
+            (0.72 + 0.28 * middlePreference);
+
+        weights[bin] += weight;
+        redSums[bin] += r * weight;
+        greenSums[bin] += g * weight;
+        blueSums[bin] += b * weight;
+    }
+
+    NSInteger bestBin = -1;
+    CGFloat bestWeight = 0.0;
+
+    for (NSInteger i = 0; i < kHueBins; i++) {
+        if (weights[i] > bestWeight) {
+            bestWeight = weights[i];
+            bestBin = i;
+        }
+    }
+
+    if (bestBin < 0 || bestWeight < 0.35) {
+        return B3MFallbackIconColor();
+    }
+
+    CGFloat r = redSums[bestBin] / bestWeight;
+    CGFloat g = greenSums[bestBin] / bestWeight;
+    CGFloat b = blueSums[bestBin] / bestWeight;
+
+    UIColor *raw = [UIColor colorWithRed:r green:g blue:b alpha:1.0];
+
+    CGFloat h = 0.0, s = 0.0, v = 0.0, alpha = 0.0;
+
+    if (![raw getHue:&h saturation:&s brightness:&v alpha:&alpha]) {
+        return raw;
+    }
+
+    // Keep the sampled hue, but normalize extreme icon colors before glass use.
+    s = MIN(0.86, MAX(0.34, s));
+    v = MIN(0.86, MAX(0.46, v));
+
+    return [UIColor colorWithHue:h saturation:s brightness:v alpha:1.0];
+}
+
+static void B3MRefreshActiveIconColor(void)
+{
+    UIImage *snapshot = B3MFindActiveIconSnapshot();
+
+    gB3MActiveIconColor = snapshot
+        ? B3MDominantColorFromImage(snapshot)
+        : B3MFallbackIconColor();
+}
+
+static UIColor *B3MResolvedBaseIconColor(void)
+{
+    return gB3MActiveIconColor ?: B3MFallbackIconColor();
+}
+
+static UIColor *B3MGlassBodyTintColor(UIView *view)
+{
+    UIColor *base = B3MResolvedBaseIconColor();
+
+    CGFloat h = 0.58, s = 0.42, v = 0.72, alpha = 1.0;
+    [base getHue:&h saturation:&s brightness:&v alpha:&alpha];
+
+    if (B3MUsesDarkAppearance(view)) {
+        // Dark glass may retain more chroma without flattening contrast.
+        s = MIN(0.58, MAX(0.22, s * 0.62));
+        v = MIN(0.78, MAX(0.48, v * 0.88));
+    } else {
+        /*
+         * Light mode needs a stable luminance floor for black text. Keep only
+         * a trace of the active icon hue and move the body tint close to white.
+         * The live backdrop still supplies the wallpaper/app colour.
+         */
+        s = MIN(0.10, MAX(0.035, s * 0.12));
+        v = 0.985;
+    }
+
+    return [UIColor colorWithHue:h saturation:s brightness:v alpha:1.0];
+}
+
+static UIColor *B3MGlassTextColorForView(UIView *view)
+{
+    UIColor *base = B3MResolvedBaseIconColor();
+
+    CGFloat h = 0.58, s = 0.42, v = 0.72, alpha = 1.0;
+    [base getHue:&h saturation:&s brightness:&v alpha:&alpha];
+
+    if (B3MUsesDarkAppearance(view)) {
+        /*
+         * Keep action labels neutral. Colour from the sampled backdrop should
+         * read through the glass body, not through the glyphs themselves.
+         */
+        return [UIColor colorWithWhite:0.985 alpha:0.98];
+    }
+
+    // Stable high-contrast foreground for the brighter Light glass profile.
+    return [UIColor colorWithWhite:0.075 alpha:0.96];
+}
+
+static BOOL B3MColorLooksDestructive(UIColor *color, UITraitCollection *traits)
+{
+    if (!color) return NO;
+
+    UIColor *resolved = color;
+
+    if ([color respondsToSelector:@selector(resolvedColorWithTraitCollection:)]) {
+        resolved = [color resolvedColorWithTraitCollection:traits];
+    }
+
+    CGFloat r = 0.0, g = 0.0, b = 0.0, alpha = 0.0;
+
+    if (![resolved getRed:&r green:&g blue:&b alpha:&alpha]) {
+        return NO;
+    }
+
+    return (r > 0.65 && r > (g * 1.45) && r > (b * 1.25));
+}
+
+@interface B3MMenuBackdropSampleView : UIView
 @end
 
-@implementation GFPanelBackdropSampleView
+@implementation B3MMenuBackdropSampleView
 
-+ (Class)layerClass {
++ (Class)layerClass
+{
     Class backdropClass =
         NSClassFromString(@"CABackdropLayer");
 
-    return backdropClass ?: [CALayer class];
+    return backdropClass ?: CALayer.class;
 }
 
 @end
 
 
-@interface GFPanelGlassView : UIView
-@property (nonatomic, strong) GFPanelBackdropSampleView *gfBackdropSampleView;
-@property (nonatomic, strong) UIView *gfTintView;
-@property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
-@property (nonatomic, strong) CALayer *gfOpticalLayer;
-@property (nonatomic, assign) CGFloat gfStrength;
-@property (nonatomic, assign) NSInteger gfStyle;
-@property (nonatomic, assign) CGFloat gfPreferredRadius;
-@property (nonatomic, assign) CGSize gfLightingSize;
-@property (nonatomic, assign) CGFloat gfLightingRadius;
-@property (nonatomic, assign) BOOL gfLastDarkAppearance;
-@property (nonatomic, assign) BOOL gfHasAppearance;
-@property (nonatomic, assign) CGFloat gfBackdropOverscan;
-- (instancetype)initWithStyle:(NSInteger)style
-                     strength:(CGFloat)strength;
-- (void)setPreferredRadius:(CGFloat)radius;
-- (void)gfRefreshMaterial;
+@interface B3MMenuGlassView : UIView
+@property (nonatomic, strong) B3MMenuBackdropSampleView *b3mBackdropSampleView;
+@property (nonatomic, strong) UIView *b3mTintView;
+@property (nonatomic, strong) UIVisualEffectView *b3mFallbackBlurView;
+@property (nonatomic, strong) CALayer *b3mOpticalLayer;
+@property (nonatomic, assign) CGFloat b3mStrength;
+@property (nonatomic, assign) CGFloat b3mPreferredRadius;
+@property (nonatomic, assign) CGFloat b3mBackdropOverscan;
+@property (nonatomic, assign) CGSize b3mLightingSize;
+@property (nonatomic, assign) CGFloat b3mLightingRadius;
+@property (nonatomic, assign) BOOL b3mLastDarkAppearance;
+@property (nonatomic, assign) BOOL b3mHasAppearance;
+- (void)b3mRefreshMaterial;
 @end
 
+@implementation B3MMenuGlassView
 
-@implementation GFPanelGlassView
-
-- (instancetype)initWithStyle:(NSInteger)style
-                     strength:(CGFloat)strength {
-    self = [super initWithFrame:CGRectZero];
+- (instancetype)initWithFrame:(CGRect)frame
+{
+    self = [super initWithFrame:frame];
 
     if (self) {
-        _gfStyle = (style == 1) ? 1 : 0;
-        _gfStrength =
-            MIN(1.0, MAX(0.0, strength));
+        /*
+         * Keep the accepted 72% menu strength. GlassFolders' response curves
+         * and optical geometry are now applied at this strength.
+         */
+        _b3mStrength = 0.72;
+        _b3mPreferredRadius = 0.0;
+        _b3mBackdropOverscan = 30.0;
+        _b3mLightingSize = CGSizeZero;
+        _b3mLightingRadius = -1.0;
 
         self.backgroundColor = UIColor.clearColor;
         self.userInteractionEnabled = NO;
@@ -3765,206 +1609,171 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         self.layer.allowsEdgeAntialiasing = YES;
 
         /*
-         * Sample beyond the final rounded mask.  Blurring a backdrop whose
-         * sample bounds end exactly at the rounded rect causes the blur kernel
-         * to clamp at the top-left / lower-right arc and creates the visible
-         * seam the screenshots showed.  The parent clips only after filtering.
+         * GlassFolders-Test3 samples the backdrop in a dedicated overscanned
+         * CABackdropLayer child. This avoids Gaussian corner seams that occur
+         * when the sample bounds end exactly at the rounded mask.
          */
-        _gfBackdropOverscan = 30.0;
-        _gfBackdropSampleView =
-            [[GFPanelBackdropSampleView alloc] initWithFrame:CGRectZero];
-        _gfBackdropSampleView.userInteractionEnabled = NO;
-        _gfBackdropSampleView.backgroundColor = UIColor.clearColor;
-        _gfBackdropSampleView.clipsToBounds = NO;
-        _gfBackdropSampleView.layer.masksToBounds = NO;
-        [self addSubview:_gfBackdropSampleView];
+        _b3mBackdropSampleView =
+            [[B3MMenuBackdropSampleView alloc]
+                initWithFrame:CGRectZero];
+
+        _b3mBackdropSampleView.userInteractionEnabled = NO;
+        _b3mBackdropSampleView.backgroundColor = UIColor.clearColor;
+        _b3mBackdropSampleView.clipsToBounds = NO;
+        _b3mBackdropSampleView.layer.masksToBounds = NO;
+
+        [self addSubview:_b3mBackdropSampleView];
+
+        _b3mTintView =
+            [[UIView alloc]
+                initWithFrame:CGRectZero];
+
+        _b3mTintView.userInteractionEnabled = NO;
+        _b3mTintView.backgroundColor = UIColor.clearColor;
+
+        [self addSubview:_b3mTintView];
 
         /*
-         * Intentionally colorless.  All hue comes from the wallpaper/backdrop.
-         * Keep the view only so older code paths can address it safely.
+         * True GlassFolders optical layer: a cached SDF-generated lighting
+         * texture, not a gradient or a simple CALayer border.
          */
-        _gfTintView =
-            [[UIView alloc] initWithFrame:CGRectZero];
-
-        _gfTintView.userInteractionEnabled = NO;
-        _gfTintView.backgroundColor = UIColor.clearColor;
-        _gfTintView.alpha = 0.0;
-
-        [self addSubview:_gfTintView];
-
-        _gfOpticalLayer =
+        _b3mOpticalLayer =
             [CALayer layer];
 
-        _gfOpticalLayer.contentsGravity =
+        _b3mOpticalLayer.contentsGravity =
             kCAGravityResize;
 
-        _gfOpticalLayer.magnificationFilter =
+        _b3mOpticalLayer.magnificationFilter =
             kCAFilterLinear;
 
-        _gfOpticalLayer.minificationFilter =
+        _b3mOpticalLayer.minificationFilter =
             kCAFilterLinear;
 
-        _gfOpticalLayer.opaque = NO;
-        _gfOpticalLayer.zPosition = 20.0;
+        _b3mOpticalLayer.opaque = NO;
+        _b3mOpticalLayer.zPosition = 20.0;
 
-        [self.layer addSublayer:_gfOpticalLayer];
+        [self.layer addSublayer:_b3mOpticalLayer];
 
-        [self gfRefreshMaterial];
+        [self b3mRefreshMaterial];
     }
 
     return self;
 }
 
-- (void)setPreferredRadius:(CGFloat)radius {
-    CGFloat safeRadius = MAX(0.0, radius);
-
-    if (fabs(self.gfPreferredRadius - safeRadius) > 0.25) {
-        self.gfPreferredRadius = safeRadius;
-        [self setNeedsLayout];
-    }
-}
-
-- (void)gfRefreshMaterial {
+- (void)b3mRefreshMaterial
+{
     BOOL darkAppearance =
-        GFUsesDarkAppearance(self);
+        B3MUsesDarkAppearance(self);
 
-    self.gfLastDarkAppearance =
+    self.b3mLastDarkAppearance =
         darkAppearance;
 
-    self.gfHasAppearance = YES;
+    self.b3mHasAppearance =
+        YES;
 
     CGFloat materialResponse =
-        GFMaterialResponse(self.gfStrength);
+        B3MMaterialResponse(
+            self.b3mStrength
+        );
 
     CGFloat tintResponse =
-        GFTintResponse(self.gfStrength);
+        B3MTintResponse(
+            self.b3mStrength
+        );
 
-    CGFloat clearBlurResponse =
-        GFClearOpenedBlurResponse(self.gfStrength);
-
-    CGFloat clearStructure =
-        GFClearStructureResponse(self.gfStrength);
-
-    BOOL clearStyle =
-        (self.gfStyle == 0);
-
-    BOOL materialRequested =
-        clearStyle || (self.gfStrength > 0.001);
+    CGFloat edgeResponse =
+        B3MEdgeResponse(
+            self.b3mStrength
+        );
 
     CALayer *materialLayer =
-        self.gfBackdropSampleView.layer;
+        self.b3mBackdropSampleView.layer;
 
     BOOL isBackdropLayer =
         [NSStringFromClass(materialLayer.class)
             containsString:@"Backdrop"];
 
-    if (materialRequested &&
-        isBackdropLayer) {
-
+    if (isBackdropLayer) {
         /*
-         * Style-specific opened material. Chroma always comes from
-         * the wallpaper/backdrop. A neutral brightness adjustment is allowed
-         * for Liquid Glass in dark appearance so a large blur kernel does not
-         * collapse the panel into black; no purple/blue/pink tint is added.
+         * Keep the menu's currently accepted Light/Dark body calibration.
+         * Only the sampling architecture and true optical layer are imported
+         * from GlassFolders here, so readability does not regress.
          */
-        CGFloat blurRadius;
-        CGFloat saturation;
-        CGFloat brightness;
-        CGFloat sampleAlpha;
+        CGFloat blurRadius =
+            darkAppearance
+                ? (
+                    4.6 +
+                    4.8 *
+                    materialResponse
+                )
+                : (
+                    4.2 +
+                    3.6 *
+                    materialResponse
+                );
 
-        if (self.gfStyle == 0) {
-            /*
-             * Clear reference target: a THIN wallpaper-owned material.
-             *
-             * Beta3.1 keeps the wide local Gaussian curve unchanged, but no
-             * longer gates Clear's clean/transmitted look behind the strength
-             * slider. 0% already uses the Clear optical baseline; strength adds
-             * blur, chroma separation and edge structure.
-             *
-             * At the 55% baseline the local blur is ~20.1 pt in both appearances;
-             * at 100% it reaches 40 pt.  Clear is intentionally NOT constrained
-             * to a numerically smaller radius than Liquid Glass: the two styles
-             * are separated by tint/lift/specular behavior, not by blur radius
-             * alone.  Color still comes only from the wallpaper backdrop.
-             */
-            /*
-             * Clear strength is now calibrated against the *already blurred*
-             * SpringBoard background. Use the same blur curve in light/dark
-             * appearance so the slider has one predictable meaning; only the
-             * neutral optical compensation differs by appearance.
-             */
-            /*
-             * Light Clear is calibrated against Apple's brighter Clear
-             * references. SpringBoard already applies a full-screen blur, so
-             * another 40 pt locally over-averages wallpaper chroma and reads
-             * as grey/frosted. Keep the accepted dark-mode ceiling unchanged,
-             * but let light Clear top out at 28 pt so color shapes still pass
-             * through the folder body.
-             */
-            blurRadius = darkAppearance
-                ? (40.0 * clearBlurResponse)
-                : (28.0 * clearBlurResponse);
+        CGFloat saturation =
+            darkAppearance
+                ? (
+                    1.070 +
+                    0.120 *
+                    materialResponse
+                )
+                : (
+                    0.900 +
+                    0.080 *
+                    materialResponse
+                );
 
-            /*
-             * High-transmission Clear contract:
-             *
-             * - luminance starts high instead of ramping from a dull host blur;
-             * - light mode restores wallpaper chroma more aggressively;
-             * - brightness is supplied by the backdrop filter, not a milky
-             *   white overlay;
-             * - sample opacity stays essentially full so the real wallpaper
-             *   remains the source of the glass body color.
-             */
-            saturation = darkAppearance
-                ? (1.080 + 0.065 * clearStructure)
-                : (1.120 + 0.120 * clearStructure);
+        CGFloat brightness =
+            darkAppearance
+                ? (
+                    0.015 +
+                    0.025 *
+                    materialResponse
+                )
+                : (
+                    0.050 +
+                    0.040 *
+                    materialResponse
+                );
 
-            brightness = darkAppearance
-                ? (0.048 + 0.006 * clearStructure)
-                : (0.075 + 0.035 * clearStructure);
+        CGFloat sampleAlpha =
+            darkAppearance
+                ? (
+                    0.90 +
+                    0.08 *
+                    materialResponse
+                )
+                : (
+                    0.985 +
+                    0.015 *
+                    materialResponse
+                );
 
-            sampleAlpha = darkAppearance
-                ? (0.992 + 0.006 * clearStructure)
-                : (0.995 + 0.005 * clearStructure);
-        } else {
-            /*
-             * Liquid Glass: a thicker but not blackened backdrop.
-             * The old ~9-10 pt dark-mode kernel smeared bright wallpaper
-             * islands into a mostly black body. A slightly smaller kernel,
-             * modest saturation recovery and a neutral brightness lift keep
-             * the material visibly glassy without adding a hue tint.
-             */
-            blurRadius = darkAppearance
-                ? (4.6 + 4.8 * materialResponse)
-                : (2.6 + 2.8 * materialResponse);
+        self.b3mBackdropSampleView.alpha =
+            B3MClamp01(sampleAlpha);
 
-            saturation = darkAppearance
-                ? (1.070 + 0.120 * materialResponse)
-                : (1.110 + 0.220 * materialResponse);
-
-            brightness = darkAppearance
-                ? (0.015 + 0.025 * materialResponse)
-                : (0.026 + 0.030 * materialResponse);
-
-            sampleAlpha = darkAppearance
-                ? (0.90 + 0.08 * materialResponse)
-                : (0.975 + 0.025 * materialResponse);
-        }
-
-        self.gfBackdropSampleView.alpha =
-            GFClamp01(sampleAlpha);
-
-        self.gfBackdropOverscan =
-            MAX(30.0, blurRadius * 2.75 + 4.0);
+        self.b3mBackdropOverscan =
+            MAX(
+                30.0,
+                blurRadius * 2.75 + 4.0
+            );
 
         id saturate =
-            GFCreateCAFilter(@"colorSaturate");
+            B3MCreateCAFilter(
+                @"colorSaturate"
+            );
 
         id brighten =
-            GFCreateCAFilter(@"colorBrightness");
+            B3MCreateCAFilter(
+                @"colorBrightness"
+            );
 
         id blur =
-            GFCreateCAFilter(@"gaussianBlur");
+            B3MCreateCAFilter(
+                @"gaussianBlur"
+            );
 
         NSMutableArray *filters =
             [NSMutableArray array];
@@ -3974,18 +1783,24 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 setValue:@(saturation)
                   forKey:@"inputAmount"];
 
-            [filters addObject:saturate];
+            [filters
+                addObject:saturate];
         }
 
-        if (brighten && fabs(brightness) > 0.0001) {
+        if (brighten &&
+            fabs(brightness) > 0.0001) {
+
             [brighten
                 setValue:@(brightness)
                   forKey:@"inputAmount"];
 
-            [filters addObject:brighten];
+            [filters
+                addObject:brighten];
         }
 
-        if (blur && blurRadius > 0.001) {
+        if (blur &&
+            blurRadius > 0.001) {
+
             [blur
                 setValue:@(blurRadius)
                   forKey:@"inputRadius"];
@@ -3995,11 +1810,11 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                   forKey:@"inputNormalizeEdges"];
 
             /*
-             * Do not request hard edges: overscan provides real neighbouring
-             * backdrop pixels, so clamping the Gaussian kernel would recreate
-             * the very corner seam we are eliminating.
+             * No hard edge. The overscanned backdrop supplies real pixels
+             * beyond the final rounded clip, exactly as GlassFolders-Test3.
              */
-            [filters addObject:blur];
+            [filters
+                addObject:blur];
         }
 
         [materialLayer
@@ -4010,150 +1825,129 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             setValue:@1.0
               forKey:@"scale"];
 
-        /*
-         * Both styles use the real wallpaper-owned backdrop. Clear simply
-         * uses a much shallower/less dominant sample than Liquid Glass.
-         */
-        self.gfBackdropSampleView.hidden = NO;
+        self.b3mBackdropSampleView.hidden =
+            NO;
 
-        if (self.gfFallbackBlurView) {
-            [self.gfFallbackBlurView
+        if (self.b3mFallbackBlurView) {
+            [self.b3mFallbackBlurView
                 removeFromSuperview];
 
-            self.gfFallbackBlurView = nil;
+            self.b3mFallbackBlurView =
+                nil;
         }
-    } else if (materialRequested) {
-        self.gfBackdropSampleView.hidden = YES;
+    } else {
+        self.b3mBackdropSampleView.hidden =
+            YES;
 
-        if (!self.gfFallbackBlurView) {
-            UIBlurEffectStyle effectStyle =
-                (self.gfStyle == 0)
-                    ? UIBlurEffectStyleSystemUltraThinMaterial
-                    : UIBlurEffectStyleSystemThinMaterial;
-
+        if (!self.b3mFallbackBlurView) {
             UIBlurEffect *effect =
-                [UIBlurEffect effectWithStyle:effectStyle];
+                [UIBlurEffect
+                    effectWithStyle:
+                        UIBlurEffectStyleSystemThinMaterial];
 
-            self.gfFallbackBlurView =
+            self.b3mFallbackBlurView =
                 [[UIVisualEffectView alloc]
                     initWithEffect:effect];
 
-            self.gfFallbackBlurView.userInteractionEnabled =
+            self.b3mFallbackBlurView.userInteractionEnabled =
                 NO;
 
-            [self insertSubview:self.gfFallbackBlurView
-                   aboveSubview:self.gfBackdropSampleView];
+            [self
+                insertSubview:self.b3mFallbackBlurView
+                 aboveSubview:self.b3mBackdropSampleView];
         }
 
-        if (self.gfStyle == 0) {
-            /*
-             * Fallback Clear remains intentionally light. UltraThinMaterial is
-             * used only when CABackdropLayer is unavailable, and at a low alpha
-             * so it cannot become a milky system material card.
-             */
-            self.gfFallbackBlurView.alpha = darkAppearance
-                ? (0.20 + 0.10 * clearStructure)
-                : (0.12 + 0.06 * clearStructure);
-        } else {
-            self.gfFallbackBlurView.alpha = darkAppearance
-                ? MIN(0.48, 0.20 + 0.30 * materialResponse)
-                : MIN(0.28, 0.10 + 0.18 * materialResponse);
-        }
+        self.b3mFallbackBlurView.alpha =
+            darkAppearance
+                ? MIN(
+                    0.48,
+                    0.20 +
+                    0.30 *
+                    materialResponse
+                )
+                : MIN(
+                    0.28,
+                    0.10 +
+                    0.18 *
+                    materialResponse
+                );
     }
 
     /*
-     * No chromatic body tint: purple/blue/pink always comes from wallpaper.
-     *
-     * Apple's "Clear" appearance still has a very small neutral-white
-     * transmission/specular lift.  That is optical luminance, not a hue.
-     * Keep it deliberately weak so a green/orange wallpaper stays green/orange.
-     * Liquid Glass keeps the body colorless; its stronger white energy lives
-     * in the specular rail image instead.
+     * Preserve the current accepted menu body tint. The Liquid Glass optical
+     * texture itself is neutral-white/black and introduces no hue.
      */
-    self.gfTintView.backgroundColor = UIColor.whiteColor;
+    self.b3mTintView.backgroundColor =
+        B3MGlassBodyTintColor(self);
 
-    if (self.gfStyle == 0) {
-        /*
-         * Clear transmission is a mode baseline, not a strength ramp.  Start
-         * close to the previous high-strength white-light compensation and
-         * only add a few tenths of a percent as structure rises.
-         */
-        CGFloat neutralLift = darkAppearance
-            ? (0.050 + 0.004 * clearStructure)
-            : (0.022 + 0.006 * clearStructure);
+    CGFloat iconTintAlpha =
+        darkAppearance
+            ? (
+                0.045 +
+                0.075 *
+                tintResponse
+            )
+            : (
+                0.085 +
+                0.055 *
+                tintResponse
+            );
 
-        self.gfTintView.alpha =
-            MIN(darkAppearance ? 0.054 : 0.028, neutralLift);
-    } else if (self.gfStrength > 0.001) {
-        /*
-         * Liquid Glass keeps the Beta2.8 composite-strength behavior.
-         */
-        CGFloat neutralLift = darkAppearance
-            ? (0.030 + 0.050 * tintResponse) * self.gfStrength
-            : (0.002 + 0.006 * tintResponse) * self.gfStrength;
-
-        self.gfTintView.alpha =
-            MIN(darkAppearance ? 0.055 : 0.008, neutralLift);
-    } else {
-        self.gfTintView.alpha = 0.0;
-    }
+    self.b3mTintView.alpha =
+        MIN(
+            darkAppearance
+                ? 0.105
+                : 0.125,
+            iconTintAlpha
+        );
 
     /*
-     * Both styles keep the fixed continuous rail GEOMETRY, but Clear uses a
-     * separately rendered broad/soft optical texture. Dark mode gets more
-     * neutral-white definition; light mode is intentionally quieter.
+     * GlassFolders-Test3 continuity floor. The visible directional reflection
+     * now comes from b3mOpticalLayer; this border only seals tiny tangent gaps
+     * between the analytic SDF texture and kCACornerCurveContinuous clipping.
      */
-    if (self.gfStyle == 0) {
-        self.gfOpticalLayer.opacity = darkAppearance
-            ? (0.72 + 0.14 * clearStructure)
-            : (0.70 + 0.20 * clearStructure);
-    } else {
-        self.gfOpticalLayer.opacity = darkAppearance
-            ? 1.0
-            : 1.0;
-    }
+    CGFloat continuityAlpha =
+        darkAppearance
+            ? (
+                0.025 +
+                0.040 *
+                edgeResponse
+            )
+            : (
+                0.006 +
+                0.010 *
+                edgeResponse
+            );
 
-    /*
-     * Beta 2.1 continuity floor. CALayer draws this border with the SAME
-     * kCACornerCurveContinuous geometry that clips the panel, so it cannot
-     * develop the tiny TL<->top or BR<->bottom tangent gap seen in the
-     * hand-rasterized rail. It is intentionally faint; the directional
-     * optical texture still provides the visible white highlight.
-     */
-    CGFloat continuityEdge = GFEdgeResponse(self.gfStrength);
-    CGFloat continuityAlpha;
-
-    if (self.gfStyle == 0) {
-        continuityAlpha = darkAppearance
-            ? (0.030 + 0.022 * clearStructure)
-            : (0.032 + 0.026 * clearStructure);
-        self.layer.borderWidth = 0.45;
-    } else {
-        continuityAlpha = darkAppearance
-            ? (0.025 + 0.040 * continuityEdge)
-            : (0.006 + 0.010 * continuityEdge);
-        self.layer.borderWidth =
-            (self.gfStrength > 0.001)
-                ? (darkAppearance ? 0.42 : 0.34)
-                : 0.0;
-    }
+    self.layer.borderWidth =
+        darkAppearance
+            ? 0.42
+            : 0.34;
 
     self.layer.borderColor =
-        [UIColor colorWithWhite:1.0
-                          alpha:GFClamp01(continuityAlpha)].CGColor;
+        [UIColor
+            colorWithWhite:1.0
+                      alpha:
+                        B3MClamp01(
+                            continuityAlpha
+                        )].CGColor;
+
+    self.b3mOpticalLayer.opacity =
+        1.0;
 
     /*
-     * Force the optical texture to be regenerated when light/dark mode
-     * changes even if the panel dimensions are unchanged.
+     * Appearance changes alter the rail gains. Force regeneration even if the
+     * menu keeps the same dimensions.
      */
-    self.gfOpticalLayer.contents = nil;
+    self.b3mOpticalLayer.contents =
+        nil;
 
     [self setNeedsLayout];
 }
 
 - (void)traitCollectionDidChange:
-    (UITraitCollection *)previousTraitCollection {
-
+    (UITraitCollection *)previousTraitCollection
+{
     [super
         traitCollectionDidChange:
             previousTraitCollection];
@@ -4167,37 +1961,41 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         self.traitCollection.userInterfaceStyle;
 
     if (previousStyle != currentStyle) {
-        [self gfRefreshMaterial];
+        [self b3mRefreshMaterial];
     }
 }
 
-- (void)layoutSubviews {
+- (void)layoutSubviews
+{
     [super layoutSubviews];
 
     CGFloat overscan =
-        MAX(24.0, self.gfBackdropOverscan);
+        MAX(
+            24.0,
+            self.b3mBackdropOverscan
+        );
 
     CGRect sampleFrame =
-        CGRectInset(self.bounds, -overscan, -overscan);
+        CGRectInset(
+            self.bounds,
+            -overscan,
+            -overscan
+        );
 
-    self.gfBackdropSampleView.frame =
+    self.b3mBackdropSampleView.frame =
         sampleFrame;
 
-    self.gfFallbackBlurView.frame =
+    self.b3mFallbackBlurView.frame =
         sampleFrame;
 
-    self.gfTintView.frame =
+    self.b3mTintView.frame =
         self.bounds;
 
     CGFloat radius =
-        self.gfPreferredRadius;
+        self.b3mPreferredRadius;
 
-    /*
-     * SBFolderBackgroundView normally already has the actual system radius.
-     * 38 pt is used only if the host has not exposed one yet.
-     */
     if (radius <= 0.0) {
-        radius = 38.0;
+        radius = 14.0;
     }
 
     CGFloat maxRadius =
@@ -4209,22 +2007,25 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     radius =
         MIN(radius, maxRadius);
 
-    self.layer.cornerRadius = radius;
+    self.layer.cornerRadius =
+        radius;
+
     self.layer.cornerCurve =
         kCACornerCurveContinuous;
 
-    self.gfOpticalLayer.frame =
+    self.b3mOpticalLayer.frame =
         self.bounds;
 
     BOOL darkAppearance =
-        GFUsesDarkAppearance(self);
+        B3MUsesDarkAppearance(self);
 
     BOOL appearanceChanged =
-        !self.gfHasAppearance ||
-        self.gfLastDarkAppearance != darkAppearance;
+        !self.b3mHasAppearance ||
+        self.b3mLastDarkAppearance !=
+            darkAppearance;
 
     if (appearanceChanged) {
-        [self gfRefreshMaterial];
+        [self b3mRefreshMaterial];
         return;
     }
 
@@ -4233,410 +2034,1247 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
     BOOL sizeChanged =
         fabs(
-            self.gfLightingSize.width -
+            self.b3mLightingSize.width -
             currentSize.width
         ) > 0.75 ||
         fabs(
-            self.gfLightingSize.height -
+            self.b3mLightingSize.height -
             currentSize.height
         ) > 0.75;
 
     BOOL radiusChanged =
         fabs(
-            self.gfLightingRadius -
+            self.b3mLightingRadius -
             radius
         ) > 0.35;
 
-    if (self.gfOpticalLayer.contents == nil ||
+    if (self.b3mOpticalLayer.contents == nil ||
         sizeChanged ||
         radiusChanged) {
 
         UIImage *lighting =
-            GFCreateOpenedPanelLightingImage(
+            B3MCreateMenuOpticalLightingImage(
                 currentSize,
                 radius,
-                self.gfStrength,
-                self.gfStyle,
+                self.b3mStrength,
                 darkAppearance
             );
 
-        self.gfOpticalLayer.contents =
+        self.b3mOpticalLayer.contents =
             lighting
                 ? (id)lighting.CGImage
                 : nil;
 
-        self.gfOpticalLayer.contentsScale =
+        self.b3mOpticalLayer.contentsScale =
             lighting
                 ? lighting.scale
                 : UIScreen.mainScreen.scale;
 
-        self.gfLightingSize =
+        self.b3mLightingSize =
             currentSize;
 
-        self.gfLightingRadius =
+        self.b3mLightingRadius =
             radius;
     }
 }
 
 @end
 
-
-/*
- * Per-instance storage. No global array and no polling.
- */
-static char kGFPanelGlassAssociationKey;
-static char kGFStockSubviewWasHiddenKey;
-static char kGFStockSubviewOriginalHiddenKey;
-
-
-static inline BOOL GFShouldUseOpenedPanel(void) {
-    /*
-     * Both selectable styles own the opened panel. Clear at 0% still uses the
-     * high-transmission Clear baseline; only its added blur/structure is zero.
-     */
-    return GFEnabled && (GFStyle == 0 || GFStyle == 1);
-}
-
-
-
-
-static GFPanelGlassView *GFPanelGlassForBackground(
-    UIView *backgroundView
-) {
-    return (GFPanelGlassView *)
-        objc_getAssociatedObject(
-            backgroundView,
-            &kGFPanelGlassAssociationKey
-        );
-}
-
-
-static void GFSetPanelGlassForBackground(
+static B3MMenuGlassView *B3MGlassMaterialForBackgroundView(
     UIView *backgroundView,
-    GFPanelGlassView *glass
-) {
-    objc_setAssociatedObject(
-        backgroundView,
-        &kGFPanelGlassAssociationKey,
-        glass,
-        OBJC_ASSOCIATION_RETAIN_NONATOMIC
-    );
-}
+    BOOL create)
+{
+    if (!backgroundView) return nil;
 
+    B3MMenuGlassView *material =
+        objc_getAssociatedObject(backgroundView, &kB3MGlassMaterialKey);
 
-/*
- * Preserve the stock material objects and their lifecycle; only visibility
- * is suppressed. This is intentionally safer than deleting or recursively
- * rewriting SpringBoard's private view tree.
- */
-static void GFSetStockPanelSubviewSuppressed(
-    UIView *subview,
-    BOOL suppressed
-) {
-    if (!subview ||
-        [subview isKindOfClass:
-            [GFPanelGlassView class]]) {
-        return;
+    if (!material && create) {
+        material =
+            [[B3MMenuGlassView alloc] initWithFrame:backgroundView.bounds];
+
+        material.autoresizingMask =
+            UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+
+        /*
+         * _UIElasticContextMenuBackgroundView is background-only. Add the
+         * material as its top background child; menu labels/icons live in the
+         * separate _UIContextMenuView hierarchy.
+         */
+        [backgroundView addSubview:material];
+
+        objc_setAssociatedObject(
+            backgroundView,
+            &kB3MGlassMaterialKey,
+            material,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
     }
 
-    NSNumber *wasHiddenMarker =
-        objc_getAssociatedObject(
-            subview,
-            &kGFStockSubviewWasHiddenKey
-        );
+    return material;
+}
+
+
+static void B3MSetStockBackgroundSubviewSuppressed(UIView *subview, BOOL suppressed)
+{
+    if (!subview || [subview isKindOfClass:B3MMenuGlassView.class]) return;
+
+    NSNumber *marker = objc_getAssociatedObject(subview, &kB3MStockSubviewWasHiddenKey);
 
     if (suppressed) {
-        if (!wasHiddenMarker) {
-            objc_setAssociatedObject(
-                subview,
-                &kGFStockSubviewOriginalHiddenKey,
-                @(subview.hidden),
-                OBJC_ASSOCIATION_RETAIN_NONATOMIC
-            );
-
-            objc_setAssociatedObject(
-                subview,
-                &kGFStockSubviewWasHiddenKey,
-                @YES,
-                OBJC_ASSOCIATION_RETAIN_NONATOMIC
-            );
+        if (![marker boolValue]) {
+            objc_setAssociatedObject(subview, &kB3MStockSubviewOriginalHiddenKey, @(subview.hidden), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(subview, &kB3MStockSubviewWasHiddenKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
-
         subview.hidden = YES;
-    } else if (wasHiddenMarker) {
-        NSNumber *originalHidden =
-            objc_getAssociatedObject(
-                subview,
-                &kGFStockSubviewOriginalHiddenKey
-            );
-
-        subview.hidden =
-            originalHidden
-                ? originalHidden.boolValue
-                : NO;
-
-        objc_setAssociatedObject(
-            subview,
-            &kGFStockSubviewWasHiddenKey,
-            nil,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
-        );
-
-        objc_setAssociatedObject(
-            subview,
-            &kGFStockSubviewOriginalHiddenKey,
-            nil,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
-        );
+    } else if ([marker boolValue]) {
+        NSNumber *originalHidden = objc_getAssociatedObject(subview, &kB3MStockSubviewOriginalHiddenKey);
+        subview.hidden = originalHidden ? originalHidden.boolValue : NO;
+        objc_setAssociatedObject(subview, &kB3MStockSubviewWasHiddenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(subview, &kB3MStockSubviewOriginalHiddenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 }
 
+static void B3MApplyGlassBackground(UIView *backgroundView)
+{
+    if (!backgroundView) return;
 
-static void GFUpdateOpenedFolderBackground(
-    UIView *backgroundView
-) {
-    if (!backgroundView) {
+    B3MMenuGlassView *material = B3MGlassMaterialForBackgroundView(backgroundView, NO);
+
+    if (!gB3MGlassMenuTint) {
+        if (material) {
+            [material removeFromSuperview];
+            objc_setAssociatedObject(backgroundView, &kB3MGlassMaterialKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        for (UIView *subview in backgroundView.subviews) {
+            B3MSetStockBackgroundSubviewSuppressed(subview, NO);
+        }
         return;
     }
 
-    GFPanelGlassView *glass =
-        GFPanelGlassForBackground(
-            backgroundView
+    /*
+     * GlassFolders' important takeover step: keep Apple's private material
+     * objects alive but hide their visual output. Without this, our glass sits
+     * underneath the stock Context Menu material and looks almost unchanged.
+     */
+    backgroundView.backgroundColor = UIColor.clearColor;
+
+    for (UIView *subview in backgroundView.subviews) {
+        if (subview != material) {
+            B3MSetStockBackgroundSubviewSuppressed(subview, YES);
+        }
+    }
+
+    if (!material) {
+        material = B3MGlassMaterialForBackgroundView(backgroundView, YES);
+    } else if (material.superview != backgroundView) {
+        [material removeFromSuperview];
+        [backgroundView addSubview:material];
+    }
+
+    material.frame = backgroundView.bounds;
+    CGFloat radius = backgroundView.layer.cornerRadius;
+    if (radius <= 0.0) radius = 14.0;
+    material.b3mPreferredRadius = radius;
+    [material b3mRefreshMaterial];
+    [backgroundView bringSubviewToFront:material];
+}
+
+static void B3MApplyGlassTextRecursively(UIView *view)
+{
+    if (!view) return;
+
+    if ([view isKindOfClass:UILabel.class]) {
+        UILabel *label = (UILabel *)view;
+
+        NSNumber *captured =
+            objc_getAssociatedObject(label, &kB3MTextCapturedKey);
+
+        id oldStored =
+            objc_getAssociatedObject(label, &kB3MTextColorKey);
+
+        UIColor *originalColor = nil;
+
+        if ([captured boolValue]) {
+            originalColor =
+                (oldStored == [NSNull null]) ? nil : (UIColor *)oldStored;
+        } else {
+            originalColor = label.textColor;
+        }
+
+        if (gB3MGlassTextTint) {
+            if (B3MColorLooksDestructive(originalColor, label.traitCollection)) {
+                if ([captured boolValue]) {
+                    label.textColor = originalColor;
+
+                    objc_setAssociatedObject(
+                        label,
+                        &kB3MTextCapturedKey,
+                        nil,
+                        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                    );
+
+                    objc_setAssociatedObject(
+                        label,
+                        &kB3MTextColorKey,
+                        nil,
+                        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                    );
+                }
+            } else {
+                if (![captured boolValue]) {
+                    objc_setAssociatedObject(
+                        label,
+                        &kB3MTextColorKey,
+                        originalColor ?: (id)[NSNull null],
+                        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                    );
+
+                    objc_setAssociatedObject(
+                        label,
+                        &kB3MTextCapturedKey,
+                        @YES,
+                        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                    );
+                }
+
+                label.textColor = B3MGlassTextColorForView(label);
+            }
+        } else if ([captured boolValue]) {
+            label.textColor = originalColor;
+
+            objc_setAssociatedObject(
+                label,
+                &kB3MTextCapturedKey,
+                nil,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+
+            objc_setAssociatedObject(
+                label,
+                &kB3MTextColorKey,
+                nil,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+        }
+    }
+
+    for (UIView *subview in view.subviews) {
+        B3MApplyGlassTextRecursively(subview);
+    }
+}
+
+static BOOL B3MActionIdentifierLooksLikeShareApp(NSString *identifier)
+{
+    if (identifier.length == 0) return NO;
+
+    NSString *lower = identifier.lowercaseString;
+
+    if ([lower isEqualToString:@"com.apple.springboard.application-shortcut-item.share"] ||
+        [lower isEqualToString:@"com.apple.springboardhome.application-shortcut-item.share"]) {
+        return YES;
+    }
+
+    BOOL springBoardOwned = ([lower rangeOfString:@"springboard"].location != NSNotFound);
+    BOOL shortcutItem = ([lower rangeOfString:@"application-shortcut-item"].location != NSNotFound);
+    BOOL share = ([lower hasSuffix:@".share"] ||
+                  [lower rangeOfString:@".share-"].location != NSNotFound);
+
+    return springBoardOwned && shortcutItem && share;
+}
+
+static NSString *B3MNormalizeMenuTitle(NSString *title)
+{
+    if (title.length == 0) return @"";
+
+    NSString *normalized = [title lowercaseString];
+    normalized = [normalized stringByReplacingOccurrencesOfString:@" " withString:@""];
+    normalized = [normalized stringByReplacingOccurrencesOfString:@"\u00a0" withString:@""];
+    normalized = [normalized stringByReplacingOccurrencesOfString:@"\t" withString:@""];
+    normalized = [normalized stringByReplacingOccurrencesOfString:@"\n" withString:@""];
+
+    return normalized;
+}
+
+static BOOL B3MTitleLooksLikeShareApp(NSString *title)
+{
+    NSString *normalized = B3MNormalizeMenuTitle(title);
+    if (normalized.length == 0) return NO;
+
+    static NSSet<NSString *> *knownTitles;
+    static dispatch_once_t onceToken;
+
+    dispatch_once(&onceToken, ^{
+        knownTitles = [NSSet setWithArray:@[
+            @"shareapp",
+            @"分享app",
+            @"共享app",
+            @"分享应用",
+            @"共享应用"
+        ]];
+    });
+
+    return [knownTitles containsObject:normalized];
+}
+
+static BOOL B3MIsShareAppElement(UIMenuElement *element)
+{
+    if (!gB3MHideShareApp || !element) {
+        return NO;
+    }
+
+    NSString *identifier = nil;
+    NSString *title = nil;
+    id candidate = (id)element;
+
+    if ([candidate respondsToSelector:@selector(identifier)]) {
+        identifier = [candidate identifier];
+    }
+
+    if ([candidate respondsToSelector:@selector(title)]) {
+        title = [candidate title];
+    }
+
+    if (B3MActionIdentifierLooksLikeShareApp(identifier)) {
+        return YES;
+    }
+
+    return B3MTitleLooksLikeShareApp(title);
+}
+
+
+static BOOL B3MActionIdentifierLooksLikeRemoveApp(NSString *identifier)
+{
+    if (identifier.length == 0) return NO;
+
+    NSString *lower = identifier.lowercaseString;
+
+    static NSSet<NSString *> *knownIdentifiers;
+    static dispatch_once_t onceToken;
+
+    dispatch_once(&onceToken, ^{
+        knownIdentifiers = [NSSet setWithArray:@[
+            @"com.apple.springboard.application-shortcut-item.remove",
+            @"com.apple.springboard.application-shortcut-item.remove-app",
+            @"com.apple.springboard.application-shortcut-item.delete",
+            @"com.apple.springboard.application-shortcut-item.delete-app",
+            @"com.apple.springboardhome.application-shortcut-item.remove",
+            @"com.apple.springboardhome.application-shortcut-item.remove-app",
+            @"com.apple.springboardhome.application-shortcut-item.delete",
+            @"com.apple.springboardhome.application-shortcut-item.delete-app"
+        ]];
+    });
+
+    if ([knownIdentifiers containsObject:lower]) {
+        return YES;
+    }
+
+    BOOL springBoardOwned =
+        ([lower rangeOfString:@"springboard"].location != NSNotFound);
+    BOOL shortcutItem =
+        ([lower rangeOfString:@"application-shortcut-item"].location != NSNotFound);
+    BOOL removeOrDelete =
+        ([lower hasSuffix:@".remove"] ||
+         [lower hasSuffix:@".remove-app"] ||
+         [lower hasSuffix:@".delete"] ||
+         [lower hasSuffix:@".delete-app"]);
+
+    return springBoardOwned && shortcutItem && removeOrDelete;
+}
+
+static BOOL B3MTitleLooksLikeRemoveApp(NSString *title)
+{
+    NSString *normalized = B3MNormalizeMenuTitle(title);
+    if (normalized.length == 0) return NO;
+
+    static NSSet<NSString *> *knownTitles;
+    static dispatch_once_t onceToken;
+
+    dispatch_once(&onceToken, ^{
+        knownTitles = [NSSet setWithArray:@[
+            @"removeapp",
+            @"移除app"
+        ]];
+    });
+
+    return [knownTitles containsObject:normalized];
+}
+
+static BOOL B3MIsRemoveAppElement(UIMenuElement *element)
+{
+    if (!gB3MHideRemoveApp || !element) {
+        return NO;
+    }
+
+    NSString *identifier = nil;
+    NSString *title = nil;
+    id candidate = (id)element;
+
+    if ([candidate respondsToSelector:@selector(identifier)]) {
+        identifier = [candidate identifier];
+    }
+
+    if ([candidate respondsToSelector:@selector(title)]) {
+        title = [candidate title];
+    }
+
+    if (B3MActionIdentifierLooksLikeRemoveApp(identifier)) {
+        return YES;
+    }
+
+    return B3MTitleLooksLikeRemoveApp(title);
+}
+
+static __thread BOOL gB3MInsideMenuRewrite = NO;
+
+static NSArray<UIMenuElement *> *B3MFilterMenuElements(NSArray<UIMenuElement *> *children)
+{
+    if ((!gB3MHideShareApp && !gB3MHideRemoveApp && !gB3MHideSectionGap) || children.count == 0) {
+        return children;
+    }
+
+    NSMutableArray<UIMenuElement *> *result =
+        [NSMutableArray arrayWithCapacity:children.count];
+
+    BOOL changed = NO;
+
+    for (UIMenuElement *element in children) {
+        if (B3MIsShareAppElement(element) ||
+            B3MIsRemoveAppElement(element)) {
+            changed = YES;
+            continue;
+        }
+
+        if ([element isKindOfClass:UIMenu.class]) {
+            UIMenu *menu = (UIMenu *)element;
+            NSArray<UIMenuElement *> *originalChildren = menu.children;
+            NSArray<UIMenuElement *> *filteredChildren =
+                B3MFilterMenuElements(originalChildren);
+
+            /*
+             * iOS 16 experimental section-gap removal.
+             *
+             * Untitled UIMenuOptionsDisplayInline menus are commonly used as
+             * visual groups. Flatten only these groups so UIKit no longer
+             * creates the large inter-section gap.
+             *
+             * We deliberately do not touch gesture recognizers, frames,
+             * constraints, or global UIKit views here.
+             */
+            if (gB3MHideSectionGap &&
+                menu.title.length == 0 &&
+                (menu.options & UIMenuOptionsDisplayInline) &&
+                !(menu.options & UIMenuOptionsDestructive)) {
+
+                [result addObjectsFromArray:filteredChildren];
+                changed = YES;
+                continue;
+            }
+
+            if (filteredChildren != originalChildren) {
+                BOOL oldGuard = gB3MInsideMenuRewrite;
+                gB3MInsideMenuRewrite = YES;
+
+                UIMenu *replacement =
+                    [menu menuByReplacingChildren:filteredChildren];
+
+                gB3MInsideMenuRewrite = oldGuard;
+
+                [result addObject:replacement ?: menu];
+                changed = YES;
+                continue;
+            }
+        }
+
+        [result addObject:element];
+    }
+
+    return changed ? result.copy : children;
+}
+
+
+static BOOL B3MViewLooksLikeStockContextMenuMaterial(UIView *view,
+                                                     UIView *root)
+{
+    if (!view || !root || [view isKindOfClass:B3MMenuGlassView.class]) {
+        return NO;
+    }
+
+    NSString *name = NSStringFromClass(view.class);
+
+    if ([name rangeOfString:@"Background" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+        [name rangeOfString:@"Backdrop" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+        [name rangeOfString:@"Material" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+        [name rangeOfString:@"Platter" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+        return YES;
+    }
+
+    if ([view isKindOfClass:UIVisualEffectView.class]) {
+        CGRect frame = [view.superview convertRect:view.frame toView:root];
+        CGFloat rootArea = MAX(1.0, CGRectGetWidth(root.bounds) * CGRectGetHeight(root.bounds));
+        CGFloat area = MAX(0.0, CGRectGetWidth(frame) * CGRectGetHeight(frame));
+
+        // Only suppress visual-effect views that materially cover the menu body.
+        return area >= rootArea * 0.60;
+    }
+
+    return NO;
+}
+
+static void B3MSuppressStockContextMenuMaterialsRecursively(UIView *view,
+                                                            UIView *root,
+                                                            BOOL suppressed)
+{
+    if (!view || !root) return;
+
+    NSArray<UIView *> *subviews = view.subviews.copy;
+
+    for (UIView *subview in subviews) {
+        if ([subview isKindOfClass:B3MMenuGlassView.class]) {
+            continue;
+        }
+
+        if (B3MViewLooksLikeStockContextMenuMaterial(subview, root)) {
+            B3MSetStockBackgroundSubviewSuppressed(subview, suppressed);
+            // A hidden material node no longer needs descendant traversal.
+            if (suppressed) continue;
+        }
+
+        B3MSuppressStockContextMenuMaterialsRecursively(subview, root, suppressed);
+    }
+}
+
+static B3MMenuGlassView *B3MRootGlassForContextMenu(UIView *root,
+                                                    BOOL create)
+{
+    if (!root) return nil;
+
+    B3MMenuGlassView *glass =
+        objc_getAssociatedObject(root, &kB3MRootGlassMaterialKey);
+
+    if (!glass && create) {
+        glass = [[B3MMenuGlassView alloc] initWithFrame:root.bounds];
+        glass.autoresizingMask =
+            UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+
+        objc_setAssociatedObject(
+            root,
+            &kB3MRootGlassMaterialKey,
+            glass,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
         );
 
-    if (!GFShouldUseOpenedPanel()) {
+        // _UIContextMenuView is known to be the live menu host on the tested
+        // device because the text-color hook on this same class is observable.
+        // Keep glass at index 0 so actions/icons remain above it.
+        [root insertSubview:glass atIndex:0];
+    }
+
+    return glass;
+}
+
+static void B3MApplyGlassToContextMenuRoot(UIView *root)
+{
+    if (!root) return;
+
+    B3MMenuGlassView *glass = B3MRootGlassForContextMenu(root, NO);
+
+    if (!gB3MGlassMenuTint) {
         if (glass) {
             [glass removeFromSuperview];
-
-            GFSetPanelGlassForBackground(
-                backgroundView,
-                nil
+            objc_setAssociatedObject(
+                root,
+                &kB3MRootGlassMaterialKey,
+                nil,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
             );
         }
 
-        for (UIView *subview
-             in backgroundView.subviews) {
-            GFSetStockPanelSubviewSuppressed(
-                subview,
-                NO
-            );
-        }
-
+        B3MSuppressStockContextMenuMaterialsRecursively(root, root, NO);
         return;
     }
 
-    /*
-     * The host itself can carry a stock dark fill even when all material
-     * subviews are hidden.
-     */
-    backgroundView.backgroundColor =
-        UIColor.clearColor;
+    root.backgroundColor = UIColor.clearColor;
+    root.layer.backgroundColor = UIColor.clearColor.CGColor;
 
-    for (UIView *subview
-         in backgroundView.subviews) {
+    // Hide the visible UIKit material wherever it sits inside the live menu
+    // hierarchy. This is the key difference from the previous build, which
+    // assumed _UIElasticContextMenuBackgroundView was the compositing owner.
+    B3MSuppressStockContextMenuMaterialsRecursively(root, root, YES);
 
-        if (subview != glass) {
-            GFSetStockPanelSubviewSuppressed(
-                subview,
-                YES
-            );
+    if (!glass) {
+        glass = B3MRootGlassForContextMenu(root, YES);
+    } else if (glass.superview != root) {
+        [glass removeFromSuperview];
+        [root insertSubview:glass atIndex:0];
+    }
+
+    glass.frame = root.bounds;
+
+    CGFloat radius = root.layer.cornerRadius;
+    if (radius <= 0.0) radius = 14.0;
+
+    glass.b3mPreferredRadius = radius;
+    [glass b3mRefreshMaterial];
+
+    // Keep the material below all action content even if UIKit reordered views.
+    [root sendSubviewToBack:glass];
+}
+
+
+#pragma mark - Better3DMenus Context Menu Diagnostics
+
+/*
+ * Diagnostic-only code.
+ *
+ * Purpose:
+ *   - Identify the actual iOS 16.6 Context Menu compositing/background host.
+ *   - Verify the z-order of B3MMenuGlassView versus Apple's stock material.
+ *   - Inspect CABackdropLayer / CAFilter state after the menu is on screen.
+ *
+ * This does NOT modify gesture recognizers, long-press duration, menu actions,
+ * layout geometry, or material state.
+ */
+
+static char kB3MDiagnosticScheduledKey;
+static NSUInteger gB3MDiagnosticPass = 0;
+
+static id B3MDiagnosticSafeValue(id object, NSString *key)
+{
+    if (!object || key.length == 0) return nil;
+
+    @try {
+        return [object valueForKey:key];
+    } @catch (__unused NSException *exception) {
+        return nil;
+    }
+}
+
+static NSString *B3MDiagnosticClassName(id object)
+{
+    return object ? NSStringFromClass([object class]) : @"(nil)";
+}
+
+static NSString *B3MDiagnosticObjectDescription(id object)
+{
+    if (!object) return @"(nil)";
+
+    @try {
+        return [object description] ?: @"(nil)";
+    } @catch (__unused NSException *exception) {
+        return @"<description threw exception>";
+    }
+}
+
+static NSUInteger B3MDiagnosticSubviewIndex(UIView *view)
+{
+    UIView *superview = view.superview;
+    if (!superview) return NSNotFound;
+
+    return [superview.subviews indexOfObjectIdenticalTo:view];
+}
+
+static CGRect B3MDiagnosticFrameInWindow(UIView *view)
+{
+    if (!view || !view.window) return CGRectNull;
+
+    @try {
+        return [view convertRect:view.bounds toView:view.window];
+    } @catch (__unused NSException *exception) {
+        return CGRectNull;
+    }
+}
+
+static NSInteger B3MDiagnosticMaterialScore(UIView *view, UIView *menuRoot)
+{
+    if (!view) return NSIntegerMin;
+
+    NSInteger score = 0;
+
+    NSString *viewClass = NSStringFromClass(view.class);
+    NSString *layerClass = NSStringFromClass(view.layer.class);
+
+    if ([view isKindOfClass:B3MMenuGlassView.class]) score += 100;
+    if ([layerClass rangeOfString:@"Backdrop" options:NSCaseInsensitiveSearch].location != NSNotFound) score += 45;
+    if ([view isKindOfClass:UIVisualEffectView.class]) score += 30;
+
+    if ([viewClass rangeOfString:@"Background" options:NSCaseInsensitiveSearch].location != NSNotFound) score += 25;
+    if ([viewClass rangeOfString:@"Backdrop" options:NSCaseInsensitiveSearch].location != NSNotFound) score += 25;
+    if ([viewClass rangeOfString:@"Material" options:NSCaseInsensitiveSearch].location != NSNotFound) score += 25;
+    if ([viewClass rangeOfString:@"Platter" options:NSCaseInsensitiveSearch].location != NSNotFound) score += 20;
+    if ([viewClass rangeOfString:@"ContextMenu" options:NSCaseInsensitiveSearch].location != NSNotFound) score += 10;
+
+    id filters = B3MDiagnosticSafeValue(view.layer, @"filters");
+    id backgroundFilters = B3MDiagnosticSafeValue(view.layer, @"backgroundFilters");
+
+    if ([filters respondsToSelector:@selector(count)] && [filters count] > 0) score += 20;
+    if ([backgroundFilters respondsToSelector:@selector(count)] && [backgroundFilters count] > 0) score += 20;
+
+    if (view.layer.cornerRadius > 0.0) score += 3;
+    if (!view.hidden && view.alpha > 0.01 && view.layer.opacity > 0.01) score += 2;
+
+    if (menuRoot && !CGRectIsEmpty(menuRoot.bounds)) {
+        CGRect rootRect = B3MDiagnosticFrameInWindow(menuRoot);
+        CGRect viewRect = B3MDiagnosticFrameInWindow(view);
+
+        if (!CGRectIsNull(rootRect) && !CGRectIsNull(viewRect)) {
+            CGFloat rootArea = MAX(1.0, CGRectGetWidth(rootRect) * CGRectGetHeight(rootRect));
+            CGFloat viewArea = MAX(0.0, CGRectGetWidth(viewRect) * CGRectGetHeight(viewRect));
+            CGFloat ratio = viewArea / rootArea;
+
+            if (ratio >= 0.55 && ratio <= 1.40) score += 8;
         }
     }
 
-    if (!glass) {
-        glass =
-            [[GFPanelGlassView alloc]
-                initWithStyle:GFStyle
-                     strength:GFGlassStrength];
+    return score;
+}
 
-        /*
-         * Associate BEFORE insertion. If UIKit calls didAddSubview: during
-         * addSubview:, the hook can already identify this as our glass.
-         */
-        GFSetPanelGlassForBackground(
-            backgroundView,
-            glass
-        );
+static void B3MDiagnosticDumpLayer(CALayer *layer, NSInteger depth)
+{
+    if (!layer || depth > 10) return;
 
-        [backgroundView
-            addSubview:glass];
-    } else if (glass.superview != backgroundView) {
-        [glass removeFromSuperview];
-        [backgroundView addSubview:glass];
+    NSString *indent =
+        [@"" stringByPaddingToLength:(NSUInteger)(depth * 2)
+                          withString:@" "
+                     startingAtIndex:0];
+
+    id filters = B3MDiagnosticSafeValue(layer, @"filters");
+    id backgroundFilters = B3MDiagnosticSafeValue(layer, @"backgroundFilters");
+    id compositingFilter = B3MDiagnosticSafeValue(layer, @"compositingFilter");
+    id scale = B3MDiagnosticSafeValue(layer, @"scale");
+
+    NSLog(@"[B3M-DIAG] %@LAYER %p <%@> frame=%@ bounds=%@ opacity=%.3f hidden=%d "
+          @"corner=%.3f z=%.3f masks=%d scale=%@ filters=%@ backgroundFilters=%@ compositingFilter=%@",
+          indent,
+          layer,
+          B3MDiagnosticClassName(layer),
+          NSStringFromCGRect(layer.frame),
+          NSStringFromCGRect(layer.bounds),
+          layer.opacity,
+          layer.hidden,
+          layer.cornerRadius,
+          layer.zPosition,
+          layer.masksToBounds,
+          B3MDiagnosticObjectDescription(scale),
+          B3MDiagnosticObjectDescription(filters),
+          B3MDiagnosticObjectDescription(backgroundFilters),
+          B3MDiagnosticObjectDescription(compositingFilter));
+
+    for (CALayer *sublayer in layer.sublayers) {
+        B3MDiagnosticDumpLayer(sublayer, depth + 1);
+    }
+}
+
+static void B3MDiagnosticDumpViewTree(UIView *view,
+                                      UIView *menuRoot,
+                                      NSInteger depth)
+{
+    if (!view || depth > 16) return;
+
+    NSString *indent =
+        [@"" stringByPaddingToLength:(NSUInteger)(depth * 2)
+                          withString:@" "
+                     startingAtIndex:0];
+
+    NSInteger score = B3MDiagnosticMaterialScore(view, menuRoot);
+    NSUInteger index = B3MDiagnosticSubviewIndex(view);
+    CGRect windowFrame = B3MDiagnosticFrameInWindow(view);
+
+    BOOL wasSuppressed =
+        [objc_getAssociatedObject(view, &kB3MStockSubviewWasHiddenKey) boolValue];
+
+    NSLog(@"[B3M-DIAG] %@VIEW %p <%@> index=%@ frame=%@ windowFrame=%@ "
+          @"alpha=%.3f hidden=%d clips=%d bg=%@ "
+          @"layer=%p <%@> layerOpacity=%.3f corner=%.3f z=%.3f "
+          @"suppressedByB3M=%d score=%ld",
+          indent,
+          view,
+          NSStringFromClass(view.class),
+          index == NSNotFound ? @"-" : [NSString stringWithFormat:@"%lu", (unsigned long)index],
+          NSStringFromCGRect(view.frame),
+          CGRectIsNull(windowFrame) ? @"(no-window)" : NSStringFromCGRect(windowFrame),
+          view.alpha,
+          view.hidden,
+          view.clipsToBounds,
+          B3MDiagnosticObjectDescription(view.backgroundColor),
+          view.layer,
+          NSStringFromClass(view.layer.class),
+          view.layer.opacity,
+          view.layer.cornerRadius,
+          view.layer.zPosition,
+          wasSuppressed,
+          (long)score);
+
+    if (score >= 20 || [view isKindOfClass:B3MMenuGlassView.class]) {
+        id filters = B3MDiagnosticSafeValue(view.layer, @"filters");
+        id backgroundFilters = B3MDiagnosticSafeValue(view.layer, @"backgroundFilters");
+        id compositingFilter = B3MDiagnosticSafeValue(view.layer, @"compositingFilter");
+
+        NSLog(@"[B3M-DIAG] %@>>> MATERIAL-CANDIDATE view=%p <%@> score=%ld "
+              @"filters=%@ backgroundFilters=%@ compositingFilter=%@",
+              indent,
+              view,
+              NSStringFromClass(view.class),
+              (long)score,
+              B3MDiagnosticObjectDescription(filters),
+              B3MDiagnosticObjectDescription(backgroundFilters),
+              B3MDiagnosticObjectDescription(compositingFilter));
+
+        if ([view isKindOfClass:B3MMenuGlassView.class] ||
+            [NSStringFromClass(view.layer.class)
+                rangeOfString:@"Backdrop"
+                      options:NSCaseInsensitiveSearch].location != NSNotFound) {
+            B3MDiagnosticDumpLayer(view.layer, depth + 1);
+        }
     }
 
-    glass.frame =
-        backgroundView.bounds;
+    NSArray<UIView *> *children = view.subviews.copy;
+    for (UIView *child in children) {
+        B3MDiagnosticDumpViewTree(child, menuRoot, depth + 1);
+    }
+}
 
-    glass.autoresizingMask =
-        UIViewAutoresizingFlexibleWidth |
-        UIViewAutoresizingFlexibleHeight;
+static void B3MDiagnosticScanWindowCandidates(UIView *view,
+                                              UIView *menuRoot,
+                                              NSInteger depth)
+{
+    if (!view || depth > 18) return;
 
-    CGFloat radius =
-        backgroundView.layer.cornerRadius;
+    NSInteger score = B3MDiagnosticMaterialScore(view, menuRoot);
 
-    if (radius <= 0.0) {
-        radius = 38.0;
+    if (score >= 20) {
+        CGRect windowFrame = B3MDiagnosticFrameInWindow(view);
+        NSUInteger index = B3MDiagnosticSubviewIndex(view);
+
+        NSLog(@"[B3M-DIAG] WINDOW-CANDIDATE depth=%ld view=%p <%@> "
+              @"parent=%p <%@> index=%@ windowFrame=%@ "
+              @"alpha=%.3f hidden=%d layer=<%@> corner=%.3f z=%.3f score=%ld",
+              (long)depth,
+              view,
+              NSStringFromClass(view.class),
+              view.superview,
+              B3MDiagnosticClassName(view.superview),
+              index == NSNotFound ? @"-" : [NSString stringWithFormat:@"%lu", (unsigned long)index],
+              CGRectIsNull(windowFrame) ? @"(no-window)" : NSStringFromCGRect(windowFrame),
+              view.alpha,
+              view.hidden,
+              NSStringFromClass(view.layer.class),
+              view.layer.cornerRadius,
+              view.layer.zPosition,
+              (long)score);
     }
 
-    [glass
-        setPreferredRadius:
-            radius];
+    for (UIView *child in view.subviews.copy) {
+        B3MDiagnosticScanWindowCandidates(child, menuRoot, depth + 1);
+    }
+}
 
-    /*
-     * SBFolderBackgroundView is a visual background surface; keep our layer
-     * above its hidden material children. The folder icon grid is not a child
-     * of this visual background class.
-     */
-    [backgroundView
-        bringSubviewToFront:glass];
+static void B3MDiagnosticDumpAncestorChain(UIView *root)
+{
+    NSLog(@"[B3M-DIAG] ---- ANCESTOR CHAIN ----");
+
+    UIView *cursor = root;
+    NSInteger depth = 0;
+
+    while (cursor && depth < 20) {
+        NSUInteger index = B3MDiagnosticSubviewIndex(cursor);
+
+        NSLog(@"[B3M-DIAG] ancestor[%ld] %p <%@> parent=%p <%@> index=%@ "
+              @"frame=%@ windowFrame=%@ alpha=%.3f hidden=%d layer=<%@>",
+              (long)depth,
+              cursor,
+              NSStringFromClass(cursor.class),
+              cursor.superview,
+              B3MDiagnosticClassName(cursor.superview),
+              index == NSNotFound ? @"-" : [NSString stringWithFormat:@"%lu", (unsigned long)index],
+              NSStringFromCGRect(cursor.frame),
+              CGRectIsNull(B3MDiagnosticFrameInWindow(cursor))
+                  ? @"(no-window)"
+                  : NSStringFromCGRect(B3MDiagnosticFrameInWindow(cursor)),
+              cursor.alpha,
+              cursor.hidden,
+              NSStringFromClass(cursor.layer.class));
+
+        cursor = cursor.superview;
+        depth++;
+    }
+}
+
+static void B3MDiagnosticDumpContextMenu(UIView *root, NSString *phase)
+{
+    if (!root || !root.window) return;
+
+    NSUInteger pass = ++gB3MDiagnosticPass;
+
+    NSLog(@"");
+    NSLog(@"[B3M-DIAG] ============================================================");
+    NSLog(@"[B3M-DIAG] PASS=%lu PHASE=%@ root=%p <%@> window=%p <%@>",
+          (unsigned long)pass,
+          phase ?: @"(unknown)",
+          root,
+          NSStringFromClass(root.class),
+          root.window,
+          NSStringFromClass(root.window.class));
+
+    NSLog(@"[B3M-DIAG] SETTINGS GlassMenuTint=%d GlassTextTint=%d ReduceBlur=%d "
+          @"HideSeparators=%d HideShareApp=%d HideRemoveApp=%d HideSectionGap=%d BlurFactor=%.3f",
+          gB3MGlassMenuTint,
+          gB3MGlassTextTint,
+          gB3MReduceBlur,
+          gB3MHideSeparators,
+          gB3MHideShareApp,
+          gB3MHideRemoveApp,
+          gB3MHideSectionGap,
+          gB3MBlurFactor);
+
+    B3MMenuGlassView *rootGlass =
+        B3MRootGlassForContextMenu(root, NO);
+
+    NSLog(@"[B3M-DIAG] ROOT-GLASS=%p superview=%p <%@> index=%@ frame=%@ "
+          @"layer=%p <%@> filters=%@",
+          rootGlass,
+          rootGlass.superview,
+          B3MDiagnosticClassName(rootGlass.superview),
+          rootGlass
+              ? (B3MDiagnosticSubviewIndex(rootGlass) == NSNotFound
+                    ? @"-"
+                    : [NSString stringWithFormat:@"%lu",
+                       (unsigned long)B3MDiagnosticSubviewIndex(rootGlass)])
+              : @"-",
+          rootGlass ? NSStringFromCGRect(rootGlass.frame) : @"(nil)",
+          rootGlass.layer,
+          rootGlass ? NSStringFromClass(rootGlass.layer.class) : @"(nil)",
+          rootGlass
+              ? B3MDiagnosticObjectDescription(
+                    B3MDiagnosticSafeValue(rootGlass.layer, @"filters"))
+              : @"(nil)");
+
+    B3MDiagnosticDumpAncestorChain(root);
+
+    NSLog(@"[B3M-DIAG] ---- _UIContextMenuView FULL SUBTREE ----");
+    B3MDiagnosticDumpViewTree(root, root, 0);
+
+    NSLog(@"[B3M-DIAG] ---- WINDOW MATERIAL CANDIDATES ----");
+    B3MDiagnosticScanWindowCandidates(root.window, root, 0);
+
+    NSLog(@"[B3M-DIAG] END PASS=%lu PHASE=%@", (unsigned long)pass, phase ?: @"(unknown)");
+    NSLog(@"[B3M-DIAG] ============================================================");
+    NSLog(@"");
+}
+
+static void B3MScheduleContextMenuDiagnostics(UIView *root)
+{
+    if (!root || !root.window) return;
+
+    NSNumber *alreadyScheduled =
+        objc_getAssociatedObject(root, &kB3MDiagnosticScheduledKey);
+
+    if ([alreadyScheduled boolValue]) return;
+
+    objc_setAssociatedObject(root,
+                             &kB3MDiagnosticScheduledKey,
+                             @YES,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (root.window) {
+            B3MDiagnosticDumpContextMenu(root, @"next-runloop");
+        }
+    });
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                 (int64_t)(0.15 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        if (root.window) {
+            B3MDiagnosticDumpContextMenu(root, @"150ms");
+        }
+    });
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                 (int64_t)(0.40 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        if (root.window) {
+            B3MDiagnosticDumpContextMenu(root, @"400ms");
+        }
+    });
 }
 
 
+%hook _UIContextMenuActionsListSeparatorView
 
+- (void)didMoveToWindow
+{
+    %orig;
+    B3MApplySeparatorState((UIView *)self);
+}
 
-@interface SBFolderBackgroundView : UIView
-@end
+- (void)layoutSubviews
+{
+    %orig;
+    B3MApplySeparatorState((UIView *)self);
+}
 
+%end
 
-%group GFOpenedPanelHooks
+%hook _UIContextMenuReusableSeparatorView
 
-%hook SBFolderBackgroundView
+- (void)didMoveToWindow
+{
+    %orig;
+    B3MApplySeparatorState((UIView *)self);
+}
 
-- (void)didAddSubview:(UIView *)subview {
+- (void)layoutSubviews
+{
+    %orig;
+    B3MApplySeparatorState((UIView *)self);
+}
+
+%end
+
+%hook _UIContextMenuSeparatorView
+
+- (void)didMoveToWindow
+{
+    %orig;
+    B3MApplySeparatorState((UIView *)self);
+}
+
+- (void)layoutSubviews
+{
+    %orig;
+    B3MApplySeparatorState((UIView *)self);
+}
+
+%end
+
+%hook _UIInterfaceActionBlankSeparatorView
+
+- (void)didMoveToWindow
+{
+    %orig;
+    B3MApplySeparatorState((UIView *)self);
+}
+
+- (void)layoutSubviews
+{
+    %orig;
+    B3MApplySeparatorState((UIView *)self);
+}
+
+%end
+
+%hook _UIInterfaceActionVibrantSeparatorView
+
+- (void)didMoveToWindow
+{
+    %orig;
+    B3MApplySeparatorState((UIView *)self);
+}
+
+- (void)layoutSubviews
+{
+    %orig;
+    B3MApplySeparatorState((UIView *)self);
+}
+
+%end
+
+%hook _UIElasticContextMenuBackgroundView
+
+- (void)didAddSubview:(UIView *)subview
+{
     %orig(subview);
-
-    if (GFShouldUseOpenedPanel() &&
-        ![subview isKindOfClass:
-            [GFPanelGlassView class]]) {
-
-        /*
-         * Synchronous suppression means newly-created stock material cannot
-         * become the first rendered dark frame.
-         */
-        GFSetStockPanelSubviewSuppressed(
-            subview,
-            YES
-        );
+    if (gB3MGlassMenuTint && ![subview isKindOfClass:B3MMenuGlassView.class]) {
+        B3MSetStockBackgroundSubviewSuppressed(subview, YES);
     }
 }
 
-- (void)didMoveToWindow {
+- (void)didMoveToWindow
+{
     %orig;
-
-    /*
-     * This is after SpringBoard constructed the background object and its
-     * material children, but before normal on-screen compositing.
-     * We do not insert our view during the private object's initializer.
-     */
-    GFUpdateOpenedFolderBackground(self);
+    B3MApplyGlassBackground((UIView *)self);
 }
 
-- (void)layoutSubviews {
+- (void)layoutSubviews
+{
     %orig;
-
-    GFUpdateOpenedFolderBackground(self);
+    B3MApplyGlassBackground((UIView *)self);
 }
 
-- (void)setBackgroundColor:(UIColor *)color {
-    if (GFShouldUseOpenedPanel()) {
+- (void)setBackgroundColor:(UIColor *)color
+{
+    if (gB3MGlassMenuTint) {
         %orig(UIColor.clearColor);
     } else {
         %orig(color);
     }
 }
 
-- (void)traitCollectionDidChange:
-    (UITraitCollection *)previousTraitCollection {
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection
+{
+    %orig(previousTraitCollection);
+    B3MMenuGlassView *material = B3MGlassMaterialForBackgroundView((UIView *)self, NO);
+    if (material) [material b3mRefreshMaterial];
+    B3MApplyGlassBackground((UIView *)self);
+}
 
+%end
+
+%hook _UIContextMenuView
+
+- (void)didAddSubview:(UIView *)subview
+{
+    %orig(subview);
+
+    if (gB3MGlassMenuTint &&
+        ![subview isKindOfClass:B3MMenuGlassView.class]) {
+        B3MApplyGlassToContextMenuRoot((UIView *)self);
+    }
+}
+
+- (void)didMoveToWindow
+{
+    %orig;
+
+    UIView *root = (UIView *)self;
+
+    if (root.window) {
+        B3MRefreshActiveIconColor();
+    } else {
+        /*
+         * UIKit may reuse a context-menu view instance. Allow one fresh
+         * diagnostic series the next time this root is attached.
+         */
+        objc_setAssociatedObject(root,
+                                 &kB3MDiagnosticScheduledKey,
+                                 nil,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+
+    B3MApplyGlassToContextMenuRoot(root);
+    B3MApplyBlurRecursively(root, NO);
+    B3MApplyGlassTextRecursively(root);
+
+    if (root.window) {
+        B3MScheduleContextMenuDiagnostics(root);
+    }
+}
+
+- (void)layoutSubviews
+{
+    %orig;
+    B3MApplyGlassToContextMenuRoot((UIView *)self);
+    B3MApplyBlurRecursively((UIView *)self, NO);
+    B3MApplyGlassTextRecursively((UIView *)self);
+}
+
+- (void)setBackgroundColor:(UIColor *)color
+{
+    if (gB3MGlassMenuTint) {
+        %orig(UIColor.clearColor);
+    } else {
+        %orig(color);
+    }
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection
+{
     %orig(previousTraitCollection);
 
-    GFPanelGlassView *glass =
-        GFPanelGlassForBackground(self);
+    B3MMenuGlassView *glass =
+        B3MRootGlassForContextMenu((UIView *)self, NO);
 
     if (glass) {
-        [glass gfRefreshMaterial];
+        [glass b3mRefreshMaterial];
     }
 
-    GFUpdateOpenedFolderBackground(self);
+    B3MApplyGlassToContextMenuRoot((UIView *)self);
+    B3MApplyGlassTextRecursively((UIView *)self);
 }
 
 %end
 
-%end
+%hook UIMenu
 
-
-
-
-@interface SBFolderIconImageView : UIView
-- (void)setBackgroundView:(UIView *)backgroundView;
-@end
-
-
-
-%group GFIconHooks
-
-%hook SBFolderIconImageView
-
-- (void)setBackgroundView:(UIView *)backgroundView {
-    if (!GFEnabled) {
-        %orig(backgroundView);
-        return;
++ (instancetype)menuWithChildren:(NSArray<UIMenuElement *> *)children
+{
+    if (gB3MInsideMenuRewrite ||
+        (!gB3MHideShareApp && !gB3MHideRemoveApp && !gB3MHideSectionGap)) {
+        return %orig;
     }
 
-    /*
-     * App Library mini-folders/clusters must keep Apple's native transparent
-     * presentation. Do not install Clear/Liquid Glass inside a category pod.
-     */
-    if (GFViewIsInsideAppLibrary(self)) {
-        %orig(backgroundView);
-        return;
+    NSArray<UIMenuElement *> *filtered =
+        B3MFilterMenuElements(children);
+
+    return %orig(filtered);
+}
+
++ (instancetype)menuWithTitle:(NSString *)title
+                     children:(NSArray<UIMenuElement *> *)children
+{
+    if (gB3MInsideMenuRewrite ||
+        (!gB3MHideShareApp && !gB3MHideRemoveApp && !gB3MHideSectionGap)) {
+        return %orig;
     }
 
-    CGFloat originalRadius =
-        backgroundView ? backgroundView.layer.cornerRadius : 0.0;
+    NSArray<UIMenuElement *> *filtered =
+        B3MFilterMenuElements(children);
 
-    GFBackdropGlassView *plate =
-        [[GFBackdropGlassView alloc] initWithStyle:GFStyle
-                                          strength:GFGlassStrength
-                                   preferredRadius:originalRadius];
+    return %orig(title, filtered);
+}
 
-    %orig(plate);
++ (instancetype)menuWithTitle:(NSString *)title
+                        image:(UIImage *)image
+                   identifier:(UIMenuIdentifier)identifier
+                      options:(UIMenuOptions)options
+                     children:(NSArray<UIMenuElement *> *)children
+{
+    if (gB3MInsideMenuRewrite ||
+        (!gB3MHideShareApp && !gB3MHideRemoveApp && !gB3MHideSectionGap)) {
+        return %orig;
+    }
+
+    NSArray<UIMenuElement *> *filtered =
+        B3MFilterMenuElements(children);
+
+    return %orig(title, image, identifier, options, filtered);
+}
+
+- (instancetype)menuByReplacingChildren:(NSArray<UIMenuElement *> *)children
+{
+    if (gB3MInsideMenuRewrite ||
+        (!gB3MHideShareApp && !gB3MHideRemoveApp && !gB3MHideSectionGap)) {
+        return %orig;
+    }
+
+    NSArray<UIMenuElement *> *filtered =
+        B3MFilterMenuElements(children);
+
+    return %orig(filtered);
 }
 
 %end
 
-%end
-
-
-%ctor {
+%ctor
+{
     @autoreleasepool {
-        GFLoadPreferences();
-
-        if (objc_getClass("SBFolderIconImageView")) {
-            %init(GFIconHooks);
+        if (![[NSBundle mainBundle].bundleIdentifier
+              isEqualToString:@"com.apple.springboard"]) {
+            return;
         }
 
-        if (objc_getClass("SBFolderBackgroundView")) {
-            %init(GFOpenedPanelHooks);
-        }
+        B3MLoadPreferences();
 
-        /*
-         * App Library page hook is the authoritative Beta 3.3 link.
-         * SBLibraryViewController belongs to SpringBoard and is present on
-         * systems that provide App Library.
-         */
-        if (objc_getClass("SBLibraryViewController")) {
-            %init(GFAppLibraryControllerHooks);
-        }
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            NULL,
+            B3MPreferencesChanged,
+            kB3MNotification,
+            NULL,
+            CFNotificationSuspensionBehaviorDeliverImmediately
+        );
 
-        /*
-         * Exact category-background hook remains only as a fast path when
-         * that private SpringBoardHome class is already loaded here.
-         * Controller traversal above does not depend on this succeeding.
-         */
-        if (objc_getClass("SBHLibraryCategoryPodBackgroundView")) {
-            %init(GFAppLibraryHooks);
-        }
+        %init;
     }
 }
