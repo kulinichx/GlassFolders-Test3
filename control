@@ -1,11 +1,11 @@
-Package: com.kulinichx.better3dmenus16rh
-Name: Better3DMenus16-RH
-Version: 0.1.9
+Package: com.kulinich.glassfolders
+Name: GlassFolders
+Version: 1.0.0
 Architecture: iphoneos-arm64e
-Description: iOS 16 RootHide context-menu tweak with dynamic app-icon glass colors, adaptive Light/Dark text contrast, separator/gap cleanup, and Share/Remove App filtering.
-Maintainer: kulinichx
-Author: Better3DMenus16-RH compatibility port
+Description: Bring refined Clear and Liquid Glass materials to iOS folders and App Library, with independent controls, light/dark appearance tuning, and a clean bilingual Settings experience.
+Maintainer: kulinich
+Author: kulinich
 Section: Tweaks
-Priority: optional
-Depends: mobilesubstrate, preferenceloader, firmware (>= 16.0), firmware (<< 17.0)
-Conflicts: com.dpkg.better3dmenus
+Depends: mobilesubstrate, preferenceloader, firmware (>= 16.0)
+Conflicts: com.local.glassfolderstest3
+Replaces: com.local.glassfolderstest3
