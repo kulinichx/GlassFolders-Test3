@@ -3,134 +3,56 @@
 <plist version="1.0">
 <dict>
 	<key>title</key>
-	<string>Better3DMenus16-RH</string>
+	<string>GlassFolders</string>
 	<key>items</key>
 	<array>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>Context Menu</string>
+			<string>GlassFolders 1.0.0</string>
 		</dict>
 		<dict>
-			<key>PostNotification</key>
-			<string>com.kulinichx.better3dmenus16rh/preferences.changed</string>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Folders</string>
+			<key>key</key>
+			<string>Enabled</string>
 			<key>default</key>
 			<true/>
 			<key>defaults</key>
-			<string>com.kulinichx.better3dmenus16rh</string>
-			<key>key</key>
-			<string>HideSeparators</string>
-			<key>label</key>
-			<string>Hide Separators</string>
+			<string>com.kulinich.glassfolders</string>
 		</dict>
 		<dict>
-			<key>PostNotification</key>
-			<string>com.kulinichx.better3dmenus16rh/preferences.changed</string>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
-			<key>default</key>
-			<true/>
-			<key>defaults</key>
-			<string>com.kulinichx.better3dmenus16rh</string>
-			<key>key</key>
-			<string>ReduceBlur</string>
 			<key>label</key>
-			<string>Reduce Blur</string>
-		</dict>
-		<dict>
-			<key>PostNotification</key>
-			<string>com.kulinichx.better3dmenus16rh/preferences.changed</string>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>default</key>
-			<true/>
-			<key>defaults</key>
-			<string>com.kulinichx.better3dmenus16rh</string>
+			<string>App Library</string>
 			<key>key</key>
-			<string>HideShareApp</string>
-			<key>label</key>
-			<string>Hide Share App</string>
-		</dict>
-		<dict>
-			<key>PostNotification</key>
-			<string>com.kulinichx.better3dmenus16rh/preferences.changed</string>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
+			<string>AppLibraryGlassEnabled</string>
 			<key>default</key>
-			<true/>
+			<false/>
 			<key>defaults</key>
-			<string>com.kulinichx.better3dmenus16rh</string>
-			<key>key</key>
-			<string>HideRemoveApp</string>
-			<key>label</key>
-			<string>Hide Remove App</string>
-		</dict>
-		<dict>
-			<key>PostNotification</key>
-			<string>com.kulinichx.better3dmenus16rh/preferences.changed</string>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>default</key>
-			<true/>
-			<key>defaults</key>
-			<string>com.kulinichx.better3dmenus16rh</string>
-			<key>key</key>
-			<string>HideSectionGap</string>
-			<key>label</key>
-			<string>Hide Section Gap</string>
-		</dict>
-		<dict>
-			<key>PostNotification</key>
-			<string>com.kulinichx.better3dmenus16rh/preferences.changed</string>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>default</key>
-			<true/>
-			<key>defaults</key>
-			<string>com.kulinichx.better3dmenus16rh</string>
-			<key>key</key>
-			<string>GlassTextTint</string>
-			<key>label</key>
-			<string>Adaptive Text Color</string>
+			<string>com.kulinich.glassfolders</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>Glass Effect</string>
-			<key>footerText</key>
-			<string>Choose Clear or Liquid Glass. Each style keeps its own strength.</string>
+			<string>Folder Style</string>
 		</dict>
 		<dict>
-			<key>PostNotification</key>
-			<string>com.kulinichx.better3dmenus16rh/preferences.changed</string>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>default</key>
-			<true/>
-			<key>defaults</key>
-			<string>com.kulinichx.better3dmenus16rh</string>
-			<key>key</key>
-			<string>GlassMenuTint</string>
-			<key>label</key>
-			<string>Glass Effect</string>
-		</dict>
-		<dict>
-			<key>PostNotification</key>
-			<string>com.kulinichx.better3dmenus16rh/preferences.changed</string>
 			<key>cell</key>
 			<string>PSSegmentCell</string>
-			<key>default</key>
-			<integer>1</integer>
-			<key>defaults</key>
-			<string>com.kulinichx.better3dmenus16rh</string>
-			<key>key</key>
-			<string>GlassStyle</string>
 			<key>label</key>
 			<string></string>
+			<key>key</key>
+			<string>Style</string>
+			<key>default</key>
+			<integer>0</integer>
+			<key>defaults</key>
+			<string>com.kulinich.glassfolders</string>
 			<key>validTitles</key>
 			<array>
 				<string>Clear</string>
@@ -143,44 +65,118 @@
 			</array>
 		</dict>
 		<dict>
-			<key>PostNotification</key>
-			<string>com.kulinichx.better3dmenus16rh/preferences.changed</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Clear Strength</string>
+			<key>footerText</key>
+			<string>Keeps the material clear while adding blur and depth.</string>
+		</dict>
+		<dict>
 			<key>cell</key>
 			<string>PSSliderCell</string>
+			<key>cellClass</key>
+			<string>GFPercentSliderCell</string>
+			<key>label</key>
+			<string></string>
+			<key>key</key>
+			<string>ClearStrength</string>
 			<key>default</key>
 			<integer>55</integer>
 			<key>defaults</key>
-			<string>com.kulinichx.better3dmenus16rh</string>
-			<key>key</key>
-			<string>ClearStrength</string>
-			<key>label</key>
-			<string>Clear Strength</string>
+			<string>com.kulinich.glassfolders</string>
 			<key>min</key>
 			<integer>0</integer>
 			<key>max</key>
 			<integer>100</integer>
 			<key>showValue</key>
-			<true/>
+			<false/>
 		</dict>
 		<dict>
-			<key>PostNotification</key>
-			<string>com.kulinichx.better3dmenus16rh/preferences.changed</string>
 			<key>cell</key>
-			<string>PSSliderCell</string>
-			<key>default</key>
-			<integer>72</integer>
-			<key>defaults</key>
-			<string>com.kulinichx.better3dmenus16rh</string>
-			<key>key</key>
-			<string>LiquidGlassStrength</string>
+			<string>PSGroupCell</string>
 			<key>label</key>
 			<string>Liquid Glass Strength</string>
+			<key>footerText</key>
+			<string>Increases glass structure, highlights, and blur.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSliderCell</string>
+			<key>cellClass</key>
+			<string>GFPercentSliderCell</string>
+			<key>label</key>
+			<string></string>
+			<key>key</key>
+			<string>LiquidGlassStrength</string>
+			<key>default</key>
+			<integer>55</integer>
+			<key>defaults</key>
+			<string>com.kulinich.glassfolders</string>
 			<key>min</key>
 			<integer>0</integer>
 			<key>max</key>
 			<integer>100</integer>
 			<key>showValue</key>
-			<true/>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>App Library Style</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSegmentCell</string>
+			<key>label</key>
+			<string></string>
+			<key>key</key>
+			<string>AppLibraryStyleMode</string>
+			<key>default</key>
+			<integer>0</integer>
+			<key>defaults</key>
+			<string>com.kulinich.glassfolders</string>
+			<key>validTitles</key>
+			<array>
+				<string>Follow Folder</string>
+				<string>Clear</string>
+				<string>Liquid Glass</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<integer>0</integer>
+				<integer>1</integer>
+				<integer>2</integer>
+			</array>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Apply &amp; Respring</string>
+			<key>action</key>
+			<string>respring</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>About</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSTitleValueCell</string>
+			<key>label</key>
+			<string>Developer</string>
+			<key>get</key>
+			<string>authorValue:</string>
 		</dict>
 	</array>
 </dict>
