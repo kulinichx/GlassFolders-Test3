@@ -31,29 +31,6 @@ static void GFRefreshAppLibraryController(UIViewController *controller);
 
 static NSUInteger GFLiveRefreshGeneration = 0;
 
-static BOOL GFLiveReadBool(CFStringRef key, BOOL fallback) {
-    CFPropertyListRef value =
-        CFPreferencesCopyAppValue(key, GFLivePreferencesDomain);
-
-    if (!value) return fallback;
-
-    BOOL result = fallback;
-
-    if (CFGetTypeID(value) == CFBooleanGetTypeID()) {
-        result = CFBooleanGetValue((CFBooleanRef)value);
-    } else if (CFGetTypeID(value) == CFNumberGetTypeID()) {
-        int number = 0;
-        CFNumberGetValue(
-            (CFNumberRef)value,
-            kCFNumberIntType,
-            &number
-        );
-        result = (number != 0);
-    }
-
-    CFRelease(value);
-    return result;
-}
 
 static NSInteger GFLiveReadInteger(
     CFStringRef key,
