@@ -8,51 +8,160 @@
 /*
  * GlassFolders live preferences bridge.
  *
- * This header is force-included into Tweak.xm by the Makefile so it shares
- * the same translation unit as GlassFolders' existing static state/functions.
- * The material engine itself is not duplicated or rewritten.
+ * IMPORTANT:
+ * This file is force-included before Tweak.xm by the Makefile.
+ * Therefore it MUST NOT define or tentatively define any of Tweak.xm's
+ * file-local static preference variables (GFEnabled, GFStyle, ...).
+ *
+ * We only forward-declare existing static FUNCTIONS. Function prototypes are
+ * safe here; the real definitions appear later in the same translation unit.
  */
+
+static CFStringRef const GFLivePreferencesDomain =
+    CFSTR("com.kulinich.glassfolders");
 
 static CFStringRef const GFLivePreferencesChangedNotification =
     CFSTR("com.kulinich.glassfolders/preferenceschanged");
 
-/*
- * Tentative declarations for the existing file-local preference state.
- * Tweak.xm later provides the initialized definitions.
- */
-static BOOL GFEnabled;
-static NSInteger GFStyle;
-static CGFloat GFClearStrength;
-static CGFloat GFLiquidGlassStrength;
-static CGFloat GFGlassStrength;
-static BOOL GFAppLibraryGlassEnabled;
-static NSInteger GFAppLibraryStyle;
-static NSInteger GFAppLibraryStyleMode;
-static NSInteger GFAppLibraryClearPreset;
-static NSInteger GFAppLibraryLiquidPreset;
-static CGFloat GFAppLibraryGlassStrength;
-
 /* Existing Tweak.xm helpers, defined later in the same translation unit. */
 static void GFLoadPreferences(void);
-static BOOL GFViewIsInsideAppLibrary(UIView *view);
 static void GFUpdateOpenedFolderBackground(UIView *backgroundView);
 static void GFUpdateRealAppLibraryPod(UIView *pod);
 static void GFRefreshAppLibraryController(UIViewController *controller);
 
 static NSUInteger GFLiveRefreshGeneration = 0;
 
-static inline void GFLiveSendNoArg(id object, NSString *selectorName) {
-    if (!object || selectorName.length == 0) return;
+static BOOL GFLiveReadBool(CFStringRef key, BOOL fallback) {
+    CFPropertyListRef value =
+        CFPreferencesCopyAppValue(key, GFLivePreferencesDomain);
 
-    SEL selector = NSSelectorFromString(selectorName);
-    if (![object respondsToSelector:selector]) return;
+    if (!value) return fallback;
 
-    ((void (*)(id, SEL))objc_msgSend)(object, selector);
+    BOOL result = fallback;
+
+    if (CFGetTypeID(value) == CFBooleanGetTypeID()) {
+        result = CFBooleanGetValue((CFBooleanRef)value);
+    } else if (CFGetTypeID(value) == CFNumberGetTypeID()) {
+        int number = 0;
+        CFNumberGetValue(
+            (CFNumberRef)value,
+            kCFNumberIntType,
+            &number
+        );
+        result = (number != 0);
+    }
+
+    CFRelease(value);
+    return result;
 }
 
-static inline void GFLiveSetNumberForKey(id object,
-                                         NSNumber *value,
-                                         NSString *key) {
+static NSInteger GFLiveReadInteger(
+    CFStringRef key,
+    NSInteger fallback
+) {
+    CFPropertyListRef value =
+        CFPreferencesCopyAppValue(key, GFLivePreferencesDomain);
+
+    if (!value) return fallback;
+
+    long long number = fallback;
+
+    if (CFGetTypeID(value) == CFNumberGetTypeID()) {
+        CFNumberGetValue(
+            (CFNumberRef)value,
+            kCFNumberLongLongType,
+            &number
+        );
+    }
+
+    CFRelease(value);
+    return (NSInteger)number;
+}
+
+static CGFloat GFLiveReadPercent(
+    CFStringRef key,
+    CGFloat fallbackPercent
+) {
+    CFPropertyListRef value =
+        CFPreferencesCopyAppValue(key, GFLivePreferencesDomain);
+
+    if (!value) {
+        return MIN(
+            1.0,
+            MAX(0.0, fallbackPercent / 100.0)
+        );
+    }
+
+    double number = fallbackPercent;
+
+    if (CFGetTypeID(value) == CFNumberGetTypeID()) {
+        CFNumberGetValue(
+            (CFNumberRef)value,
+            kCFNumberDoubleType,
+            &number
+        );
+    }
+
+    CFRelease(value);
+
+    return MIN(
+        1.0,
+        MAX(0.0, (CGFloat)number / 100.0)
+    );
+}
+
+static NSInteger GFLiveFolderStyle(void) {
+    NSInteger style =
+        GFLiveReadInteger(CFSTR("Style"), 0);
+
+    return (style == 1) ? 1 : 0;
+}
+
+static CGFloat GFLiveFolderStrengthForStyle(
+    NSInteger style
+) {
+    /*
+     * Match GFLoadPreferences' migration behavior closely enough for
+     * already-existing glass views.
+     */
+    CGFloat legacy =
+        GFLiveReadPercent(CFSTR("GlassStrength"), 55.0);
+
+    if (style == 0) {
+        return GFLiveReadPercent(
+            CFSTR("ClearStrength"),
+            legacy * 100.0
+        );
+    }
+
+    return GFLiveReadPercent(
+        CFSTR("LiquidGlassStrength"),
+        legacy * 100.0
+    );
+}
+
+static void GFLiveSendNoArg(
+    id object,
+    NSString *selectorName
+) {
+    if (!object || selectorName.length == 0) return;
+
+    SEL selector =
+        NSSelectorFromString(selectorName);
+
+    if (![object respondsToSelector:selector]) return;
+
+    ((void (*)(id, SEL))objc_msgSend)(
+        object,
+        selector
+    );
+}
+
+static void GFLiveSetNumberForKey(
+    id object,
+    NSNumber *value,
+    NSString *key
+) {
     if (!object || !value || key.length == 0) return;
 
     @try {
@@ -61,127 +170,156 @@ static inline void GFLiveSetNumberForKey(id object,
     }
 }
 
-static UIView *GFLiveFindSubviewNamed(UIView *root, NSString *className) {
-    if (!root || className.length == 0) return nil;
-
-    if ([NSStringFromClass(root.class) isEqualToString:className]) {
-        return root;
-    }
-
-    for (UIView *subview in root.subviews) {
-        UIView *match = GFLiveFindSubviewNamed(subview, className);
-        if (match) return match;
-    }
-
-    return nil;
-}
-
-static void GFLiveCollectAndRefreshViews(UIView *view,
-                                         NSMutableArray<UIView *> *folderIcons) {
+static void GFLiveRefreshViewTree(UIView *view) {
     if (!view) return;
 
-    NSString *className = NSStringFromClass(view.class);
+    NSString *className =
+        NSStringFromClass(view.class);
 
-    if ([className isEqualToString:@"GFPanelGlassView"]) {
-        GFLiveSetNumberForKey(view, @(GFStyle), @"gfStyle");
-        GFLiveSetNumberForKey(view, @(GFGlassStrength), @"gfStrength");
-        GFLiveSendNoArg(view, @"gfRefreshMaterial");
-        [view setNeedsLayout];
-    } else if ([className isEqualToString:@"GFAppLibraryGlassView"]) {
-        /*
-         * App Library overlays derive their recipe from the refreshed globals.
-         * Their own strength remains intentionally fixed by the existing code.
-         */
-        GFLiveSendNoArg(view, @"gfRefreshMaterial");
-        [view setNeedsLayout];
-    } else if ([className isEqualToString:
-                @"SBHLibraryCategoryPodBackgroundView"]) {
-        GFUpdateRealAppLibraryPod(view);
-    } else if ([className isEqualToString:@"SBFolderBackgroundView"]) {
+    /*
+     * Open-folder host:
+     * Existing GlassFolders code owns creation/removal and restoration of
+     * stock material children. Calling it after GFLoadPreferences() makes the
+     * enable/disable state live for an already-open folder.
+     */
+    if ([className isEqualToString:
+            @"SBFolderBackgroundView"]) {
         GFUpdateOpenedFolderBackground(view);
-    } else if ([className isEqualToString:@"SBFolderIconImageView"]) {
-        [folderIcons addObject:view];
     }
 
-    for (UIView *subview in [view.subviews copy]) {
-        GFLiveCollectAndRefreshViews(subview, folderIcons);
+    /*
+     * App Library category cards:
+     * Reuse the project's authoritative update function.
+     */
+    if ([className isEqualToString:
+            @"SBHLibraryCategoryPodBackgroundView"]) {
+        GFUpdateRealAppLibraryPod(view);
     }
 
-    [view setNeedsLayout];
+    /*
+     * Existing folder glass instances retain style/strength as instance
+     * properties, so update those from preferences and ask the object's own
+     * material engine to rebuild itself.
+     *
+     * No access to Tweak.xm's static variables is needed here.
+     */
+    if ([className isEqualToString:
+            @"GFBackdropGlassView"] ||
+        [className isEqualToString:
+            @"GFPanelGlassView"]) {
+
+        NSInteger style =
+            GFLiveFolderStyle();
+
+        CGFloat strength =
+            GFLiveFolderStrengthForStyle(style);
+
+        GFLiveSetNumberForKey(
+            view,
+            @(style),
+            @"gfStyle"
+        );
+
+        GFLiveSetNumberForKey(
+            view,
+            @(strength),
+            @"gfStrength"
+        );
+
+        GFLiveSendNoArg(
+            view,
+            @"gfRefreshMaterial"
+        );
+
+        [view setNeedsLayout];
+    }
+
+    /*
+     * App Library glass reads its effective style/preset from the project's
+     * refreshed global preference state inside gfRefreshMaterial.
+     */
+    if ([className isEqualToString:
+            @"GFAppLibraryGlassView"]) {
+        GFLiveSendNoArg(
+            view,
+            @"gfRefreshMaterial"
+        );
+
+        [view setNeedsLayout];
+    }
+
+    /*
+     * Closed folder icons only receive a new native/GlassFolders background
+     * when SpringBoard asks SBFolderIconImageView to set one. We deliberately
+     * do not fabricate a private stock background here.
+     *
+     * Style/strength changes are already applied to the current
+     * GFBackdropGlassView above. Enable/disable settles through SpringBoard's
+     * normal icon relayout/reconfiguration after returning from Settings.
+     */
+    if ([className isEqualToString:
+            @"SBFolderIconImageView"]) {
+        [view setNeedsDisplay];
+        [view setNeedsLayout];
+    }
+
+    NSArray<UIView *> *children =
+        [view.subviews copy];
+
+    for (UIView *subview in children) {
+        GFLiveRefreshViewTree(subview);
+    }
 }
 
-static void GFLiveRefreshControllerTree(UIViewController *controller) {
+static void GFLiveRefreshControllerTree(
+    UIViewController *controller
+) {
     if (!controller) return;
 
-    NSString *className = NSStringFromClass(controller.class);
-    if ([className containsString:@"SBLibraryViewController"]) {
+    NSString *className =
+        NSStringFromClass(controller.class);
+
+    if ([className containsString:
+            @"SBLibraryViewController"]) {
         GFRefreshAppLibraryController(controller);
     }
 
-    for (UIViewController *child in controller.childViewControllers) {
+    for (UIViewController *child
+         in controller.childViewControllers) {
         GFLiveRefreshControllerTree(child);
     }
 
-    UIViewController *presented = controller.presentedViewController;
+    UIViewController *presented =
+        controller.presentedViewController;
+
     if (presented) {
         GFLiveRefreshControllerTree(presented);
     }
 }
 
-static void GFLiveRefreshClosedFolderIcon(UIView *iconView) {
-    if (!iconView) return;
-
-    [iconView setNeedsDisplay];
-    [iconView setNeedsLayout];
-
-    /*
-     * If folder glass is already active, rebuild the currently-installed plate
-     * through GlassFolders' own setBackgroundView: hook. That gives style and
-     * strength changes an immediate result without duplicating the material
-     * construction logic here.
-     *
-     * Enabling/disabling the folder effect itself is left to SpringBoard's
-     * normal icon reconfiguration on scene activation/layout; no respring is
-     * required.
-     */
-    if (!GFEnabled || GFViewIsInsideAppLibrary(iconView)) {
-        return;
-    }
-
-    UIView *currentGlass =
-        GFLiveFindSubviewNamed(iconView, @"GFBackdropGlassView");
-
-    SEL setBackgroundSelector =
-        NSSelectorFromString(@"setBackgroundView:");
-
-    if (currentGlass &&
-        [iconView respondsToSelector:setBackgroundSelector]) {
-        ((void (*)(id, SEL, id))objc_msgSend)(
-            iconView,
-            setBackgroundSelector,
-            currentGlass
-        );
-    }
-}
-
 static void GFLiveRefreshAllSurfaces(void) {
-    UIApplication *application = UIApplication.sharedApplication;
+    UIApplication *application =
+        UIApplication.sharedApplication;
+
     if (!application) return;
 
-    NSMutableArray<UIView *> *folderIcons =
-        [NSMutableArray array];
+    for (UIScene *scene
+         in application.connectedScenes) {
 
-    for (UIScene *scene in application.connectedScenes) {
-        if (![scene isKindOfClass:UIWindowScene.class]) {
+        if (![scene isKindOfClass:
+                UIWindowScene.class]) {
             continue;
         }
 
-        UIWindowScene *windowScene = (UIWindowScene *)scene;
+        UIWindowScene *windowScene =
+            (UIWindowScene *)scene;
 
-        for (UIWindow *window in windowScene.windows) {
+        for (UIWindow *window
+             in windowScene.windows) {
+
             if (!window) continue;
 
-            GFLiveCollectAndRefreshViews(window, folderIcons);
+            GFLiveRefreshViewTree(window);
 
             if (window.rootViewController) {
                 GFLiveRefreshControllerTree(
@@ -190,26 +328,21 @@ static void GFLiveRefreshAllSurfaces(void) {
             }
         }
     }
-
-    for (UIView *iconView in folderIcons) {
-        GFLiveRefreshClosedFolderIcon(iconView);
-    }
 }
 
 static void GFLiveApplyPreferencesNow(void) {
     /*
-     * Reuse the real GlassFolders loader so defaults, migration and style
-     * selection stay exactly in sync with the existing tweak.
+     * This is the authoritative existing GlassFolders loader.
+     * It updates GFEnabled/GFStyle/strength/App Library globals internally.
      */
     GFLoadPreferences();
 
-    /*
-     * One immediate pass updates currently-existing surfaces. A short second
-     * pass catches SpringBoard/App Library views that are relaid out one phase
-     * later after returning from Settings.
-     */
     GFLiveRefreshAllSurfaces();
 
+    /*
+     * SpringBoard/App Library may relayout one phase after returning from
+     * Settings, so do one cheap settling pass.
+     */
     dispatch_after(
         dispatch_time(
             DISPATCH_TIME_NOW,
@@ -223,30 +356,33 @@ static void GFLiveApplyPreferencesNow(void) {
 }
 
 static void GFLiveSchedulePreferenceReload(void) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        NSUInteger generation =
-            ++GFLiveRefreshGeneration;
+    dispatch_async(
+        dispatch_get_main_queue(),
+        ^{
+            NSUInteger generation =
+                ++GFLiveRefreshGeneration;
 
-        /*
-         * Settings sliders can emit many writes while dragging. Coalesce them
-         * so expensive backdrop/SDF refresh work happens only after activity
-         * settles instead of once per raw UISlider event.
-         */
-        dispatch_after(
-            dispatch_time(
-                DISPATCH_TIME_NOW,
-                (int64_t)(0.10 * NSEC_PER_SEC)
-            ),
-            dispatch_get_main_queue(),
-            ^{
-                if (generation != GFLiveRefreshGeneration) {
-                    return;
+            /*
+             * Coalesce rapid slider writes so backdrop/SDF work is not rebuilt
+             * for every raw UISlider event.
+             */
+            dispatch_after(
+                dispatch_time(
+                    DISPATCH_TIME_NOW,
+                    (int64_t)(0.10 * NSEC_PER_SEC)
+                ),
+                dispatch_get_main_queue(),
+                ^{
+                    if (generation !=
+                        GFLiveRefreshGeneration) {
+                        return;
+                    }
+
+                    GFLiveApplyPreferencesNow();
                 }
-
-                GFLiveApplyPreferencesNow();
-            }
-        );
-    });
+            );
+        }
+    );
 }
 
 static void GFLivePreferencesDarwinCallback(
@@ -272,11 +408,6 @@ static void GFLivePreferencesDarwinCallback(
 
 - (void)gfApplicationDidBecomeActive:
     (__unused NSNotification *)notification {
-    /*
-     * SpringBoard may have been visually covered by Settings when the Darwin
-     * notification arrived. Re-run the cheap surface refresh when Home becomes
-     * active so enable/disable and recycled icon views settle without respring.
-     */
     GFLiveSchedulePreferenceReload();
 }
 
@@ -294,13 +425,19 @@ static void GFLivePreferencesInstall(void) {
             CFNotificationSuspensionBehaviorDeliverImmediately
         );
 
-        static GFLiveActivationObserver *activationObserver = nil;
-        activationObserver = [GFLiveActivationObserver new];
+        static GFLiveActivationObserver
+            *activationObserver = nil;
+
+        activationObserver =
+            [GFLiveActivationObserver new];
 
         [[NSNotificationCenter defaultCenter]
             addObserver:activationObserver
-               selector:@selector(gfApplicationDidBecomeActive:)
-                   name:UIApplicationDidBecomeActiveNotification
+               selector:@selector(
+                   gfApplicationDidBecomeActive:
+               )
+                   name:
+                       UIApplicationDidBecomeActiveNotification
                  object:nil];
     }
 }
