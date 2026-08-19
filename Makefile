@@ -11,7 +11,7 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = GlassFolders
 GlassFolders_FILES = Tweak.xm
-GlassFolders_CFLAGS = -fobjc-arc
+GlassFolders_CFLAGS = -fobjc-arc -include $(THEOS_PROJECT_DIR)/GFLivePreferencesPrelude.h
 GlassFolders_FRAMEWORKS = UIKit CoreFoundation QuartzCore
 
 include $(THEOS_MAKE_PATH)/tweak.mk
