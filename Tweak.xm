@@ -4611,6 +4611,16 @@ static void GFUpdateOpenedFolderBackground(
 
 %ctor {
     @autoreleasepool {
+        /*
+         * Fix: only load inside SpringBoard.
+         * The original beta loaded in every process (Preferences, apps, etc.),
+         * wasting memory and potentially causing visual artifacts outside SpringBoard.
+         */
+        if (![[NSBundle mainBundle].bundleIdentifier
+              isEqualToString:@"com.apple.springboard"]) {
+            return;
+        }
+
         GFLoadPreferences();
 
         if (objc_getClass("SBFolderIconImageView")) {

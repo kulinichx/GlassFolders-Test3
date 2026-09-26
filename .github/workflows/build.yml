@@ -127,7 +127,7 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -q '^Version: 1.0.0$' ctrl/control
+          grep -q '^Version: 1.0.0-fix1$' ctrl/control
           grep -q '^Architecture: iphoneos-arm64e$' ctrl/control
 
           DYLIB="$(find root -type f -name 'GlassFolders.dylib' | head -n 1)"
@@ -216,7 +216,7 @@ jobs:
       - name: Upload RootHide deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.0.0-RootHide-arm64e
+          name: GlassFolders-1.0.0-fix1-RootHide-arm64e
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
@@ -346,7 +346,7 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -q '^Version: 1.0.0$' ctrl/control
+          grep -q '^Version: 1.0.0-fix1$' ctrl/control
           grep -q '^Architecture: iphoneos-arm64$' ctrl/control
 
           DYLIB="$(find root -type f -name 'GlassFolders.dylib' | head -n 1)"
@@ -452,7 +452,7 @@ jobs:
       - name: Upload rootless deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.0.0-Rootless-arm64
+          name: GlassFolders-1.0.0-fix1-Rootless-arm64
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
