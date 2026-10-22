@@ -62,3 +62,8 @@
 "Binding challenge expired" = "Binding challenge expired";
 "Binding challenge is for another device" = "Binding challenge is for another device";
 "Secure Enclave device proof unavailable" = "Secure Enclave device proof unavailable";
+"Dock" = "Dock";
+"Customize Dock" = "Customize Dock";
+"Hide Background" = "Hide Background";
+"Glass Effect" = "Glass Effect";
+"Turn off to restore the system Dock. Dock works independently of folders and App Library." = "Turn off to restore the system Dock. Dock works independently of folders and App Library.";

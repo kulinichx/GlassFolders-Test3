@@ -1,4 +1,4 @@
-name: GlassFolders 1.1.0 Release
+name: GlassFolders 1.2.0 Release
 
 on:
   workflow_dispatch:
@@ -22,7 +22,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 1.1.0 / ROOTHIDE ARM64E ==="
+          echo "=== GLASSFOLDERS 1.2.0 / ROOTHIDE ARM64E ==="
 
       - name: Install dependencies
         shell: bash
@@ -128,7 +128,7 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -q '^Version: 1.1.0~license2$' ctrl/control
+          grep -q '^Version: 1.2.0~dock1$' ctrl/control
           grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64e$' ctrl/control
 
@@ -169,7 +169,7 @@ jobs:
               p = plistlib.load(f)
           assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
           assert p["CFBundleName"] == "GlassFoldersPrefs"
-          assert p["CFBundleShortVersionString"] == "1.1.0"
+          assert p["CFBundleShortVersionString"] == "1.2.0"
           assert p["NSPrincipalClass"] == "GFRootListController"
           print("Preference bundle Info.plist verified.")
           PY
@@ -215,6 +215,12 @@ jobs:
           assert {"copyDeviceCode", "bindDevice", "pasteLicense", "removeLicense", "respring"}.issubset({x.get("action") for x in license_items})
           assert any(x.get("id") == "GFRemoveLicense" and x.get("gfVisibility") == "activated" for x in license_items)
           print("Dedicated license page and compact home entry verified.")
+          dock = {x.get("key"): x for x in p["items"] if x.get("key") in {"DockEnabled", "DockMode"}}
+          assert dock["DockEnabled"]["default"] is False
+          assert dock["DockMode"]["validValues"] == [0, 1]
+          assert dock["DockMode"]["validTitles"] == ["Hide Background", "Glass Effect"]
+          assert dock["DockMode"]["default"] == 0
+          print("Independent, opt-in Dock controls verified.")
           assert any(x.get("label") == "Folders" for x in items)
           assert any(x.get("label") == "App Library" for x in items)
           print("RootHide product identity/localization resources verified.")
@@ -226,7 +232,7 @@ jobs:
       - name: Upload RootHide deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.1.0-license2-RootHide-arm64e
+          name: GlassFolders-1.2.0-dock1-RootHide-arm64e
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
@@ -244,7 +250,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 1.1.0 / STANDARD ROOTLESS ARM64 ==="
+          echo "=== GLASSFOLDERS 1.2.0 / STANDARD ROOTLESS ARM64 ==="
 
       - name: Install dependencies
         shell: bash
@@ -356,7 +362,7 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -q '^Version: 1.1.0~license2$' ctrl/control
+          grep -q '^Version: 1.2.0~dock1$' ctrl/control
           grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64$' ctrl/control
 
@@ -413,7 +419,7 @@ jobs:
               p = plistlib.load(f)
           assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
           assert p["CFBundleName"] == "GlassFoldersPrefs"
-          assert p["CFBundleShortVersionString"] == "1.1.0"
+          assert p["CFBundleShortVersionString"] == "1.2.0"
           assert p["NSPrincipalClass"] == "GFRootListController"
           print("Preference bundle Info.plist verified.")
           PY
@@ -462,6 +468,12 @@ jobs:
           assert {"copyDeviceCode", "bindDevice", "pasteLicense", "removeLicense", "respring"}.issubset({x.get("action") for x in license_items})
           assert any(x.get("id") == "GFRemoveLicense" and x.get("gfVisibility") == "activated" for x in license_items)
           print("Dedicated license page and compact home entry verified.")
+          dock = {x.get("key"): x for x in p["items"] if x.get("key") in {"DockEnabled", "DockMode"}}
+          assert dock["DockEnabled"]["default"] is False
+          assert dock["DockMode"]["validValues"] == [0, 1]
+          assert dock["DockMode"]["validTitles"] == ["Hide Background", "Glass Effect"]
+          assert dock["DockMode"]["default"] == 0
+          print("Independent, opt-in Dock controls verified.")
           print("Standard rootless product identity/localization resources verified.")
           PY
 
@@ -471,7 +483,7 @@ jobs:
       - name: Upload rootless deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.1.0-license2-Rootless-arm64
+          name: GlassFolders-1.2.0-dock1-Rootless-arm64
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14

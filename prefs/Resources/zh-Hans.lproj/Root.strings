@@ -61,3 +61,8 @@
 "Keeps the material clear while adding blur and depth." = "保持通透，向上增加模糊与层次。";
 "Increases glass structure, highlights, and blur." = "向上增强玻璃结构、高光与模糊。";
 "Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material." = "文件夹与资源库可独立开启。“跟随文件夹”只同步 Clear / Liquid Glass 样式；资源库使用已调好的固定玻璃效果。";
+"Dock" = "Dock 栏";
+"Customize Dock" = "自定义 Dock";
+"Hide Background" = "隐藏背景";
+"Glass Effect" = "玻璃效果";
+"Turn off to restore the system Dock. Dock works independently of folders and App Library." = "关闭后恢复系统 Dock 背景。Dock 与文件夹、资源库可独立开关。";

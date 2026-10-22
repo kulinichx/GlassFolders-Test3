@@ -22,7 +22,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 1.1.0</string>
+			<string>GlassFolders 1.2.0</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -167,6 +167,34 @@
 			<string>PSGroupCell</string>
 			<key>footerText</key>
 			<string>Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key><string>Dock</string>
+			<key>footerText</key>
+			<string>Turn off to restore the system Dock. Dock works independently of folders and App Library.</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSSwitchCell</string>
+			<key>label</key><string>Customize Dock</string>
+			<key>key</key><string>DockEnabled</string>
+			<key>default</key><false/>
+			<key>defaults</key><string>com.kulinich.glassfolders</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSSegmentCell</string>
+			<key>label</key><string></string>
+			<key>key</key><string>DockMode</string>
+			<key>default</key><integer>0</integer>
+			<key>defaults</key><string>com.kulinich.glassfolders</string>
+			<key>validTitles</key>
+			<array><string>Hide Background</string><string>Glass Effect</string></array>
+			<key>validValues</key>
+			<array><integer>0</integer><integer>1</integer></array>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSGroupCell</string>
 		</dict>
 		<dict>
 			<key>cell</key>

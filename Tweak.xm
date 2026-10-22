@@ -7,7 +7,7 @@
 #import "GFLicense.h"
 
 /*
- * GlassFolders 1.1.0 — release
+ * GlassFolders 1.2.0 — release
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -41,6 +41,10 @@ static CGFloat GFGlassStrength = 0.0;        // active style strength for existi
 
 // App Library remains intentionally independent from normal folders.
 static BOOL GFAppLibraryGlassEnabled = NO;
+
+// Dock is independent of folder/App Library preferences, and opt-in on upgrade.
+static BOOL GFDockEnabled = NO;
+static NSInteger GFDockMode = 0; // 0 hide background, 1 glass
 
 // Legacy value retained for preference compatibility:
 // 0 = Clear, 1 = Liquid Glass
@@ -115,7 +119,7 @@ static void GFLoadPreferences(void) {
     CFPreferencesAppSynchronize(GFPreferencesDomain);
 
     // Verify signed entitlement when loading preferences, never in frame/layout
-    // callbacks. Both folder and App Library gates use the same result.
+    // callbacks. All three surfaces use the same verified entitlement.
     BOOL licensed = GFLicenseCurrentInfo() != nil;
     GFEnabled = licensed && GFReadBool(CFSTR("Enabled"), YES);
     GFStyle = GFReadInteger(CFSTR("Style"), 0);
@@ -138,6 +142,9 @@ static void GFLoadPreferences(void) {
 
     GFAppLibraryGlassEnabled =
         licensed && GFReadBool(CFSTR("AppLibraryGlassEnabled"), NO);
+
+    GFDockEnabled = licensed && GFReadBool(CFSTR("DockEnabled"), NO);
+    GFDockMode = GFReadInteger(CFSTR("DockMode"), 0) == 1 ? 1 : 0;
 
     GFAppLibraryStyle =
         GFReadInteger(CFSTR("AppLibraryStyle"), 0);
@@ -4289,6 +4296,180 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 @end
 
 
+// A distinct class keeps live folder-style changes away from the Dock recipe.
+@interface GFDockGlassView : GFPanelGlassView
+@end
+@implementation GFDockGlassView
+@end
+
+@interface GFDockBackgroundState : NSObject
+@property (nonatomic, weak) UIView *background;
+@property (nonatomic, strong) GFDockGlassView *glass;
+@property (nonatomic, assign) BOOL originalHidden;
+@property (nonatomic, assign) BOOL captureNativeVisibility;
+- (void)restoreBackground;
+@end
+
+@implementation GFDockBackgroundState
+- (void)restoreBackground {
+    UIView *background = self.background;
+    if (background) background.hidden = self.originalHidden;
+    [self.glass removeFromSuperview];
+    self.glass = nil;
+    self.background = nil;
+}
+- (void)dealloc {
+    [self restoreBackground];
+}
+@end
+
+static char kGFDockBackgroundStateKey;
+
+// Only inspect the two known Dock hosts' native background. Never traverse or
+// suppress icon/content views, and leave unfamiliar layouts untouched.
+static UIView *GFDockNativeBackground(UIView *host) {
+    id candidate = nil;
+    Ivar ivar = class_getInstanceVariable(host.class, "_backgroundView");
+    const char *encoding = ivar ? ivar_getTypeEncoding(ivar) : NULL;
+    if (encoding && encoding[0] == '@') {
+        candidate = object_getIvar(host, ivar);
+    }
+    if (!candidate) {
+        SEL selector = NSSelectorFromString(@"backgroundView");
+        Method method = class_getInstanceMethod(host.class, selector);
+        char returnType[8] = {0};
+        if (method) method_getReturnType(method, returnType, sizeof(returnType));
+        if (method && method_getNumberOfArguments(method) == 2 &&
+            returnType[0] == '@') {
+            candidate = ((id (*)(id, SEL))objc_msgSend)(host, selector);
+        }
+    }
+    if (![candidate isKindOfClass:UIView.class] || candidate == host ||
+        ![(UIView *)candidate isDescendantOfView:host]) return nil;
+    return (UIView *)candidate;
+}
+
+static void GFRestoreDockBackground(UIView *host) {
+    GFDockBackgroundState *state =
+        objc_getAssociatedObject(host, &kGFDockBackgroundStateKey);
+    [state restoreBackground];
+    objc_setAssociatedObject(host, &kGFDockBackgroundStateKey, nil,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static void GFPrepareDockNativeUpdate(UIView *host) {
+    GFDockBackgroundState *state =
+        objc_getAssociatedObject(host, &kGFDockBackgroundStateKey);
+    if (state.background) {
+        state.background.hidden = state.originalHidden;
+        state.captureNativeVisibility = YES;
+    }
+}
+
+static void GFUpdateDockBackground(UIView *host) {
+    if (!host) return;
+    GFDockBackgroundState *state =
+        objc_getAssociatedObject(host, &kGFDockBackgroundStateKey);
+    if (!GFDockEnabled) {
+        if (state) {
+            GFRestoreDockBackground(host);
+            [host setNeedsLayout];
+        }
+        return;
+    }
+
+    UIView *background = GFDockNativeBackground(host);
+    if (!background || (state && state.background != background)) {
+        GFRestoreDockBackground(host);
+        state = nil;
+    }
+    if (!background) return;
+
+    if (!state) {
+        state = [GFDockBackgroundState new];
+        state.background = background;
+        state.originalHidden = background.hidden;
+        objc_setAssociatedObject(host, &kGFDockBackgroundStateKey, state,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (state.captureNativeVisibility) {
+        state.originalHidden = background.hidden;
+        state.captureNativeVisibility = NO;
+    }
+
+    if (GFDockMode == 1) {
+        if (!state.glass) {
+            state.glass = [[GFDockGlassView alloc] initWithStyle:1 strength:0.55];
+            state.glass.isAccessibilityElement = NO;
+            state.glass.accessibilityElementsHidden = YES;
+        }
+        GFDockGlassView *glass = state.glass;
+        UIView *container = background.superview;
+        // Sibling of the native background, below Dock content. A hidden
+        // native view cannot hide our material or swallow icon touches.
+        NSUInteger index = [container.subviews indexOfObjectIdenticalTo:background];
+        if (glass.superview != container ||
+            [container.subviews indexOfObjectIdenticalTo:glass] != index + 1) {
+            [container insertSubview:glass aboveSubview:background];
+        }
+        glass.bounds = (CGRect){CGPointZero, background.bounds.size};
+        glass.center = background.center;
+        glass.transform = background.transform;
+        glass.alpha = background.alpha;
+        glass.hidden = state.originalHidden;
+        glass.layer.zPosition = background.layer.zPosition;
+        CGFloat radius = background.layer.cornerRadius;
+        if (radius <= 0.0) radius = MIN(30.0, background.bounds.size.height * 0.5);
+        [glass setPreferredRadius:radius];
+        [glass setNeedsLayout];
+    } else {
+        [state.glass removeFromSuperview];
+        state.glass = nil;
+    }
+    // Only the native background is suppressed. Alpha stays owned by the OS.
+    if (!background.hidden) background.hidden = YES;
+}
+
+%group GFDockHooks
+%hook SBDockView
+- (void)layoutSubviews {
+    %orig;
+    GFUpdateDockBackground((UIView *)self);
+}
+%end
+%end
+
+%group GFFloatingDockHooks
+%hook SBFloatingDockPlatterView
+- (void)layoutSubviews {
+    %orig;
+    GFUpdateDockBackground((UIView *)self);
+}
+%end
+%end
+
+// Restore first so native visibility/alpha decisions made during transitions
+// are captured again. No global UIView setters or per-frame callbacks.
+%group GFDockAlphaHooks
+%hook SBDockView
+- (void)setBackgroundAlpha:(CGFloat)alpha {
+    GFPrepareDockNativeUpdate((UIView *)self);
+    %orig;
+    GFUpdateDockBackground((UIView *)self);
+}
+%end
+%end
+
+%group GFFloatingDockAlphaHooks
+%hook SBFloatingDockPlatterView
+- (void)setBackgroundAlpha:(CGFloat)alpha {
+    GFPrepareDockNativeUpdate((UIView *)self);
+    %orig;
+    GFUpdateDockBackground((UIView *)self);
+}
+%end
+%end
+
 /*
  * Per-instance storage. No global array and no polling.
  */
@@ -4630,6 +4811,21 @@ static void GFUpdateOpenedFolderBackground(
         }
 
         GFLoadPreferences();
+
+        Class dockClass = objc_getClass("SBDockView");
+        if ([dockClass isSubclassOfClass:UIView.class]) {
+            %init(GFDockHooks);
+            if (class_getInstanceMethod(dockClass, @selector(setBackgroundAlpha:))) {
+                %init(GFDockAlphaHooks);
+            }
+        }
+        Class floatingDockClass = objc_getClass("SBFloatingDockPlatterView");
+        if ([floatingDockClass isSubclassOfClass:UIView.class]) {
+            %init(GFFloatingDockHooks);
+            if (class_getInstanceMethod(floatingDockClass, @selector(setBackgroundAlpha:))) {
+                %init(GFFloatingDockAlphaHooks);
+            }
+        }
 
         // Private SpringBoard classes can change between iOS releases. Hook
         // only compatible UIKit subclasses and existing private selectors.

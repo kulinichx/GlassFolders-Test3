@@ -28,6 +28,7 @@ static void GFLoadPreferences(void);
 static void GFUpdateOpenedFolderBackground(UIView *backgroundView);
 static void GFUpdateRealAppLibraryPod(UIView *pod);
 static void GFRefreshAppLibraryController(UIViewController *controller);
+static void GFUpdateDockBackground(UIView *host);
 
 static NSUInteger GFLiveRefreshGeneration = 0;
 
@@ -152,6 +153,13 @@ static void GFLiveRefreshViewTree(UIView *view) {
 
     NSString *className =
         NSStringFromClass(view.class);
+
+    Class dockClass = NSClassFromString(@"SBDockView");
+    Class floatingDockClass = NSClassFromString(@"SBFloatingDockPlatterView");
+    if ((dockClass && [view isKindOfClass:dockClass]) ||
+        (floatingDockClass && [view isKindOfClass:floatingDockClass])) {
+        GFUpdateDockBackground(view);
+    }
 
     /*
      * Open-folder host:
