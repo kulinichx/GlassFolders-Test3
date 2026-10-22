@@ -187,6 +187,8 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 static char kGFLockBackgroundKey;
 static char kGFLockPressKey;
 static char kGFLockStackedKey;
+static char kGFLockCoverSheetVisibleKey;
+static char kGFLockCoverSheetDismissingKey;
 
 static BOOL GFLockIsKind(id object, const char *name) {
     Class cls = objc_getClass(name);
@@ -234,7 +236,40 @@ static CGFloat GFLockRadius(id object) {
     return 0.0;
 }
 
-static BOOL GFLockScreenVisible(void) {
+static BOOL GFLockHasAppearanceCallback(Class cls, SEL selector) {
+    Method method = class_getInstanceMethod(cls, selector);
+    char result[8] = {0};
+    char argument[8] = {0};
+    if (!method || method_getNumberOfArguments(method) != 3) return NO;
+    method_getReturnType(method, result, sizeof(result));
+    method_getArgumentType(method, 2, argument, sizeof(argument));
+    return result[0] == 'v' && (argument[0] == 'B' || argument[0] == 'c');
+}
+
+static UIResponder *GFLockCoverSheetOwner(UIView *host) {
+    UIResponder *responder = host;
+    for (NSUInteger depth = 0; responder && depth < 64; depth++) {
+        if (GFLockIsKind(responder, "CSCoverSheetViewController")) return responder;
+        responder = responder.nextResponder;
+    }
+    return nil;
+}
+
+static BOOL GFLockScreenDismissing(UIView *host) {
+    return [objc_getAssociatedObject(GFLockCoverSheetOwner(host),
+                                    &kGFLockCoverSheetDismissingKey) boolValue];
+}
+
+static BOOL GFLockScreenVisible(UIView *host) {
+    // Authentication/manager flags may flip at the start of an interactive
+    // dismissal, while the cover sheet is still on screen. Its appearance
+    // lifetime lasts through that animation and through a cancelled swipe.
+    // Scope the marker to the owning controller, not a global unlocked flag.
+    NSNumber *visible = objc_getAssociatedObject(GFLockCoverSheetOwner(host),
+                                                &kGFLockCoverSheetVisibleKey);
+    if (visible) return visible.boolValue;
+    // Fallback for unrecognized owners or lifecycle callbacks unavailable on
+    // a particular OS. Never extend ordinary banners into lock-screen glass.
     Class cls = objc_getClass("SBLockScreenManager");
     // Class methods use the metaclass, unlike the instance getter helper.
     SEL sel = NSSelectorFromString(@"sharedInstanceIfExists");
@@ -329,7 +364,7 @@ static void GFUpdateLockScreenSurface(UIView *host) {
         // Latching/pronounced describe button configuration, not whether the
         // flashlight is currently on. Use selection and actual press state.
         enabled = GFLockQuickActionsEnabled && !button.selected && !button.highlighted &&
-                  button.enabled &&
+                  (button.enabled || GFLockScreenDismissing(host)) &&
                   ![objc_getAssociatedObject(host, &kGFLockPressKey) boolValue];
         background = GFLockView(GFLockIvar(host, "_backgroundEffectView"));
         if (![background isKindOfClass:UIVisualEffectView.class]) background = nil;
@@ -354,7 +389,7 @@ static void GFUpdateLockScreenSurface(UIView *host) {
 
     // Unknown/missing background layouts are left untouched. In particular,
     // an opaque remotely rendered Live Activity is never made transparent.
-    if (!enabled || !host.window || !GFLockScreenVisible() || !background ||
+    if (!enabled || !host.window || !GFLockScreenVisible(host) || !background ||
         background == host || ![background isDescendantOfView:host] ||
         !content || ![content isDescendantOfView:host] || [content isDescendantOfView:background] ||
         background.bounds.size.width <= 0.0 || background.bounds.size.height <= 0.0) {

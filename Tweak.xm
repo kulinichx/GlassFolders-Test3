@@ -4606,6 +4606,46 @@ static void GFUpdateDockBackground(UIView *host) {
 %end
 %end
 
+%group GFLockCoverSheetAppearanceHooks
+%hook CSCoverSheetViewController
+- (void)viewWillAppear:(BOOL)animated {
+    objc_setAssociatedObject(self, &kGFLockCoverSheetVisibleKey, @YES,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, &kGFLockCoverSheetDismissingKey, @NO,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    %orig;
+    GFLockScheduleRefresh();
+}
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+    // Also settle state after an interactive dismissal is cancelled.
+    objc_setAssociatedObject(self, &kGFLockCoverSheetVisibleKey, @YES,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, &kGFLockCoverSheetDismissingKey, @NO,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    GFLockScheduleRefresh();
+}
+- (void)viewWillDisappear:(BOOL)animated {
+    // UIKit can disable quick actions during dismissal. Keep their ordinary
+    // material while they animate away; selected/pressed feedback still wins.
+    objc_setAssociatedObject(self, &kGFLockCoverSheetDismissingKey, @YES,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    %orig;
+    GFLockScheduleRefresh();
+}
+- (void)viewDidDisappear:(BOOL)animated {
+    // Keep the replacement through the entire dismissal; willDisappear is
+    // too early and also runs for interactive swipes that can be cancelled.
+    %orig;
+    objc_setAssociatedObject(self, &kGFLockCoverSheetVisibleKey, @NO,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, &kGFLockCoverSheetDismissingKey, @NO,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    GFLockScheduleRefresh();
+}
+%end
+%end
+
 %group GFLockPresentedHooks
 %hook SBLockScreenManager
 - (void)lockScreenViewControllerDidPresent {
@@ -4965,6 +5005,15 @@ static void GFUpdateOpenedFolderBackground(
         }
 
         GFLoadPreferences();
+
+        Class coverSheetClass = objc_getClass("CSCoverSheetViewController");
+        if ([coverSheetClass isSubclassOfClass:UIViewController.class] &&
+            GFLockHasAppearanceCallback(coverSheetClass, @selector(viewWillAppear:)) &&
+            GFLockHasAppearanceCallback(coverSheetClass, @selector(viewDidAppear:)) &&
+            GFLockHasAppearanceCallback(coverSheetClass, @selector(viewWillDisappear:)) &&
+            GFLockHasAppearanceCallback(coverSheetClass, @selector(viewDidDisappear:))) {
+            %init(GFLockCoverSheetAppearanceHooks);
+        }
 
         Class notificationClass = objc_getClass("NCNotificationShortLookView");
         if ([notificationClass isSubclassOfClass:UIView.class]) {
