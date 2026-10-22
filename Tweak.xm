@@ -4542,6 +4542,34 @@ static void GFUpdateDockBackground(UIView *host) {
     %orig;
     GFUpdateLockScreenSurface((UIView *)self);
 }
+- (void)setEnabled:(BOOL)enabled {
+    GFRestoreLockScreenSurface((UIView *)self);
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+%end
+%end
+
+%group GFLockQuickActionStyleHooks
+%hook CSQuickActionsButton
+- (void)_updateStyle {
+    // Legibility/wallpaper changes can rebuild or reveal the stock material
+    // without running layout. Restore before UIKit updates, then reapply.
+    GFRestoreLockScreenSurface((UIView *)self);
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+%end
+%end
+
+%group GFLockQuickActionEndHooks
+%hook CSQuickActionsButton
+- (void)clickInteractionDidEnd:(id)interaction {
+    GFRestoreLockScreenSurface((UIView *)self);
+    %orig;
+    objc_setAssociatedObject(self, &kGFLockPressKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    GFUpdateLockScreenSurface((UIView *)self);
+}
 %end
 %end
 
@@ -4941,6 +4969,12 @@ static void GFUpdateOpenedFolderBackground(
         Class quickClass = objc_getClass("CSQuickActionsButton");
         if ([quickClass isSubclassOfClass:UIControl.class]) {
             %init(GFLockQuickActionHooks);
+            if (class_getInstanceMethod(quickClass, NSSelectorFromString(@"_updateStyle"))) {
+                %init(GFLockQuickActionStyleHooks);
+            }
+            if (class_getInstanceMethod(quickClass, NSSelectorFromString(@"clickInteractionDidEnd:"))) {
+                %init(GFLockQuickActionEndHooks);
+            }
             if (class_getInstanceMethod(quickClass, NSSelectorFromString(@"_animateEffectUpdateWithProgress:ended:"))) {
                 %init(GFLockQuickActionPressHooks);
             }

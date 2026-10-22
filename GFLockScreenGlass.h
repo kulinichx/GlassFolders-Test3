@@ -3,13 +3,122 @@
 #ifndef GF_LOCK_SCREEN_GLASS_H
 #define GF_LOCK_SCREEN_GLASS_H
 
+static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, CGFloat radius) {
+    CALayer *backdrop = glass.gfBackdropSampleView.layer;
+    if ([NSStringFromClass(backdrop.class) containsString:@"Backdrop"]) {
+        // Peers using the same recipe share a capture group. Never filter in
+        // place: overlapping/animated notifications must not feed previously
+        // brightened glass back into another glass pass.
+        SEL groupSelector = NSSelectorFromString(@"setGroupName:");
+        if ([backdrop respondsToSelector:groupSelector])
+            ((void (*)(id, SEL, id))objc_msgSend)(backdrop, groupSelector, group);
+        SEL inPlaceSelector = NSSelectorFromString(@"setAllowsInPlaceFiltering:");
+        if ([backdrop respondsToSelector:inPlaceSelector])
+            ((void (*)(id, SEL, BOOL))objc_msgSend)(backdrop, inPlaceSelector, NO);
+        NSMutableArray *filters = [NSMutableArray array];
+        id saturate = GFCreateCAFilter(@"colorSaturate");
+        if (saturate) {
+            [saturate setValue:@1.04 forKey:@"inputAmount"];
+            [filters addObject:saturate];
+        }
+        id blur = GFCreateCAFilter(@"gaussianBlur");
+        if (blur) {
+            [blur setValue:@(radius) forKey:@"inputRadius"];
+            [blur setValue:@YES forKey:@"inputNormalizeEdges"];
+            [filters addObject:blur];
+        }
+        // No additive brightness filter: it can accumulate across a stack.
+        [backdrop setValue:filters forKey:@"filters"];
+        glass.gfBackdropSampleView.alpha = 1.0;
+    }
+}
+
 @interface GFLockScreenGlassView : GFPanelGlassView
 @property (nonatomic, assign) BOOL gfCircular;
 @end
 @implementation GFLockScreenGlassView
+- (void)gfRefreshMaterial {
+    [super gfRefreshMaterial];
+    GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.cards", 6.0);
+    // Keep the body neutral; directional lighting belongs at the edge, not
+    // in a white fill that becomes brighter with every overlapping card.
+    self.gfTintView.alpha = 0.0;
+    self.gfOpticalLayer.opacity = 0.65;
+}
 - (void)layoutSubviews {
     [super layoutSubviews];
     if (self.gfCircular) self.layer.cornerCurve = kCACornerCurveCircular;
+}
+@end
+
+// A 50 pt circular control needs its own material and specular geometry. The
+// large-card optical texture is too soft/dense at this scale and is generated
+// for continuous rounded rectangles, rather than a circular button.
+@interface GFQuickActionGlassView : GFLockScreenGlassView
+@property (nonatomic, strong) CAGradientLayer *gfCircularRim;
+@property (nonatomic, strong) CAShapeLayer *gfCircularRimMask;
+@property (nonatomic, assign) CGSize gfCircularRimSize;
+@end
+@implementation GFQuickActionGlassView
+- (instancetype)initWithStyle:(NSInteger)style strength:(CGFloat)strength {
+    self = [super initWithStyle:style strength:strength];
+    if (self) {
+        self.gfCircular = YES;
+        self.gfCircularRim = [CAGradientLayer layer];
+        self.gfCircularRim.startPoint = CGPointMake(0.15, 0.0);
+        self.gfCircularRim.endPoint = CGPointMake(0.85, 1.0);
+        self.gfCircularRim.locations = @[@0.0, @0.28, @0.60, @1.0];
+        self.gfCircularRim.colors = @[
+            (id)[UIColor colorWithWhite:1.0 alpha:0.42].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.12].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.035].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.24].CGColor
+        ];
+        self.gfCircularRim.zPosition = 21.0;
+        self.gfCircularRim.contentsScale = UIScreen.mainScreen.scale;
+        self.gfCircularRimMask = [CAShapeLayer layer];
+        self.gfCircularRimMask.contentsScale = UIScreen.mainScreen.scale;
+        self.gfCircularRimMask.fillColor = UIColor.clearColor.CGColor;
+        self.gfCircularRimMask.strokeColor = UIColor.whiteColor.CGColor;
+        self.gfCircularRimMask.lineWidth = 0.7;
+        self.gfCircularRim.mask = self.gfCircularRimMask;
+        [self.layer addSublayer:self.gfCircularRim];
+    }
+    return self;
+}
+- (void)gfRefreshMaterial {
+    [super gfRefreshMaterial];
+    // Keep wallpaper detail at button scale, with a small neutral lift. No
+    // opaque grey disc, copied wallpaper image, or overlay over the icon.
+    GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.buttons", 3.0);
+    if (self.gfFallbackBlurView) {
+        self.gfFallbackBlurView.effect =
+            [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterial];
+        self.gfFallbackBlurView.alpha = 0.18;
+    }
+    self.gfTintView.alpha = GFUsesDarkAppearance(self) ? 0.045 : 0.028;
+    self.layer.borderWidth = 0.0;
+    self.gfOpticalLayer.hidden = YES;
+}
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    // The rounded-card texture stays unused. The mask and highlight both use
+    // the same exact ellipse, including when display zoom changes the size.
+    self.gfOpticalLayer.hidden = YES;
+    self.layer.cornerCurve = kCACornerCurveCircular;
+    self.layer.cornerRadius = MIN(self.bounds.size.width, self.bounds.size.height) * 0.5;
+    self.gfBackdropSampleView.frame = CGRectInset(self.bounds, -12.0, -12.0);
+    self.gfFallbackBlurView.frame = self.gfBackdropSampleView.frame;
+    if (!CGSizeEqualToSize(self.gfCircularRimSize, self.bounds.size)) {
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        self.gfCircularRim.frame = self.bounds;
+        self.gfCircularRimMask.frame = self.bounds;
+        CGRect ring = CGRectInset(self.bounds, 0.5, 0.5);
+        self.gfCircularRimMask.path = [UIBezierPath bezierPathWithOvalInRect:ring].CGPath;
+        self.gfCircularRimSize = self.bounds.size;
+        [CATransaction commit];
+    }
 }
 @end
 
@@ -176,7 +285,8 @@ static void GFUpdateLockScreenSurface(UIView *host) {
         state = [GFLockBackgroundState new];
         state.background = background;
         state.originalHidden = background.hidden;
-        state.glass = [[GFLockScreenGlassView alloc] initWithStyle:1 strength:0.55];
+        Class glassClass = circle ? GFQuickActionGlassView.class : GFLockScreenGlassView.class;
+        state.glass = [[glassClass alloc] initWithStyle:1 strength:0.55];
         state.glass.isAccessibilityElement = NO;
         state.glass.accessibilityElementsHidden = YES;
         objc_setAssociatedObject(host, &kGFLockBackgroundKey, state, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
