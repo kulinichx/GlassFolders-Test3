@@ -7,7 +7,7 @@
 "Liquid Glass Strength" = "Liquid Glass 强度";
 "App Library Style" = "资源库样式";
 "Follow Folder" = "跟随文件夹";
-"Apply & Respring" = "应用并注销";
+"Reload SpringBoard" = "重新载入桌面";
 "About" = "关于";
 "Developer" = "作者";
 
@@ -24,14 +24,14 @@
 "2. Device Proof Copied ✓" = "2. 设备回执已复制 ✓";
 "Send the Device Code to the developer. Use their binding challenge to create a device proof, then send the proof back. Complete binding and signing within five minutes. Finally, paste the license to activate." = "将设备码发给开发者，收到绑定码后生成设备回执并发回。绑定与签发需在五分钟内完成，最后粘贴收到的授权即可激活。";
 "Your current license remains active until a new license is saved." = "新授权保存成功前，原授权继续有效。";
-"Apply & Respring after changing the license." = "更改授权后，请点击“应用并注销”。";
+"Reload SpringBoard after changing the license." = "更改授权后，请点击“重新载入桌面”。";
 "Offline License" = "授权管理";
 "License Status" = "授权状态";
 "1. Copy Device Code" = "1. 复制设备码";
 "2. Bind This Device" = "2. 绑定本机";
 "3. Paste License" = "3. 粘贴授权";
 "Remove License" = "移除授权";
-"Copy Device Code, bind this device, then paste your license. Glass effects require activation. Apply & Respring after changing the license." = "复制设备码发送给开发者，完成本机绑定后粘贴授权。玻璃效果需要激活；更改授权后请点击“应用并注销”。";
+"Copy Device Code, bind this device, then paste your license. Glass effects require activation. Reload SpringBoard after changing the license." = "复制设备码发送给开发者，完成本机绑定后粘贴授权。玻璃效果需要激活；更改授权后请点击“重新载入桌面”。";
 "Activated" = "已激活";
 "Not Activated" = "未激活";
 "OK" = "好";
@@ -44,9 +44,9 @@
 "Paste the GlassFolders license from the developer." = "粘贴开发者签发的 GlassFolders 专用授权。";
 "Device Code copied. Send it to the developer to receive a binding challenge." = "设备码已复制，请发送给开发者获取绑定码。";
 "Device proof copied. Send it to the developer for verification and signing." = "设备回执已复制，请在绑定码到期前发送给开发者验证并签发授权。";
-"License saved. Tap Apply & Respring to enable glass effects." = "授权已保存，点击“应用并注销”启用玻璃效果。";
+"License saved. Tap Reload SpringBoard to enable glass effects." = "授权已保存，点击“重新载入桌面”启用玻璃效果。";
 "Remove this device's saved license? Glass effects will stop after respring." = "确定移除本机保存的授权吗？注销后玻璃效果将停止。";
-"License removed. Tap Apply & Respring." = "授权已移除，请点击“应用并注销”。";
+"License removed. Tap Reload SpringBoard." = "授权已移除，请点击“重新载入桌面”。";
 "Invalid license format" = "授权格式错误，请粘贴完整的 GF1 授权。";
 "Invalid license signature" = "授权签名无效，请检查是否复制完整或联系开发者。";
 "Unsupported license payload" = "该授权不适用于此版本的 GlassFolders。";
@@ -79,3 +79,13 @@
 "Notification Banners" = "通知横幅";
 "Glass Banners" = "横幅玻璃效果";
 "Glass for system notification banners on the Home Screen and in apps. Independent of lock screen cards and folder strength. Changes take effect immediately; turn off to restore the system appearance." = "为主屏及应用内弹出的系统通知横幅添加玻璃效果，与锁屏卡片和文件夹强度独立。设置即时生效；关闭后恢复系统样式。";
+
+"Home Screen Glass" = "主屏玻璃";
+"Dock Mode" = "Dock 模式";
+"Switches and appearance changes take effect immediately." = "开关与外观调整即时生效。";
+"Lock screen glass is independent of folder strength." = "锁屏玻璃不受文件夹强度影响。";
+"Reload after installing an update or changing the license." = "安装新版或更改授权后使用，日常调整无需重新载入。";
+"%ld/%ld enabled" = "已开启 %ld/%ld";
+"Expanded" = "已展开";
+"Collapsed" = "已收起";
+"Tap to expand or collapse." = "轻点展开或收起。";

@@ -346,6 +346,75 @@ extern char **environ;
 
 @implementation GFRootListController
 
+- (NSUserDefaults *)layoutPreferences {
+    // UI expansion state stays separate from the tweak's live settings.
+    return [[NSUserDefaults alloc] initWithSuiteName:@"com.kulinich.glassfolders.settings-layout"];
+}
+
+- (BOOL)sectionExpanded:(NSString *)section {
+    return [[self layoutPreferences] boolForKey:section];
+}
+
+- (NSString *)sectionSummary:(PSSpecifier *)specifier {
+    NSString *section = [specifier propertyForKey:@"gfCollapseID"];
+    NSArray *keys = [section isEqualToString:@"home"]
+        ? @[@"Enabled", @"AppLibraryGlassEnabled", @"DockEnabled", @"BannerNotificationsEnabled"]
+        : @[@"LockNotificationsEnabled", @"LockQuickActionsEnabled", @"LockMusicEnabled", @"LockActivitiesEnabled"];
+    NSInteger enabled = 0;
+    for (NSString *key in keys) {
+        NSNumber *value = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)key,
+            CFSTR("com.kulinich.glassfolders")));
+        if (value ? value.boolValue : [key isEqualToString:@"Enabled"]) enabled++;
+    }
+    return [NSString stringWithFormat:[self gfText:@"%ld/%ld enabled"], (long)enabled, (long)keys.count];
+}
+
+- (void)configureSectionCell:(UITableViewCell *)cell specifier:(PSSpecifier *)specifier {
+    NSString *section = [specifier propertyForKey:@"gfCollapseID"];
+    BOOL expanded = [self sectionExpanded:section];
+    cell.textLabel.textColor = UIColor.labelColor;
+    cell.detailTextLabel.text = [self sectionSummary:specifier];
+    UIImageView *arrow = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:expanded ? @"chevron.up" : @"chevron.down"]];
+    arrow.tintColor = UIColor.tertiaryLabelColor;
+    arrow.isAccessibilityElement = NO;
+    cell.accessoryView = arrow;
+    cell.accessibilityTraits |= UIAccessibilityTraitButton;
+    cell.accessibilityValue = [NSString stringWithFormat:@"%@, %@", cell.detailTextLabel.text,
+        [self gfText:expanded ? @"Expanded" : @"Collapsed"]];
+    cell.accessibilityHint = [self gfText:@"Tap to expand or collapse."];
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCell *cell = [super tableView:tableView cellForRowAtIndexPath:indexPath];
+    PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
+    if ([specifier propertyForKey:@"gfCollapseID"]) {
+        [self configureSectionCell:cell specifier:specifier];
+    }
+    return cell;
+}
+
+- (void)refreshSectionSummaries {
+    for (UITableViewCell *cell in self.table.visibleCells) {
+        NSIndexPath *indexPath = [self.table indexPathForCell:cell];
+        PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
+        if ([specifier propertyForKey:@"gfCollapseID"]) {
+            [self configureSectionCell:cell specifier:specifier];
+        }
+    }
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
+    NSString *section = [specifier propertyForKey:@"gfCollapseID"];
+    if (section) {
+        [tableView deselectRowAtIndexPath:indexPath animated:YES];
+        [[self layoutPreferences] setBool:![self sectionExpanded:section] forKey:section];
+        [self reloadSpecifiers];
+        return;
+    }
+    [super tableView:tableView didSelectRowAtIndexPath:indexPath];
+}
+
 - (NSString *)licenseSummary:(PSSpecifier *)specifier {
     (void)specifier;
     return [self gfText:GFLicenseCurrentInfo() ? @"Activated" : @"Not Activated"];
@@ -353,13 +422,18 @@ extern char **environ;
 
 - (NSArray *)specifiers {
     if (!_specifiers) {
-        NSMutableArray *items = [[self loadSpecifiersFromPlistName:@"Root" target:self] mutableCopy];
-        if (GFLicenseCurrentInfo()) {
-            NSIndexSet *prompt = [items indexesOfObjectsPassingTest:^BOOL(PSSpecifier *specifier, NSUInteger index, BOOL *stop) {
-                (void)index; (void)stop;
-                return [[specifier propertyForKey:@"gfVisibility"] isEqualToString:@"unactivated"];
-            }];
-            [items removeObjectsAtIndexes:prompt];
+        BOOL activated = GFLicenseCurrentInfo() != nil;
+        NSNumber *style = CFBridgingRelease(CFPreferencesCopyAppValue(CFSTR("Style"),
+            CFSTR("com.kulinich.glassfolders")));
+        NSInteger selectedStyle = style.integerValue == 1 ? 1 : 0;
+        NSMutableArray *items = [NSMutableArray array];
+        for (PSSpecifier *specifier in [self loadSpecifiersFromPlistName:@"Root" target:self]) {
+            if (activated && [[specifier propertyForKey:@"gfVisibility"] isEqualToString:@"unactivated"]) continue;
+            NSString *section = [specifier propertyForKey:@"gfSection"];
+            if (section && ![self sectionExpanded:section]) continue;
+            NSNumber *requiredStyle = [specifier propertyForKey:@"gfStyle"];
+            if (requiredStyle && requiredStyle.integerValue != selectedStyle) continue;
+            [items addObject:specifier];
         }
         _specifiers = items;
     }
@@ -474,7 +548,7 @@ extern char **environ;
                     self.gfCopiedDeviceCode = NO;
                     self.gfCreatedDeviceProof = NO;
                     [self reloadSpecifiers];
-                    [self gfShowMessage:[self gfText:@"License saved. Tap Apply & Respring to enable glass effects."]];
+                    [self gfShowMessage:[self gfText:@"License saved. Tap Reload SpringBoard to enable glass effects."]];
                 } else [self gfShowMessage:[self gfText:error.localizedDescription]];
             }
         }]];
@@ -497,7 +571,7 @@ extern char **environ;
                 self.gfCopiedDeviceCode = NO;
                 self.gfCreatedDeviceProof = NO;
                 [self reloadSpecifiers];
-                [self gfShowMessage:[self gfText:@"License removed. Tap Apply & Respring."]];
+                [self gfShowMessage:[self gfText:@"License removed. Tap Reload SpringBoard."]];
             } else [self gfShowMessage:[self gfText:error.localizedDescription]];
         }]];
     [self presentViewController:alert animated:YES completion:nil];

@@ -7,22 +7,42 @@
 	<key>items</key>
 	<array>
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Activate GlassFolders</string>
-			<key>footerText</key><string>Activate to enable glass effects.</string>
-			<key>gfVisibility</key><string>unactivated</string>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Activate GlassFolders</string>
+			<key>footerText</key>
+			<string>Activate to enable glass effects.</string>
+			<key>gfVisibility</key>
+			<string>unactivated</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSLinkCell</string>
-			<key>label</key><string>Activate Now</string>
-			<key>detail</key><string>GFLicenseListController</string>
-			<key>gfVisibility</key><string>unactivated</string>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>label</key>
+			<string>Activate Now</string>
+			<key>detail</key>
+			<string>GFLicenseListController</string>
+			<key>gfVisibility</key>
+			<string>unactivated</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Switches and appearance changes take effect immediately.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkCell</string>
 			<key>label</key>
-			<string>GlassFolders 1.3.0 (lock14)</string>
+			<string>Home Screen Glass</string>
+			<key>id</key>
+			<string>GFSectionhome</string>
+			<key>gfCollapseID</key>
+			<string>home</string>
+			<key>get</key>
+			<string>sectionSummary:</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -35,6 +55,8 @@
 			<true/>
 			<key>defaults</key>
 			<string>com.kulinich.glassfolders</string>
+			<key>gfSection</key>
+			<string>home</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -47,6 +69,110 @@
 			<false/>
 			<key>defaults</key>
 			<string>com.kulinich.glassfolders</string>
+			<key>gfSection</key>
+			<string>home</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Dock</string>
+			<key>key</key>
+			<string>DockEnabled</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.kulinich.glassfolders</string>
+			<key>gfSection</key>
+			<string>home</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Notification Banners</string>
+			<key>key</key>
+			<string>BannerNotificationsEnabled</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.kulinich.glassfolders</string>
+			<key>gfSection</key>
+			<string>home</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Lock screen glass is independent of folder strength.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>label</key>
+			<string>Lock Screen Glass</string>
+			<key>id</key>
+			<string>GFSectionlock</string>
+			<key>gfCollapseID</key>
+			<string>lock</string>
+			<key>get</key>
+			<string>sectionSummary:</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Notification Cards</string>
+			<key>key</key>
+			<string>LockNotificationsEnabled</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.kulinich.glassfolders</string>
+			<key>gfSection</key>
+			<string>lock</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Flashlight and Camera</string>
+			<key>key</key>
+			<string>LockQuickActionsEnabled</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.kulinich.glassfolders</string>
+			<key>gfSection</key>
+			<string>lock</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Music Panel</string>
+			<key>key</key>
+			<string>LockMusicEnabled</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.kulinich.glassfolders</string>
+			<key>gfSection</key>
+			<string>lock</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Live Activities</string>
+			<key>key</key>
+			<string>LockActivitiesEnabled</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.kulinich.glassfolders</string>
+			<key>gfSection</key>
+			<string>lock</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -81,8 +207,8 @@
 			<string>PSGroupCell</string>
 			<key>label</key>
 			<string>Clear Strength</string>
-			<key>footerText</key>
-			<string>Keeps the material clear while adding blur and depth.</string>
+			<key>gfStyle</key>
+			<integer>0</integer>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -103,14 +229,16 @@
 			<integer>100</integer>
 			<key>showValue</key>
 			<false/>
+			<key>gfStyle</key>
+			<integer>0</integer>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
 			<string>Liquid Glass Strength</string>
-			<key>footerText</key>
-			<string>Increases glass structure, highlights, and blur.</string>
+			<key>gfStyle</key>
+			<integer>1</integer>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -131,6 +259,8 @@
 			<integer>100</integer>
 			<key>showValue</key>
 			<false/>
+			<key>gfStyle</key>
+			<integer>1</integer>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -165,117 +295,64 @@
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
-			<key>footerText</key>
-			<string>Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material.</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>label</key><string>Dock</string>
-			<key>footerText</key>
-			<string>Turn off to restore the system Dock. Dock works independently of folders and App Library.</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Customize Dock</string>
-			<key>key</key><string>DockEnabled</string>
-			<key>default</key><false/>
-			<key>defaults</key><string>com.kulinich.glassfolders</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSSegmentCell</string>
-			<key>label</key><string></string>
-			<key>key</key><string>DockMode</string>
-			<key>default</key><integer>0</integer>
-			<key>defaults</key><string>com.kulinich.glassfolders</string>
-			<key>validTitles</key>
-			<array><string>Hide Background</string><string>Glass Effect</string></array>
-			<key>validValues</key>
-			<array><integer>0</integer><integer>1</integer></array>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Notification Banners</string>
-			<key>footerText</key>
-			<string>Glass for system notification banners on the Home Screen and in apps. Independent of lock screen cards and folder strength. Changes take effect immediately; turn off to restore the system appearance.</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Glass Banners</string>
-			<key>key</key><string>BannerNotificationsEnabled</string>
-			<key>default</key><false/>
-			<key>defaults</key><string>com.kulinich.glassfolders</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Lock Screen Glass</string>
-			<key>footerText</key>
-			<string>Independent switches with tuned glass effects. Lock screen appearance is independent of folder strength. Changes take effect immediately. A valid GlassFolders license is required.</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Notification Cards</string>
-			<key>key</key><string>LockNotificationsEnabled</string>
-			<key>default</key><false/>
-			<key>defaults</key><string>com.kulinich.glassfolders</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Flashlight and Camera</string>
-			<key>key</key><string>LockQuickActionsEnabled</string>
-			<key>default</key><false/>
-			<key>defaults</key><string>com.kulinich.glassfolders</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Music Panel</string>
-			<key>key</key><string>LockMusicEnabled</string>
-			<key>default</key><false/>
-			<key>defaults</key><string>com.kulinich.glassfolders</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>Live Activities</string>
-			<key>key</key><string>LockActivitiesEnabled</string>
-			<key>default</key><false/>
-			<key>defaults</key><string>com.kulinich.glassfolders</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>footerText</key>
-			<string>Live Activities replace compatible system backgrounds only. App-drawn opaque backgrounds may remain. Flashlight-on and pressed buttons keep system feedback. Test on your device.</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSButtonCell</string>
 			<key>label</key>
-			<string>Apply &amp; Respring</string>
-			<key>action</key>
-			<string>respring</string>
+			<string>Dock Mode</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSegmentCell</string>
+			<key>label</key>
+			<string></string>
+			<key>key</key>
+			<string>DockMode</string>
+			<key>default</key>
+			<integer>0</integer>
+			<key>defaults</key>
+			<string>com.kulinich.glassfolders</string>
+			<key>validTitles</key>
+			<array>
+				<string>Hide Background</string>
+				<string>Glass Effect</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<integer>0</integer>
+				<integer>1</integer>
+			</array>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
 			<string>About</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSLinkCell</string>
-			<key>label</key><string>License Management</string>
-			<key>id</key><string>GFLicenseManagement</string>
-			<key>detail</key><string>GFLicenseListController</string>
-			<key>get</key><string>licenseSummary:</string>
+			<key>footerText</key>
+			<string>GlassFolders 1.3.0 (lock15) · kulinich</string>
 		</dict>
 		<dict>
 			<key>cell</key>
-			<string>PSTitleValueCell</string>
+			<string>PSLinkCell</string>
 			<key>label</key>
-			<string>Developer</string>
+			<string>License Management</string>
+			<key>id</key>
+			<string>GFLicenseManagement</string>
+			<key>detail</key>
+			<string>GFLicenseListController</string>
 			<key>get</key>
-			<string>authorValue:</string>
+			<string>licenseSummary:</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Reload after installing an update or changing the license.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Reload SpringBoard</string>
+			<key>action</key>
+			<string>respring</string>
 		</dict>
 	</array>
 </dict>

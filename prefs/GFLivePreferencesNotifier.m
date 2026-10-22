@@ -40,6 +40,11 @@ static void GFLivePostPreferencesChanged(void) {
                     specifier:specifier];
 
     GFLivePostPreferencesChanged();
+    if ([[specifier propertyForKey:@"key"] isEqualToString:@"Style"]) {
+        [self reloadSpecifiers];
+    } else if ([specifier propertyForKey:@"gfSection"]) {
+        [self refreshSectionSummaries];
+    }
 }
 
 @end

@@ -70,11 +70,11 @@
 		</dict>
 		<dict>
 			<key>cell</key><string>PSGroupCell</string>
-			<key>footerText</key><string>Apply &amp; Respring after changing the license.</string>
+			<key>footerText</key><string>Reload SpringBoard after changing the license.</string>
 		</dict>
 		<dict>
 			<key>cell</key><string>PSButtonCell</string>
-			<key>label</key><string>Apply &amp; Respring</string>
+			<key>label</key><string>Reload SpringBoard</string>
 			<key>action</key><string>respring</string>
 		</dict>
 		<dict>
