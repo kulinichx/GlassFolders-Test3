@@ -38,10 +38,137 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
     }
 }
 
+// The lock-screen rim is separate from the folder's wide optical texture.
+// Each band uses the same Core Animation corner curve as the clipping layer:
+// a narrow reflection, a faint inward shoulder, and a shallow inner shade.
+// These are local source-over layers, not additive backdrop filters.
+static CAGradientLayer *GFLockRimBand(NSArray *colors) {
+    CAGradientLayer *band = [CAGradientLayer layer];
+    band.startPoint = CGPointMake(0.12, 0.0);
+    band.endPoint = CGPointMake(0.88, 1.0);
+    // More stops ease the falloff into the quiet side and back into the
+    // secondary reflection. There is no bright segment with a cut-off end.
+    band.locations = @[@0.0, @0.12, @0.28, @0.46, @0.62, @0.78, @0.92, @1.0];
+    band.colors = colors;
+    band.contentsScale = UIScreen.mainScreen.scale;
+    CALayer *mask = [CALayer layer];
+    mask.backgroundColor = UIColor.clearColor.CGColor;
+    mask.contentsScale = UIScreen.mainScreen.scale;
+    // Feather inward as well as around the perimeter. Fixed layers are reused
+    // on layout; no bitmap generation or animation timer is needed.
+    for (NSNumber *opacity in @[@1.0, @0.80, @0.46, @0.18, @0.035]) {
+        CALayer *ring = [CALayer layer];
+        ring.borderColor = UIColor.whiteColor.CGColor;
+        ring.opacity = opacity.floatValue;
+        ring.contentsScale = UIScreen.mainScreen.scale;
+        ring.allowsEdgeAntialiasing = YES;
+        [mask addSublayer:ring];
+    }
+    band.mask = mask;
+    return band;
+}
+
+@interface GFLockRimView : UIView
+@property (nonatomic, strong) CAGradientLayer *gfReflection;
+@property (nonatomic, strong) CAGradientLayer *gfShoulder;
+@property (nonatomic, strong) CAGradientLayer *gfInnerShade;
+@property (nonatomic, assign) CGFloat gfRadius;
+@property (nonatomic, assign) BOOL gfCircular;
+@property (nonatomic, assign) BOOL gfSubdued;
+@end
+@implementation GFLockRimView
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.userInteractionEnabled = NO;
+        self.backgroundColor = UIColor.clearColor;
+        self.layer.zPosition = 21.0;
+        self.gfShoulder = GFLockRimBand(@[
+            (id)[UIColor colorWithWhite:1.0 alpha:0.18].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.165].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.085].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.024].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.008].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.04].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.092].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.10].CGColor
+        ]);
+        self.gfInnerShade = GFLockRimBand(@[
+            (id)[UIColor colorWithWhite:0.0 alpha:0.025].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.022].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.014].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.012].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.032].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.075].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.112].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.12].CGColor
+        ]);
+        self.gfReflection = GFLockRimBand(@[
+            (id)[UIColor colorWithWhite:1.0 alpha:0.48].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.44].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.24].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.065].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.015].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.10].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.29].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.32].CGColor
+        ]);
+        [self.layer addSublayer:self.gfInnerShade];
+        [self.layer addSublayer:self.gfShoulder];
+        [self.layer addSublayer:self.gfReflection];
+    }
+    return self;
+}
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    // The shoulder is intentionally faint and narrower on small controls.
+    // Rear strips never receive the full bevel of a foreground card.
+    self.gfShoulder.opacity = self.gfSubdued ? 0.12 : 1.0;
+    self.gfReflection.opacity = self.gfSubdued ? 0.16 : 1.0;
+    self.gfInnerShade.opacity = self.gfSubdued ? 0.18 : 1.0;
+    for (CAGradientLayer *band in @[self.gfInnerShade, self.gfShoulder, self.gfReflection]) {
+        CGFloat inset = (band == self.gfInnerShade) ? 1.2 : 0.0;
+        CGFloat width = band == self.gfShoulder ? (self.gfCircular ? 1.6 : 2.4) :
+                        (band == self.gfReflection ? 0.8 : 1.2);
+        CGRect rect = CGRectInset(self.bounds, inset, inset);
+        rect.size.width = MAX(0.0, rect.size.width);
+        rect.size.height = MAX(0.0, rect.size.height);
+        band.frame = rect;
+        band.mask.frame = (CGRect){CGPointZero, rect.size};
+        NSUInteger index = 0;
+        for (CALayer *ring in band.mask.sublayers) {
+            CGFloat featherInset = width * index / 5.0;
+            CGRect ringRect = CGRectInset((CGRect){CGPointZero, rect.size}, featherInset, featherInset);
+            ringRect.size.width = MAX(0.0, ringRect.size.width);
+            ringRect.size.height = MAX(0.0, ringRect.size.height);
+            ring.frame = ringRect;
+            ring.borderWidth = width / 5.0;
+            ring.cornerRadius = MAX(0.0, self.gfRadius - inset - featherInset);
+            ring.cornerCurve = self.gfCircular ? kCACornerCurveCircular : kCACornerCurveContinuous;
+            index++;
+        }
+    }
+    [CATransaction commit];
+}
+@end
+
 @interface GFLockScreenGlassView : GFPanelGlassView
 @property (nonatomic, assign) BOOL gfCircular;
+@property (nonatomic, strong) GFLockRimView *gfLockRim;
 @end
 @implementation GFLockScreenGlassView
+- (instancetype)initWithStyle:(NSInteger)style strength:(CGFloat)strength {
+    self = [super initWithStyle:style strength:strength];
+    if (self) {
+        self.gfLockRim = [[GFLockRimView alloc] initWithFrame:self.bounds];
+        [self addSubview:self.gfLockRim];
+        // The superclass refreshes during init, before the rim exists.
+        [self gfRefreshMaterial];
+    }
+    return self;
+}
 - (void)gfRefreshMaterial {
     [super gfRefreshMaterial];
     GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.cards",
@@ -51,16 +178,23 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
             [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterial];
         self.gfFallbackBlurView.alpha = 0.22;
     }
-    // Keep the body neutral; directional lighting belongs at the edge, not
-    // in a white fill that becomes brighter with every overlapping card.
+    // Preserve transmission and the fixed blur. Thickness lives at the rim,
+    // without a new grey/white body fill or a uniform hard outline.
     self.gfTintView.alpha = 0.0;
-    self.gfOpticalLayer.opacity = 0.85;
-    self.layer.borderWidth = 0.4;
-    self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.10].CGColor;
+    self.gfOpticalLayer.hidden = YES;
+    self.layer.borderWidth = 0.0;
+    [self.gfLockRim setNeedsLayout];
 }
 - (void)layoutSubviews {
     [super layoutSubviews];
-    if (self.gfCircular) self.layer.cornerCurve = kCACornerCurveCircular;
+    if (self.gfCircular) {
+        self.layer.cornerCurve = kCACornerCurveCircular;
+        self.layer.cornerRadius = MIN(self.bounds.size.width, self.bounds.size.height) * 0.5;
+    }
+    self.gfLockRim.frame = self.bounds;
+    self.gfLockRim.gfRadius = self.layer.cornerRadius;
+    self.gfLockRim.gfCircular = self.gfCircular;
+    [self.gfLockRim setNeedsLayout];
 }
 @end
 
@@ -76,8 +210,6 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 }
 @end
 
-// Rear cards expose only a narrow strip. Reusing the large panel's optical
-// rail there turns that strip into a bright slab on light wallpapers.
 @interface GFNotificationGlassView : GFLockScreenGlassView
 @property (nonatomic, assign) BOOL gfStacked;
 @end
@@ -89,54 +221,26 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 }
 - (void)gfRefreshMaterial {
     [super gfRefreshMaterial];
-    self.gfOpticalLayer.hidden = self.gfStacked;
-    if (self.gfStacked) {
-        // A single subdued outline, with no filled optical shoulder.
-        self.layer.borderWidth = 0.35;
-        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.06].CGColor;
-    }
+    self.gfLockRim.gfSubdued = self.gfStacked;
+    [self.gfLockRim setNeedsLayout];
 }
 @end
 
-// A 50 pt circular control needs its own material and specular geometry. The
-// large-card optical texture is too soft/dense at this scale and is generated
-// for continuous rounded rectangles, rather than a circular button.
+// Small circular controls share the layered rim, but use a narrower shoulder
+// and their own lighter backdrop. Selection and press feedback stay native.
 @interface GFQuickActionGlassView : GFLockScreenGlassView
-@property (nonatomic, strong) CAGradientLayer *gfCircularRim;
-@property (nonatomic, strong) CAShapeLayer *gfCircularRimMask;
-@property (nonatomic, assign) CGSize gfCircularRimSize;
 @end
 @implementation GFQuickActionGlassView
 - (instancetype)initWithStyle:(NSInteger)style strength:(CGFloat)strength {
     self = [super initWithStyle:style strength:strength];
     if (self) {
         self.gfCircular = YES;
-        self.gfCircularRim = [CAGradientLayer layer];
-        self.gfCircularRim.startPoint = CGPointMake(0.15, 0.0);
-        self.gfCircularRim.endPoint = CGPointMake(0.85, 1.0);
-        self.gfCircularRim.locations = @[@0.0, @0.28, @0.60, @1.0];
-        self.gfCircularRim.colors = @[
-            (id)[UIColor colorWithWhite:1.0 alpha:0.50].CGColor,
-            (id)[UIColor colorWithWhite:1.0 alpha:0.16].CGColor,
-            (id)[UIColor colorWithWhite:1.0 alpha:0.035].CGColor,
-            (id)[UIColor colorWithWhite:1.0 alpha:0.28].CGColor
-        ];
-        self.gfCircularRim.zPosition = 21.0;
-        self.gfCircularRim.contentsScale = UIScreen.mainScreen.scale;
-        self.gfCircularRimMask = [CAShapeLayer layer];
-        self.gfCircularRimMask.contentsScale = UIScreen.mainScreen.scale;
-        self.gfCircularRimMask.fillColor = UIColor.clearColor.CGColor;
-        self.gfCircularRimMask.strokeColor = UIColor.whiteColor.CGColor;
-        self.gfCircularRimMask.lineWidth = 0.7;
-        self.gfCircularRim.mask = self.gfCircularRimMask;
-        [self.layer addSublayer:self.gfCircularRim];
+        [self gfRefreshMaterial];
     }
     return self;
 }
 - (void)gfRefreshMaterial {
     [super gfRefreshMaterial];
-    // Keep wallpaper detail at button scale, with a small neutral lift. No
-    // opaque grey disc, copied wallpaper image, or overlay over the icon.
     GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.buttons",
                              GFLockButtonBlurRadius);
     if (self.gfFallbackBlurView) {
@@ -145,28 +249,11 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
         self.gfFallbackBlurView.alpha = 0.18;
     }
     self.gfTintView.alpha = GFUsesDarkAppearance(self) ? 0.045 : 0.028;
-    self.layer.borderWidth = 0.0;
-    self.gfOpticalLayer.hidden = YES;
 }
 - (void)layoutSubviews {
     [super layoutSubviews];
-    // The rounded-card texture stays unused. The mask and highlight both use
-    // the same exact ellipse, including when display zoom changes the size.
-    self.gfOpticalLayer.hidden = YES;
-    self.layer.cornerCurve = kCACornerCurveCircular;
-    self.layer.cornerRadius = MIN(self.bounds.size.width, self.bounds.size.height) * 0.5;
     self.gfBackdropSampleView.frame = CGRectInset(self.bounds, -12.0, -12.0);
     self.gfFallbackBlurView.frame = self.gfBackdropSampleView.frame;
-    if (!CGSizeEqualToSize(self.gfCircularRimSize, self.bounds.size)) {
-        [CATransaction begin];
-        [CATransaction setDisableActions:YES];
-        self.gfCircularRim.frame = self.bounds;
-        self.gfCircularRimMask.frame = self.bounds;
-        CGRect ring = CGRectInset(self.bounds, 0.5, 0.5);
-        self.gfCircularRimMask.path = [UIBezierPath bezierPathWithOvalInRect:ring].CGPath;
-        self.gfCircularRimSize = self.bounds.size;
-        [CATransaction commit];
-    }
 }
 @end
 
