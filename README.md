@@ -1,6 +1,6 @@
 # GlassFolders 1.3.0 — Lock screen candidate
 
-This branch adds an independent offline GlassFolders issuer and device-bound activation. Candidate package: `1.3.0~lock7`. Target systems: iOS / iPadOS **16.0–17.3.1**, with a compatible jailbreak and SpringBoard injection environment. Device validation is still required; the source target is not a claim of tested compatibility.
+This branch adds an independent offline GlassFolders issuer and device-bound activation. Candidate package: `1.3.0~lock8`. Target systems: iOS / iPadOS **16.0–17.3.1**, with a compatible jailbreak and SpringBoard injection environment. Device validation is still required; the source target is not a claim of tested compatibility.
 
 See [离线授权、使用流程与兼容性检查](docs/离线授权与兼容性.md) and [Windows 签发器说明](tools/issuer/README.md). Issuer private keys and records must remain outside the repository. Existing RC7 licenses are not accepted. The previous 1.0.0-fix1 binary does not contain these changes.
 
@@ -22,6 +22,7 @@ GlassFolders brings refined Clear and Liquid Glass materials to iOS folders and 
 - `lock5`: independent opt-in glass for system notification banners on the Home Screen and in apps, with a separate backdrop capture group; excludes banner scaling from rear-card detection (device retest pending)
 - `lock6`: replace the wide lock-screen optical texture and uniform outline with a feathered, directional reflection, soft inward shoulder and shallow inner shade; share this rim with Home Screen/app banners, reduce rear-card lighting, and retain narrower circular-button optics. Fixed blur and folder independence remain unchanged (device retest pending).
 - `lock7`: refresh short looks after their notification wrapper lays out, identify actual banner containers in addition to the private flag, resolve isolated wrapped materials, and observe delayed native background reveals. Cards use 8 pt blur, a faint neutral body veil and wider feathered inward edges; rear strips and circular buttons omit the veil (device retest pending).
+- `lock8`: soften the inward card rim with pixel-spaced smoothstep coverage, a wider lower-peak shoulder and a shade that fades in before fading out. Restore collapsed-stack definition with a restrained reflection distributed along the lower edge. Preserve lock7 body/blur, foreground fine reflection, circular buttons and working banner routing. User reports lock7 glass and notification banners working on iPhone 14 Pro / iOS 16.6; lock8 edge refinement still requires device retesting.
 - Independent Clear and Liquid Glass strength controls for folders
 - App Library modes: Follow Folder, Clear, or Liquid Glass
 - Matched App Library category-card and search-field materials
@@ -40,7 +41,7 @@ App Library uses fixed, tuned material recipes rather than exposing engineering 
 ## Compatibility
 
 - Package identifier: `com.kulinich.glassfolders`
-- Candidate package version: `1.3.0~lock7`
+- Candidate package version: `1.3.0~lock8`
 - Minimum firmware declared by the package: iOS / iPadOS 16.0
 - Maximum target: iOS / iPadOS 17.3.1 (package dependency `< 17.3.2`)
 - Runtime/device validation: pending for this candidate; see the compatibility checklist above

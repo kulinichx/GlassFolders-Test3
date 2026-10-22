@@ -68,6 +68,27 @@ static CAGradientLayer *GFLockRimBand(NSArray *colors) {
     return band;
 }
 
+typedef NS_ENUM(NSUInteger, GFLockRimProfile) {
+    GFLockRimProfileLegacy,
+    GFLockRimProfileShoulder,
+    GFLockRimProfileShade,
+};
+
+static CGFloat GFLockRimSmoothstep(CGFloat t) {
+    t = MAX(0.0, MIN(1.0, t));
+    return t * t * (3.0 - 2.0 * t);
+}
+
+static CGFloat GFLockRimCoverage(GFLockRimProfile profile, CGFloat t) {
+    if (profile == GFLockRimProfileShoulder)
+        return 0.75 * (1.0 - GFLockRimSmoothstep(t));
+    // The inner shade must start transparent too. A hard, fully opaque start
+    // at an inset draws a second contour even when its inward tail is soft.
+    CGFloat rise = GFLockRimSmoothstep(t / 0.30);
+    CGFloat fall = 1.0 - GFLockRimSmoothstep((t - 0.30) / 0.70);
+    return 0.35 * rise * fall;
+}
+
 @interface GFLockRimView : UIView
 @property (nonatomic, strong) CAGradientLayer *gfReflection;
 @property (nonatomic, strong) CAGradientLayer *gfShoulder;
@@ -126,25 +147,54 @@ static CAGradientLayer *GFLockRimBand(NSArray *colors) {
     // The shoulder is intentionally faint and narrower on small controls.
     // Rear strips never receive the full bevel of a foreground card.
     self.gfShoulder.opacity = self.gfSubdued ? 0.12 : 1.0;
-    self.gfReflection.opacity = self.gfSubdued ? 0.16 : 1.0;
-    self.gfInnerShade.opacity = self.gfSubdued ? 0.18 : 1.0;
+    self.gfReflection.opacity = self.gfSubdued ? 0.36 : 1.0;
+    self.gfInnerShade.opacity = self.gfSubdued ? 0.40 : 1.0;
     for (CAGradientLayer *band in @[self.gfInnerShade, self.gfShoulder, self.gfReflection]) {
-        CGFloat inset = (band == self.gfInnerShade) ? (self.gfCircular ? 1.2 : 1.6) : 0.0;
-        CGFloat width = band == self.gfShoulder ? (self.gfCircular ? 1.6 : 3.6) :
-                        (band == self.gfReflection ? 0.8 : (self.gfCircular ? 1.2 : 2.4));
+        // A collapsed stack reveals mostly bottom strips. A diagonal light
+        // leaves their middle almost invisible; distribute the restrained
+        // reflection along the lower edge, without brightening the body.
+        band.startPoint = self.gfSubdued ? CGPointMake(0.5, 0.0) : CGPointMake(0.12, 0.0);
+        band.endPoint = self.gfSubdued ? CGPointMake(0.5, 1.0) : CGPointMake(0.88, 1.0);
+        GFLockRimProfile profile = GFLockRimProfileLegacy;
+        if (!self.gfCircular && band == self.gfShoulder) profile = GFLockRimProfileShoulder;
+        if (!self.gfCircular && band == self.gfInnerShade) profile = GFLockRimProfileShade;
+        CGFloat inset = (band == self.gfInnerShade) ? (self.gfCircular ? 1.2 : 0.35) : 0.0;
+        CGFloat width = band == self.gfShoulder ? (self.gfCircular ? 1.6 : 4.8) :
+                        (band == self.gfReflection ? 0.8 : (self.gfCircular ? 1.2 : 5.6));
+        CGFloat scale = self.window.screen.scale ?: UIScreen.mainScreen.scale;
+        NSUInteger count = 5;
+        if (profile != GFLockRimProfileLegacy) {
+            // Sample the smooth profile at display-pixel intervals, instead
+            // of five broad, visibly stepped bands. Keep the fine reflection
+            // and small circular-button recipe unchanged.
+            count = MAX((NSUInteger)1, (NSUInteger)ceil(width * scale));
+            width = count / scale;
+            inset = round(inset * scale) / scale;
+        }
         CGRect rect = CGRectInset(self.bounds, inset, inset);
         rect.size.width = MAX(0.0, rect.size.width);
         rect.size.height = MAX(0.0, rect.size.height);
         band.frame = rect;
         band.mask.frame = (CGRect){CGPointZero, rect.size};
+        while (band.mask.sublayers.count > count) [band.mask.sublayers.lastObject removeFromSuperlayer];
+        while (band.mask.sublayers.count < count) {
+            CALayer *ring = [CALayer layer];
+            ring.borderColor = UIColor.whiteColor.CGColor;
+            ring.allowsEdgeAntialiasing = YES;
+            [band.mask addSublayer:ring];
+        }
+        const float legacyOpacity[] = {1.0, 0.80, 0.46, 0.18, 0.035};
         NSUInteger index = 0;
         for (CALayer *ring in band.mask.sublayers) {
-            CGFloat featherInset = width * index / 5.0;
+            CGFloat featherInset = width * index / count;
             CGRect ringRect = CGRectInset((CGRect){CGPointZero, rect.size}, featherInset, featherInset);
             ringRect.size.width = MAX(0.0, ringRect.size.width);
             ringRect.size.height = MAX(0.0, ringRect.size.height);
             ring.frame = ringRect;
-            ring.borderWidth = width / 5.0;
+            ring.contentsScale = scale;
+            ring.opacity = profile == GFLockRimProfileLegacy ? legacyOpacity[index] :
+                GFLockRimCoverage(profile, (index + 0.5) / count);
+            ring.borderWidth = width / count;
             ring.cornerRadius = MAX(0.0, self.gfRadius - inset - featherInset);
             ring.cornerCurve = self.gfCircular ? kCACornerCurveCircular : kCACornerCurveContinuous;
             index++;
