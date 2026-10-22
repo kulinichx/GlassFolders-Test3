@@ -160,8 +160,11 @@ static CGFloat GFLockRimCoverage(GFLockRimProfile profile, CGFloat t) {
         if (!self.gfCircular && band == self.gfShoulder) profile = GFLockRimProfileShoulder;
         if (!self.gfCircular && band == self.gfInnerShade) profile = GFLockRimProfileShade;
         CGFloat inset = (band == self.gfInnerShade) ? (self.gfCircular ? 1.2 : 0.25) : 0.0;
+        // Widen the compact reflection only. Preserve lock9's clean inward
+        // shoulder/shade; rear strips use a smaller increase to stay distinct.
+        CGFloat reflectionWidth = self.gfCircular ? 0.8 : (self.gfSubdued ? 1.4 : 1.6);
         CGFloat width = band == self.gfShoulder ? (self.gfCircular ? 1.6 : 2.4) :
-                        (band == self.gfReflection ? (self.gfCircular ? 0.8 : 1.2) :
+                        (band == self.gfReflection ? reflectionWidth :
                          (self.gfCircular ? 1.2 : 1.6));
         CGFloat scale = self.window.screen.scale ?: UIScreen.mainScreen.scale;
         NSUInteger count = 5;
