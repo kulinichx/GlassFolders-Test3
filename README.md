@@ -18,7 +18,7 @@ GlassFolders brings refined Clear and Liquid Glass materials to iOS folders and 
 - Opt-in lock-screen notification, flashlight/camera, music, and compatible Live Activity system backgrounds; see [锁屏玻璃使用与测试](docs/锁屏玻璃使用与测试.md)
 - `lock2`: dedicated circular flashlight/camera optics and style/interaction refresh; grouped, non-in-place lock-screen backdrop filtering without additive card brightness, addressing overlapping-card washout reported on iOS 16.6 (device retest pending)
 - `lock3`: lock-screen blur follows the selected folder style’s existing strength slider (lighter for circular controls), with stable edge lighting; subdued rear notification cards and guarded stack-overlay suppression target remaining bright rear strips (device retest pending)
-- `lock4`: retain lock-screen glass through Cover Sheet dismissal and cancelled swipes, including temporarily disabled quick actions during the transition (device retest pending)
+- `lock4`: replace lock3 blur linkage with fixed lock-screen optics (6 pt cards / 3 pt buttons), clearer front edges and subdued rear cards; retain glass through Cover Sheet dismissal and cancelled swipes, including temporarily disabled quick actions (device retest pending)
 - Independent Clear and Liquid Glass strength controls for folders
 - App Library modes: Follow Folder, Clear, or Liquid Glass
 - Matched App Library category-card and search-field materials

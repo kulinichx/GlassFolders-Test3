@@ -3,16 +3,10 @@
 #ifndef GF_LOCK_SCREEN_GLASS_H
 #define GF_LOCK_SCREEN_GLASS_H
 
-static CGFloat GFLockBlurStrength(void) {
-    return isfinite(GFGlassStrength) ? GFClamp01(GFGlassStrength) : 0.55;
-}
-
-static CGFloat GFLockBlurRadius(CGFloat strength) {
-    // Preserve lock2's 6 pt card / 3 pt button baseline at the existing 55%.
-    // Higher values add diffusion, never additive luminance or stronger rims.
-    return strength <= 0.55 ? 6.0 * strength / 0.55 :
-        6.0 + 12.0 * (strength - 0.55) / 0.45;
-}
+// Lock-screen optics have a fixed recipe, independent of folder preferences.
+// Keep wallpaper detail behind cards, and use still less blur for small buttons.
+static const CGFloat GFLockCardBlurRadius = 6.0;
+static const CGFloat GFLockButtonBlurRadius = 3.0;
 
 static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, CGFloat radius) {
     CALayer *backdrop = glass.gfBackdropSampleView.layer;
@@ -46,23 +40,23 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 
 @interface GFLockScreenGlassView : GFPanelGlassView
 @property (nonatomic, assign) BOOL gfCircular;
-@property (nonatomic, assign) CGFloat gfAppliedBlurStrength;
 @end
 @implementation GFLockScreenGlassView
 - (void)gfRefreshMaterial {
     [super gfRefreshMaterial];
-    self.gfAppliedBlurStrength = GFLockBlurStrength();
     GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.cards",
-                             GFLockBlurRadius(self.gfAppliedBlurStrength));
+                             GFLockCardBlurRadius);
     if (self.gfFallbackBlurView) {
         self.gfFallbackBlurView.effect =
             [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterial];
-        self.gfFallbackBlurView.alpha = 0.40 * self.gfAppliedBlurStrength;
+        self.gfFallbackBlurView.alpha = 0.22;
     }
     // Keep the body neutral; directional lighting belongs at the edge, not
     // in a white fill that becomes brighter with every overlapping card.
     self.gfTintView.alpha = 0.0;
-    self.gfOpticalLayer.opacity = 0.65;
+    self.gfOpticalLayer.opacity = 0.85;
+    self.layer.borderWidth = 0.4;
+    self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.10].CGColor;
 }
 - (void)layoutSubviews {
     [super layoutSubviews];
@@ -110,10 +104,10 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
         self.gfCircularRim.endPoint = CGPointMake(0.85, 1.0);
         self.gfCircularRim.locations = @[@0.0, @0.28, @0.60, @1.0];
         self.gfCircularRim.colors = @[
-            (id)[UIColor colorWithWhite:1.0 alpha:0.42].CGColor,
-            (id)[UIColor colorWithWhite:1.0 alpha:0.12].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.50].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.16].CGColor,
             (id)[UIColor colorWithWhite:1.0 alpha:0.035].CGColor,
-            (id)[UIColor colorWithWhite:1.0 alpha:0.24].CGColor
+            (id)[UIColor colorWithWhite:1.0 alpha:0.28].CGColor
         ];
         self.gfCircularRim.zPosition = 21.0;
         self.gfCircularRim.contentsScale = UIScreen.mainScreen.scale;
@@ -132,11 +126,11 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
     // Keep wallpaper detail at button scale, with a small neutral lift. No
     // opaque grey disc, copied wallpaper image, or overlay over the icon.
     GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.buttons",
-                             0.5 * GFLockBlurRadius(self.gfAppliedBlurStrength));
+                             GFLockButtonBlurRadius);
     if (self.gfFallbackBlurView) {
         self.gfFallbackBlurView.effect =
             [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterial];
-        self.gfFallbackBlurView.alpha = (0.18 / 0.55) * self.gfAppliedBlurStrength;
+        self.gfFallbackBlurView.alpha = 0.18;
     }
     self.gfTintView.alpha = GFUsesDarkAppearance(self) ? 0.045 : 0.028;
     self.layer.borderWidth = 0.0;
@@ -413,8 +407,6 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     }
     UIView *container = background.superview;
     GFLockScreenGlassView *glass = state.glass;
-    if (fabs(glass.gfAppliedBlurStrength - GFLockBlurStrength()) > 0.0001)
-        [glass gfRefreshMaterial];
     if (notification) {
         ((GFNotificationGlassView *)glass).gfStacked = GFLockNotificationIsStacked(host);
         GFLockSyncStackOverlay(host, state);
