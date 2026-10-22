@@ -66,3 +66,10 @@
 "Hide Background" = "隐藏背景";
 "Glass Effect" = "玻璃效果";
 "Turn off to restore the system Dock. Dock works independently of folders and App Library." = "关闭后恢复系统 Dock 背景。Dock 与文件夹、资源库可独立开关。";
+"Lock Screen Glass" = "锁屏玻璃";
+"Notification Cards" = "通知卡片";
+"Flashlight and Camera" = "电筒与相机";
+"Music Panel" = "音乐面板";
+"Live Activities" = "实时活动";
+"Independent switches. Changes take effect immediately; turn off to restore the system appearance. A valid GlassFolders license is required." = "各项可独立开启，设置即时生效；关闭后恢复系统样式。需要有效的 GlassFolders 授权。";
+"Live Activities replace compatible system backgrounds only. App-drawn opaque backgrounds may remain. Flashlight-on and pressed buttons keep system feedback. Test on your device." = "实时活动仅替换兼容的系统底板；应用自绘的不透明背景可能保留。电筒点亮及按钮按住时保留系统反馈，效果请以本机实测为准。";

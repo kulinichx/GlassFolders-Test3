@@ -1,6 +1,6 @@
-# GlassFolders 1.2.0 — Dock candidate
+# GlassFolders 1.3.0 — Lock screen candidate
 
-This branch adds an independent offline GlassFolders issuer and device-bound activation. Candidate package: `1.2.0~dock1`. Target systems: iOS / iPadOS **16.0–17.3.1**, with a compatible jailbreak and SpringBoard injection environment. Device validation is still required; the source target is not a claim of tested compatibility.
+This branch adds an independent offline GlassFolders issuer and device-bound activation. Candidate package: `1.3.0~lock1`. Target systems: iOS / iPadOS **16.0–17.3.1**, with a compatible jailbreak and SpringBoard injection environment. Device validation is still required; the source target is not a claim of tested compatibility.
 
 See [离线授权、使用流程与兼容性检查](docs/离线授权与兼容性.md) and [Windows 签发器说明](tools/issuer/README.md). Issuer private keys and records must remain outside the repository. Existing RC7 licenses are not accepted. The previous 1.0.0-fix1 binary does not contain these changes.
 
@@ -15,6 +15,7 @@ GlassFolders brings refined Clear and Liquid Glass materials to iOS folders and 
 - Clear and Liquid Glass folder materials
 - Independent Folder and App Library enable/disable controls
 - Independent Dock switch with Hide Background / Glass Effect modes; off by default
+- Opt-in lock-screen notification, flashlight/camera, music, and compatible Live Activity system backgrounds; see [锁屏玻璃使用与测试](docs/锁屏玻璃使用与测试.md)
 - Independent Clear and Liquid Glass strength controls for folders
 - App Library modes: Follow Folder, Clear, or Liquid Glass
 - Matched App Library category-card and search-field materials
@@ -33,7 +34,7 @@ App Library uses fixed, tuned material recipes rather than exposing engineering 
 ## Compatibility
 
 - Package identifier: `com.kulinich.glassfolders`
-- Candidate package version: `1.2.0~dock1`
+- Candidate package version: `1.3.0~lock1`
 - Minimum firmware declared by the package: iOS / iPadOS 16.0
 - Maximum target: iOS / iPadOS 17.3.1 (package dependency `< 17.3.2`)
 - Runtime/device validation: pending for this candidate; see the compatibility checklist above

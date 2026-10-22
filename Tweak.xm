@@ -7,7 +7,7 @@
 #import "GFLicense.h"
 
 /*
- * GlassFolders 1.2.0 — release
+ * GlassFolders 1.3.0 — release
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -45,6 +45,12 @@ static BOOL GFAppLibraryGlassEnabled = NO;
 // Dock is independent of folder/App Library preferences, and opt-in on upgrade.
 static BOOL GFDockEnabled = NO;
 static NSInteger GFDockMode = 0; // 0 hide background, 1 glass
+
+// Lock-screen surfaces are independent, opt-in, and share the same entitlement.
+static BOOL GFLockNotificationsEnabled = NO;
+static BOOL GFLockQuickActionsEnabled = NO;
+static BOOL GFLockMusicEnabled = NO;
+static BOOL GFLockActivitiesEnabled = NO;
 
 // Legacy value retained for preference compatibility:
 // 0 = Clear, 1 = Liquid Glass
@@ -119,7 +125,7 @@ static void GFLoadPreferences(void) {
     CFPreferencesAppSynchronize(GFPreferencesDomain);
 
     // Verify signed entitlement when loading preferences, never in frame/layout
-    // callbacks. All three surfaces use the same verified entitlement.
+    // callbacks. All surfaces use the same verified entitlement.
     BOOL licensed = GFLicenseCurrentInfo() != nil;
     GFEnabled = licensed && GFReadBool(CFSTR("Enabled"), YES);
     GFStyle = GFReadInteger(CFSTR("Style"), 0);
@@ -145,6 +151,11 @@ static void GFLoadPreferences(void) {
 
     GFDockEnabled = licensed && GFReadBool(CFSTR("DockEnabled"), NO);
     GFDockMode = GFReadInteger(CFSTR("DockMode"), 0) == 1 ? 1 : 0;
+
+    GFLockNotificationsEnabled = licensed && GFReadBool(CFSTR("LockNotificationsEnabled"), NO);
+    GFLockQuickActionsEnabled = licensed && GFReadBool(CFSTR("LockQuickActionsEnabled"), NO);
+    GFLockMusicEnabled = licensed && GFReadBool(CFSTR("LockMusicEnabled"), NO);
+    GFLockActivitiesEnabled = licensed && GFReadBool(CFSTR("LockActivitiesEnabled"), NO);
 
     GFAppLibraryStyle =
         GFReadInteger(CFSTR("AppLibraryStyle"), 0);
@@ -4470,6 +4481,76 @@ static void GFUpdateDockBackground(UIView *host) {
 %end
 %end
 
+#import "GFLockScreenGlass.h"
+
+%group GFLockNotificationHooks
+%hook NCNotificationShortLookView
+- (void)layoutSubviews { %orig; GFUpdateLockScreenSurface((UIView *)self); }
+- (void)didMoveToWindow { %orig; GFUpdateLockScreenSurface((UIView *)self); }
+%end
+%end
+
+%group GFLockMusicHooks
+%hook CSAdjunctItemView
+- (void)layoutSubviews { %orig; GFUpdateLockScreenSurface((UIView *)self); }
+- (void)didMoveToWindow { %orig; GFUpdateLockScreenSurface((UIView *)self); }
+%end
+%end
+
+%group GFLockActivityHooks
+%hook NCNotificationListSupplementaryHostingView
+- (void)layoutSubviews { %orig; GFUpdateLockScreenSurface((UIView *)self); }
+- (void)didMoveToWindow { %orig; GFUpdateLockScreenSurface((UIView *)self); }
+%end
+%end
+
+%group GFLockQuickActionHooks
+%hook CSQuickActionsButton
+- (void)layoutSubviews { %orig; GFUpdateLockScreenSurface((UIView *)self); }
+- (void)didMoveToWindow { %orig; GFUpdateLockScreenSurface((UIView *)self); }
+- (void)setSelected:(BOOL)selected {
+    GFRestoreLockScreenSurface((UIView *)self);
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+- (void)setHighlighted:(BOOL)highlighted {
+    GFRestoreLockScreenSurface((UIView *)self);
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+%end
+%end
+
+%group GFLockQuickActionPressHooks
+%hook CSQuickActionsButton
+- (void)_animateEffectUpdateWithProgress:(double)progress ended:(BOOL)ended {
+    GFRestoreLockScreenSurface((UIView *)self);
+    objc_setAssociatedObject(self, &kGFLockPressKey, @(!ended && progress > 0.0),
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+%end
+%end
+
+%group GFLockStateHooks
+%hook SBLockScreenManager
+- (void)_setUILocked:(BOOL)locked { %orig; GFLockScheduleRefresh(); }
+%end
+%end
+
+%group GFLockPresentedHooks
+%hook SBLockScreenManager
+- (void)lockScreenViewControllerDidPresent { %orig; GFLockScheduleRefresh(); }
+%end
+%end
+
+%group GFLockDismissedHooks
+%hook SBLockScreenManager
+- (void)lockScreenViewControllerDidDismiss { %orig; GFLockScheduleRefresh(); }
+%end
+%end
+
 /*
  * Per-instance storage. No global array and no polling.
  */
@@ -4811,6 +4892,24 @@ static void GFUpdateOpenedFolderBackground(
         }
 
         GFLoadPreferences();
+
+        Class notificationClass = objc_getClass("NCNotificationShortLookView");
+        if ([notificationClass isSubclassOfClass:UIView.class]) { %init(GFLockNotificationHooks); }
+        Class adjunctClass = objc_getClass("CSAdjunctItemView");
+        if ([adjunctClass isSubclassOfClass:UIView.class]) { %init(GFLockMusicHooks); }
+        Class activityClass = objc_getClass("NCNotificationListSupplementaryHostingView");
+        if ([activityClass isSubclassOfClass:UIView.class]) { %init(GFLockActivityHooks); }
+        Class quickClass = objc_getClass("CSQuickActionsButton");
+        if ([quickClass isSubclassOfClass:UIControl.class]) {
+            %init(GFLockQuickActionHooks);
+            if (class_getInstanceMethod(quickClass, NSSelectorFromString(@"_animateEffectUpdateWithProgress:ended:"))) {
+                %init(GFLockQuickActionPressHooks);
+            }
+        }
+        Class lockClass = objc_getClass("SBLockScreenManager");
+        if (class_getInstanceMethod(lockClass, NSSelectorFromString(@"_setUILocked:"))) { %init(GFLockStateHooks); }
+        if (class_getInstanceMethod(lockClass, NSSelectorFromString(@"lockScreenViewControllerDidPresent"))) { %init(GFLockPresentedHooks); }
+        if (class_getInstanceMethod(lockClass, NSSelectorFromString(@"lockScreenViewControllerDidDismiss"))) { %init(GFLockDismissedHooks); }
 
         Class dockClass = objc_getClass("SBDockView");
         if ([dockClass isSubclassOfClass:UIView.class]) {

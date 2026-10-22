@@ -29,6 +29,7 @@ static void GFUpdateOpenedFolderBackground(UIView *backgroundView);
 static void GFUpdateRealAppLibraryPod(UIView *pod);
 static void GFRefreshAppLibraryController(UIViewController *controller);
 static void GFUpdateDockBackground(UIView *host);
+static void GFUpdateLockScreenSurface(UIView *host);
 
 static NSUInteger GFLiveRefreshGeneration = 0;
 
@@ -153,6 +154,15 @@ static void GFLiveRefreshViewTree(UIView *view) {
 
     NSString *className =
         NSStringFromClass(view.class);
+
+    for (NSString *name in @[@"NCNotificationShortLookView", @"CSQuickActionsButton",
+                             @"CSAdjunctItemView", @"NCNotificationListSupplementaryHostingView"]) {
+        Class cls = NSClassFromString(name);
+        if (cls && [view isKindOfClass:cls]) {
+            GFUpdateLockScreenSurface(view);
+            break;
+        }
+    }
 
     Class dockClass = NSClassFromString(@"SBDockView");
     Class floatingDockClass = NSClassFromString(@"SBFloatingDockPlatterView");

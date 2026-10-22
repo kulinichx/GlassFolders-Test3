@@ -1,4 +1,4 @@
-name: GlassFolders 1.2.0 Release
+name: GlassFolders 1.3.0 Release
 
 on:
   workflow_dispatch:
@@ -22,7 +22,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 1.2.0 / ROOTHIDE ARM64E ==="
+          echo "=== GLASSFOLDERS 1.3.0 / ROOTHIDE ARM64E ==="
 
       - name: Install dependencies
         shell: bash
@@ -128,7 +128,7 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -q '^Version: 1.2.0~dock1$' ctrl/control
+          grep -q '^Version: 1.3.0~lock1$' ctrl/control
           grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64e$' ctrl/control
 
@@ -169,7 +169,7 @@ jobs:
               p = plistlib.load(f)
           assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
           assert p["CFBundleName"] == "GlassFoldersPrefs"
-          assert p["CFBundleShortVersionString"] == "1.2.0"
+          assert p["CFBundleShortVersionString"] == "1.3.0"
           assert p["NSPrincipalClass"] == "GFRootListController"
           print("Preference bundle Info.plist verified.")
           PY
@@ -221,6 +221,12 @@ jobs:
           assert dock["DockMode"]["validTitles"] == ["Hide Background", "Glass Effect"]
           assert dock["DockMode"]["default"] == 0
           print("Independent, opt-in Dock controls verified.")
+          lock_keys = {"LockNotificationsEnabled", "LockQuickActionsEnabled", "LockMusicEnabled", "LockActivitiesEnabled"}
+          lock = {x.get("key"): x for x in p["items"] if x.get("key") in lock_keys}
+          assert set(lock) == lock_keys
+          assert all(x["cell"] == "PSSwitchCell" and x["default"] is False for x in lock.values())
+          assert all(x["defaults"] == "com.kulinich.glassfolders" for x in lock.values())
+          print("Independent, opt-in lock-screen controls verified.")
           assert any(x.get("label") == "Folders" for x in items)
           assert any(x.get("label") == "App Library" for x in items)
           print("RootHide product identity/localization resources verified.")
@@ -232,7 +238,7 @@ jobs:
       - name: Upload RootHide deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.2.0-dock1-RootHide-arm64e
+          name: GlassFolders-1.3.0-lock1-RootHide-arm64e
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
@@ -250,7 +256,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 1.2.0 / STANDARD ROOTLESS ARM64 ==="
+          echo "=== GLASSFOLDERS 1.3.0 / STANDARD ROOTLESS ARM64 ==="
 
       - name: Install dependencies
         shell: bash
@@ -362,7 +368,7 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -q '^Version: 1.2.0~dock1$' ctrl/control
+          grep -q '^Version: 1.3.0~lock1$' ctrl/control
           grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64$' ctrl/control
 
@@ -419,7 +425,7 @@ jobs:
               p = plistlib.load(f)
           assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
           assert p["CFBundleName"] == "GlassFoldersPrefs"
-          assert p["CFBundleShortVersionString"] == "1.2.0"
+          assert p["CFBundleShortVersionString"] == "1.3.0"
           assert p["NSPrincipalClass"] == "GFRootListController"
           print("Preference bundle Info.plist verified.")
           PY
@@ -474,6 +480,12 @@ jobs:
           assert dock["DockMode"]["validTitles"] == ["Hide Background", "Glass Effect"]
           assert dock["DockMode"]["default"] == 0
           print("Independent, opt-in Dock controls verified.")
+          lock_keys = {"LockNotificationsEnabled", "LockQuickActionsEnabled", "LockMusicEnabled", "LockActivitiesEnabled"}
+          lock = {x.get("key"): x for x in p["items"] if x.get("key") in lock_keys}
+          assert set(lock) == lock_keys
+          assert all(x["cell"] == "PSSwitchCell" and x["default"] is False for x in lock.values())
+          assert all(x["defaults"] == "com.kulinich.glassfolders" for x in lock.values())
+          print("Independent, opt-in lock-screen controls verified.")
           print("Standard rootless product identity/localization resources verified.")
           PY
 
@@ -483,7 +495,7 @@ jobs:
       - name: Upload rootless deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.2.0-dock1-Rootless-arm64
+          name: GlassFolders-1.3.0-lock1-Rootless-arm64
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14

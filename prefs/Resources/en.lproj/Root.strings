@@ -67,3 +67,10 @@
 "Hide Background" = "Hide Background";
 "Glass Effect" = "Glass Effect";
 "Turn off to restore the system Dock. Dock works independently of folders and App Library." = "Turn off to restore the system Dock. Dock works independently of folders and App Library.";
+"Lock Screen Glass" = "Lock Screen Glass";
+"Notification Cards" = "Notification Cards";
+"Flashlight and Camera" = "Flashlight and Camera";
+"Music Panel" = "Music Panel";
+"Live Activities" = "Live Activities";
+"Independent switches. Changes take effect immediately; turn off to restore the system appearance. A valid GlassFolders license is required." = "Independent switches. Changes take effect immediately; turn off to restore the system appearance. A valid GlassFolders license is required.";
+"Live Activities replace compatible system backgrounds only. App-drawn opaque backgrounds may remain. Flashlight-on and pressed buttons keep system feedback. Test on your device." = "Live Activities replace compatible system backgrounds only. App-drawn opaque backgrounds may remain. Flashlight-on and pressed buttons keep system feedback. Test on your device.";
