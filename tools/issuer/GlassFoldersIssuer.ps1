@@ -48,7 +48,9 @@ function Get-GFState {
     return $state
 }
 function Save-GFState($State) { Write-GFAtomic $script:GFStateFile ($State | ConvertTo-Json -Depth 8) }
-function Get-GFNow { return [int64][Math]::Floor(([DateTime]::UtcNow - [DateTime]'1970-01-01Z').TotalSeconds) }
+# Parsing a Z-suffixed DateTime converts it to local time in Windows PowerShell.
+# Subtracting that local epoch from UtcNow shifts every challenge by the timezone.
+function Get-GFNow { return [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() }
 function ConvertTo-GF64([byte[]]$Bytes) { return [Convert]::ToBase64String($Bytes).TrimEnd('=').Replace('+','-').Replace('/','_') }
 function ConvertFrom-GF64([string]$Text) {
     if ($Text -cnotmatch '^[A-Za-z0-9_-]+$' -or $Text.Length % 4 -eq 1) { throw 'Invalid Base64URL.' }
@@ -423,7 +425,7 @@ function Show-GFHistory([string]$PreviewFile) {
 }
 
 $form=New-Object Windows.Forms.Form
-$form.Text='GlassFolders 离线授权签发器 1.1'
+$form.Text='GlassFolders 离线授权签发器 1.1.1'
 $form.StartPosition='CenterScreen'; $form.Font=New-Object Drawing.Font('Microsoft YaHei UI',10)
 $form.AutoScaleMode='Dpi'; $form.AutoScaleDimensions=New-Object Drawing.SizeF(96,96)
 $form.BackColor=[Drawing.Color]::FromArgb(244,246,250)

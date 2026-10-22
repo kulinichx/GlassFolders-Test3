@@ -4,7 +4,13 @@ Windows 10/11，Windows PowerShell 5.1，无需安装 Python。界面为中文�
 
 本目录是公开源代码，**不含正式私钥**。本次配置好的可用工具放在仓库外的 `G:\AITEST\GlassFolders 1.0\GlassFolders-Issuer`，双击其中 `GlassFolders签发器.exe` 使用。该图形启动器直接显示签发界面，不弹出 CMD 或 PowerShell 窗口；使用同级 `GlassFolders-Issuer-Private` 数据目录，不会重复生成密钥。
 
-安装后的状态和手机/电脑逐步激活说明见仓库 `docs/安装状态与激活指南.md`。旧 `1.0.0-fix1.deb` 没有新增授权功能；新候选版尚需编译，首次安装未激活时不会启用玻璃效果。
+安装后的状态和手机/电脑逐步激活说明见仓库 `docs/安装状态与激活指南.md`。旧 `1.0.0-fix1.deb` 没有新增授权功能；新授权候选版首次安装未激活时不会启用玻璃效果。
+
+## 1.1.1 时间修复
+
+修复 Windows PowerShell 5.1 在北京时间下生成的绑定码时间早了 8 小时、手机立即提示“绑定码已过期或设备时间不正确”的问题。现在使用标准 Unix 时间，不受电脑时区影响。
+
+关闭已打开的旧签发窗口，重新双击 `GlassFolders签发器.exe`，确认标题为 **1.1.1**，重新生成并发送绑定码，再由手机生成新的回执。旧绑定码和旧回执不能继续使用。此修复只更新电脑签发器，手机现有授权版 DEB 无需重装；保留现有私钥和记录即可。
 
 ## 使用
 
@@ -58,6 +64,6 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Build-Launcher.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File .\GlassFoldersIssuer.ps1 -UISmokeTest -DataDirectory D:\GFPrivate
 ```
 
-该检查创建界面控件并验证公私钥匹配，然后退出；不弹出窗口、不创建授权、不修改历史。完整自动检查在仓库 `tests/Test-Issuer.ps1`，另需 Node.js，用临时测试密钥运行。
+该检查创建界面控件并验证公私钥匹配，然后退出；不弹出窗口、不创建授权、不修改历史。完整自动检查在仓库 `tests/Test-Issuer.ps1`，另需 Node.js，用临时测试密钥运行。1.1.1 已通过 51 项检查，包含独立时钟校验、新绑定码的手机端时间条件、签名交叉验证和历史界面检查。
 
 绑定回执是签名持有证明，不是 Apple 远程硬件认证。实现边界详见协议说明。

@@ -25,11 +25,23 @@ function New-TestProof([string]$Challenge, [string]$Device) {
     } finally { [Array]::Clear($key,0,$key.Length) }
 }
 try {
+    $clockNode = $env:GF_TEST_NODE
+    if (-not $clockNode) { $clockNode = (Get-Command node -ErrorAction SilentlyContinue).Source }
+    if (-not $clockNode) { throw 'Set GF_TEST_NODE to node.exe for independent clock verification.' }
+    $clockBefore = Get-GFNow
+    $independentNow = [int64](& $clockNode -e 'process.stdout.write(String(Math.floor(Date.now()/1000)))')
+    if ($LASTEXITCODE -ne 0) { throw 'Independent clock check failed.' }
+    $clockAfter = Get-GFNow
+    Assert-GF ($independentNow -ge $clockBefore -and $independentNow -le $clockAfter) 'Unix clock agrees with independent Node clock in local timezone'
     $device = 'GF-' + ('A' * 64); $other = 'GF-' + ('B' * 64)
     Reject-GF { Initialize-GFKey } 'Existing key is never overwritten'
     Reject-GF { New-GFChallenge 'bad' } 'Malformed device code rejected'
     Reject-GF { New-GFLicense '0001' $device 'Test user' '' } 'License requires verified challenge'
     $challenge = New-GFChallenge $device
+    $challengeInfo = $challenge | ConvertFrom-Json
+    Assert-GF ([Math]::Abs($challengeInfo.issued - $independentNow) -le 5 -and $challengeInfo.expires - $challengeInfo.issued -eq 300) 'Fresh challenge has real Unix time and five-minute lifetime'
+    $phoneNow = [int64](& $clockNode -e 'process.stdout.write(String(Math.floor(Date.now()/1000)))')
+    Assert-GF ($challengeInfo.issued -ge 0 -and $challengeInfo.issued -le $phoneNow + 60 -and $challengeInfo.expires -gt $phoneNow -and $challengeInfo.expires -le $challengeInfo.issued + 900) 'Fresh challenge passes phone clock checks'
     $proof = New-TestProof $challenge $device
     Reject-GF { Test-GFProof ($proof.Replace('GFP1','RHP1')) $device } 'RC7 proof rejected'
     Reject-GF { Test-GFProof ($proof + ' ') $device } 'Noncanonical proof rejected'
