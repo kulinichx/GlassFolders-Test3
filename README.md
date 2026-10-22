@@ -1,6 +1,6 @@
 # GlassFolders 1.3.0 — Lock screen candidate
 
-This branch adds an independent offline GlassFolders issuer and device-bound activation. Candidate package: `1.3.0~lock4`. Target systems: iOS / iPadOS **16.0–17.3.1**, with a compatible jailbreak and SpringBoard injection environment. Device validation is still required; the source target is not a claim of tested compatibility.
+This branch adds an independent offline GlassFolders issuer and device-bound activation. Candidate package: `1.3.0~lock5`. Target systems: iOS / iPadOS **16.0–17.3.1**, with a compatible jailbreak and SpringBoard injection environment. Device validation is still required; the source target is not a claim of tested compatibility.
 
 See [离线授权、使用流程与兼容性检查](docs/离线授权与兼容性.md) and [Windows 签发器说明](tools/issuer/README.md). Issuer private keys and records must remain outside the repository. Existing RC7 licenses are not accepted. The previous 1.0.0-fix1 binary does not contain these changes.
 
@@ -19,6 +19,7 @@ GlassFolders brings refined Clear and Liquid Glass materials to iOS folders and 
 - `lock2`: dedicated circular flashlight/camera optics and style/interaction refresh; grouped, non-in-place lock-screen backdrop filtering without additive card brightness, addressing overlapping-card washout reported on iOS 16.6 (device retest pending)
 - `lock3`: lock-screen blur follows the selected folder style’s existing strength slider (lighter for circular controls), with stable edge lighting; subdued rear notification cards and guarded stack-overlay suppression target remaining bright rear strips (device retest pending)
 - `lock4`: replace lock3 blur linkage with fixed lock-screen optics (6 pt cards / 3 pt buttons), clearer front edges and subdued rear cards; retain glass through Cover Sheet dismissal and cancelled swipes, including temporarily disabled quick actions (device retest pending)
+- `lock5`: independent opt-in glass for system notification banners on the Home Screen and in apps, with a separate backdrop capture group; excludes banner scaling from rear-card detection (device retest pending)
 - Independent Clear and Liquid Glass strength controls for folders
 - App Library modes: Follow Folder, Clear, or Liquid Glass
 - Matched App Library category-card and search-field materials
@@ -37,7 +38,7 @@ App Library uses fixed, tuned material recipes rather than exposing engineering 
 ## Compatibility
 
 - Package identifier: `com.kulinich.glassfolders`
-- Candidate package version: `1.3.0~lock4`
+- Candidate package version: `1.3.0~lock5`
 - Minimum firmware declared by the package: iOS / iPadOS 16.0
 - Maximum target: iOS / iPadOS 17.3.1 (package dependency `< 17.3.2`)
 - Runtime/device validation: pending for this candidate; see the compatibility checklist above

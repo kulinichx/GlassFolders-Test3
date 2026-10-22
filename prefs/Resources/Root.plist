@@ -22,7 +22,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 1.3.0 (lock4)</string>
+			<string>GlassFolders 1.3.0 (lock5)</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -192,6 +192,19 @@
 			<array><string>Hide Background</string><string>Glass Effect</string></array>
 			<key>validValues</key>
 			<array><integer>0</integer><integer>1</integer></array>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSGroupCell</string>
+			<key>label</key><string>Notification Banners</string>
+			<key>footerText</key>
+			<string>Glass for system notification banners on the Home Screen and in apps. Independent of lock screen cards and folder strength. Changes take effect immediately; turn off to restore the system appearance.</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSSwitchCell</string>
+			<key>label</key><string>Glass Banners</string>
+			<key>key</key><string>BannerNotificationsEnabled</string>
+			<key>default</key><false/>
+			<key>defaults</key><string>com.kulinich.glassfolders</string>
 		</dict>
 		<dict>
 			<key>cell</key><string>PSGroupCell</string>

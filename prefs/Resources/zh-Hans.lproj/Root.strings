@@ -75,3 +75,7 @@
 "Live Activities replace compatible system backgrounds only. App-drawn opaque backgrounds may remain. Flashlight-on and pressed buttons keep system feedback. Test on your device." = "实时活动仅替换兼容的系统底板；应用自绘的不透明背景可能保留。电筒点亮及按钮按住时保留系统反馈，效果请以本机实测为准。";
 
 "Independent switches with tuned glass effects. Lock screen appearance is independent of folder strength. Changes take effect immediately. A valid GlassFolders license is required." = "各项可独立开启，使用已调好的玻璃效果，不受文件夹强度影响；设置即时生效。需要有效的 GlassFolders 授权。";
+
+"Notification Banners" = "通知横幅";
+"Glass Banners" = "横幅玻璃效果";
+"Glass for system notification banners on the Home Screen and in apps. Independent of lock screen cards and folder strength. Changes take effect immediately; turn off to restore the system appearance." = "为主屏及应用内弹出的系统通知横幅添加玻璃效果，与锁屏卡片和文件夹强度独立。设置即时生效；关闭后恢复系统样式。";

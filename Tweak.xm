@@ -52,6 +52,7 @@ static BOOL GFLockNotificationsEnabled = NO;
 static BOOL GFLockQuickActionsEnabled = NO;
 static BOOL GFLockMusicEnabled = NO;
 static BOOL GFLockActivitiesEnabled = NO;
+static BOOL GFBannerNotificationsEnabled = NO;
 
 // Legacy value retained for preference compatibility:
 // 0 = Clear, 1 = Liquid Glass
@@ -157,6 +158,7 @@ static void GFLoadPreferences(void) {
     GFLockQuickActionsEnabled = licensed && GFReadBool(CFSTR("LockQuickActionsEnabled"), NO);
     GFLockMusicEnabled = licensed && GFReadBool(CFSTR("LockMusicEnabled"), NO);
     GFLockActivitiesEnabled = licensed && GFReadBool(CFSTR("LockActivitiesEnabled"), NO);
+    GFBannerNotificationsEnabled = licensed && GFReadBool(CFSTR("BannerNotificationsEnabled"), NO);
 
     GFAppLibraryStyle =
         GFReadInteger(CFSTR("AppLibraryStyle"), 0);
@@ -4508,6 +4510,19 @@ static void GFUpdateDockBackground(UIView *host) {
 %end
 %end
 
+%group GFNotificationPresentationHooks
+%hook NCNotificationShortLookView
+- (void)_setBanner:(BOOL)banner {
+    // Reused short looks can switch presentation. Restore before UIKit
+    // configures the new kind, then apply only its own independently gated recipe.
+    GFRestoreLockScreenSurface((UIView *)self);
+    objc_setAssociatedObject(self, &kGFLockStackedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+%end
+%end
+
 %group GFLockMusicHooks
 %hook CSAdjunctItemView
 - (void)layoutSubviews {
@@ -5008,16 +5023,19 @@ static void GFUpdateOpenedFolderBackground(
 
         Class coverSheetClass = objc_getClass("CSCoverSheetViewController");
         if ([coverSheetClass isSubclassOfClass:UIViewController.class] &&
-            GFLockHasAppearanceCallback(coverSheetClass, @selector(viewWillAppear:)) &&
-            GFLockHasAppearanceCallback(coverSheetClass, @selector(viewDidAppear:)) &&
-            GFLockHasAppearanceCallback(coverSheetClass, @selector(viewWillDisappear:)) &&
-            GFLockHasAppearanceCallback(coverSheetClass, @selector(viewDidDisappear:))) {
+            GFLockHasBoolArgumentMethod(coverSheetClass, @selector(viewWillAppear:)) &&
+            GFLockHasBoolArgumentMethod(coverSheetClass, @selector(viewDidAppear:)) &&
+            GFLockHasBoolArgumentMethod(coverSheetClass, @selector(viewWillDisappear:)) &&
+            GFLockHasBoolArgumentMethod(coverSheetClass, @selector(viewDidDisappear:))) {
             %init(GFLockCoverSheetAppearanceHooks);
         }
 
         Class notificationClass = objc_getClass("NCNotificationShortLookView");
         if ([notificationClass isSubclassOfClass:UIView.class]) {
             %init(GFLockNotificationHooks);
+            if (GFLockHasBoolArgumentMethod(notificationClass, NSSelectorFromString(@"_setBanner:"))) {
+                %init(GFNotificationPresentationHooks);
+            }
             Method stackMethod = class_getInstanceMethod(notificationClass,
                 NSSelectorFromString(@"configureStackDimmingForTransform:"));
             char stackReturn[8] = {0};

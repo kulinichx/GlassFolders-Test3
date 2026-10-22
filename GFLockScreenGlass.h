@@ -64,6 +64,18 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 }
 @end
 
+// Banners sample the current scene, with a capture group separate from lock
+// screen cards. Their slide/scale animation must never classify them as rear cards.
+@interface GFBannerGlassView : GFLockScreenGlassView
+@end
+@implementation GFBannerGlassView
+- (void)gfRefreshMaterial {
+    [super gfRefreshMaterial];
+    GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.notifications.banners",
+                             GFLockCardBlurRadius);
+}
+@end
+
 // Rear cards expose only a narrow strip. Reusing the large panel's optical
 // rail there turns that strip into a bright slab on light wallpapers.
 @interface GFNotificationGlassView : GFLockScreenGlassView
@@ -206,14 +218,20 @@ static id GFLockIvar(id object, const char *name) {
     return type && type[0] == '@' ? object_getIvar(object, ivar) : nil;
 }
 
-static BOOL GFLockBool(id object, NSString *name, BOOL fallback) {
+static BOOL GFLockReadBool(id object, NSString *name, BOOL *value) {
     SEL sel = NSSelectorFromString(name);
     Method method = object ? class_getInstanceMethod(object_getClass(object), sel) : NULL;
     char type[8] = {0};
     if (method) method_getReturnType(method, type, sizeof(type));
     if (!method || method_getNumberOfArguments(method) != 2 ||
-        (type[0] != 'B' && type[0] != 'c')) return fallback;
-    return ((BOOL (*)(id, SEL))objc_msgSend)(object, sel);
+        (type[0] != 'B' && type[0] != 'c')) return NO;
+    *value = ((BOOL (*)(id, SEL))objc_msgSend)(object, sel);
+    return YES;
+}
+
+static BOOL GFLockBool(id object, NSString *name, BOOL fallback) {
+    BOOL value = fallback;
+    return GFLockReadBool(object, name, &value) ? value : fallback;
 }
 
 static CGFloat GFLockRadius(id object) {
@@ -230,7 +248,7 @@ static CGFloat GFLockRadius(id object) {
     return 0.0;
 }
 
-static BOOL GFLockHasAppearanceCallback(Class cls, SEL selector) {
+static BOOL GFLockHasBoolArgumentMethod(Class cls, SEL selector) {
     Method method = class_getInstanceMethod(cls, selector);
     char result[8] = {0};
     char argument[8] = {0};
@@ -263,7 +281,7 @@ static BOOL GFLockScreenVisible(UIView *host) {
                                                 &kGFLockCoverSheetVisibleKey);
     if (visible) return visible.boolValue;
     // Fallback for unrecognized owners or lifecycle callbacks unavailable on
-    // a particular OS. Never extend ordinary banners into lock-screen glass.
+    // a particular OS. Banners have a separate gate and bypass this query.
     Class cls = objc_getClass("SBLockScreenManager");
     // Class methods use the metaclass, unlike the instance getter helper.
     SEL sel = NSSelectorFromString(@"sharedInstanceIfExists");
@@ -338,17 +356,21 @@ static void GFLockSyncStackOverlay(UIView *host, GFLockBackgroundState *state) {
 static void GFUpdateLockScreenSurface(UIView *host) {
     if (!host) return;
     GFLockBackgroundState *state = objc_getAssociatedObject(host, &kGFLockBackgroundKey);
-    if (!state && !GFLockNotificationsEnabled && !GFLockQuickActionsEnabled &&
+    if (!state && !GFBannerNotificationsEnabled && !GFLockNotificationsEnabled && !GFLockQuickActionsEnabled &&
         !GFLockMusicEnabled && !GFLockActivitiesEnabled) return;
 
     BOOL enabled = NO;
     BOOL circle = NO;
     BOOL notification = GFLockIsKind(host, "NCNotificationShortLookView");
+    BOOL banner = NO;
     UIView *background = nil;
     UIView *content = nil;
     id radiusOwner = host;
     if (notification) {
-        enabled = GFLockNotificationsEnabled && !GFLockBool(host, @"_isBanner", YES);
+        // Unknown presentation stays native; a missing getter must never be
+        // mistaken for a banner just because the banner option is enabled.
+        BOOL knownPresentation = GFLockReadBool(host, @"_isBanner", &banner);
+        enabled = knownPresentation && (banner ? GFBannerNotificationsEnabled : GFLockNotificationsEnabled);
         background = GFLockMaterial(host);
         content = GFLockView(GFLockObject(host, @"notificationContentView"));
         if (!content) content = GFLockView(GFLockIvar(host, "_notificationContentView"));
@@ -383,14 +405,17 @@ static void GFUpdateLockScreenSurface(UIView *host) {
 
     // Unknown/missing background layouts are left untouched. In particular,
     // an opaque remotely rendered Live Activity is never made transparent.
-    if (!enabled || !host.window || !GFLockScreenVisible(host) || !background ||
+    if (!enabled || !host.window || (!banner && !GFLockScreenVisible(host)) || !background ||
         background == host || ![background isDescendantOfView:host] ||
         !content || ![content isDescendantOfView:host] || [content isDescendantOfView:background] ||
         background.bounds.size.width <= 0.0 || background.bounds.size.height <= 0.0) {
         if (state) GFRestoreLockScreenSurface(host);
         return;
     }
-    if (state && state.background != background) {
+    Class glassClass = circle ? GFQuickActionGlassView.class :
+        (banner ? GFBannerGlassView.class :
+         (notification ? GFNotificationGlassView.class : GFLockScreenGlassView.class));
+    if (state && (state.background != background || ![state.glass isMemberOfClass:glassClass])) {
         GFRestoreLockScreenSurface(host);
         state = nil;
     }
@@ -398,8 +423,6 @@ static void GFUpdateLockScreenSurface(UIView *host) {
         state = [GFLockBackgroundState new];
         state.background = background;
         state.originalHidden = background.hidden;
-        Class glassClass = circle ? GFQuickActionGlassView.class :
-            (notification ? GFNotificationGlassView.class : GFLockScreenGlassView.class);
         state.glass = [[glassClass alloc] initWithStyle:1 strength:0.55];
         state.glass.isAccessibilityElement = NO;
         state.glass.accessibilityElementsHidden = YES;
@@ -407,7 +430,7 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     }
     UIView *container = background.superview;
     GFLockScreenGlassView *glass = state.glass;
-    if (notification) {
+    if (notification && !banner) {
         ((GFNotificationGlassView *)glass).gfStacked = GFLockNotificationIsStacked(host);
         GFLockSyncStackOverlay(host, state);
     }

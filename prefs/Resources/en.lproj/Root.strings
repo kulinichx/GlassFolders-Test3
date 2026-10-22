@@ -76,3 +76,7 @@
 "Live Activities replace compatible system backgrounds only. App-drawn opaque backgrounds may remain. Flashlight-on and pressed buttons keep system feedback. Test on your device." = "Live Activities replace compatible system backgrounds only. App-drawn opaque backgrounds may remain. Flashlight-on and pressed buttons keep system feedback. Test on your device.";
 
 "Independent switches with tuned glass effects. Lock screen appearance is independent of folder strength. Changes take effect immediately. A valid GlassFolders license is required." = "Independent switches with tuned glass effects. Lock screen appearance is independent of folder strength. Changes take effect immediately. A valid GlassFolders license is required.";
+
+"Notification Banners" = "Notification Banners";
+"Glass Banners" = "Glass Banners";
+"Glass for system notification banners on the Home Screen and in apps. Independent of lock screen cards and folder strength. Changes take effect immediately; turn off to restore the system appearance." = "Glass for system notification banners on the Home Screen and in apps. Independent of lock screen cards and folder strength. Changes take effect immediately; turn off to restore the system appearance.";
