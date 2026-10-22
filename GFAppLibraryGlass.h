@@ -2,7 +2,7 @@
 #ifndef GF_APP_LIBRARY_GLASS_H
 #define GF_APP_LIBRARY_GLASS_H
 
-#import "GFGlassRim.h"
+#import "GFHorizontalGlassRim.h"
 
 @interface GFAppLibraryBackdropView : UIView
 @end
@@ -17,13 +17,16 @@
 @property (nonatomic, strong) GFAppLibraryBackdropView *gfBackdropSampleView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
 @property (nonatomic, strong) CAGradientLayer *gfBodyVeil;
-@property (nonatomic, strong) GFLockRimView *gfCardRim;
+@property (nonatomic, strong) GFHorizontalGlassRimView *gfCardRim;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
 @property (nonatomic, assign) BOOL gfSearchVariant;
+@property (nonatomic, assign) BOOL gfDockVariant;
 @property (nonatomic, assign) BOOL gfHasMaterial;
 @property (nonatomic, assign) BOOL gfMaterialDark;
 @property (nonatomic, assign) NSInteger gfMaterialStyle;
+@property (nonatomic, assign) BOOL gfMaterialSearchVariant;
+@property (nonatomic, assign) BOOL gfMaterialDockVariant;
 - (instancetype)initWithStrength:(CGFloat)strength;
 - (void)setPreferredRadius:(CGFloat)radius;
 - (void)gfRefreshMaterial;
@@ -50,15 +53,14 @@
         [self addSubview:_gfBackdropSampleView];
 
         _gfBodyVeil = [CAGradientLayer layer];
-        _gfBodyVeil.startPoint = CGPointMake(0.3, 0.0);
-        _gfBodyVeil.endPoint = CGPointMake(0.7, 1.0);
-        _gfBodyVeil.locations = @[@0.0, @0.36, @0.72, @1.0];
+        _gfBodyVeil.startPoint = CGPointMake(0.5, 0.0);
+        _gfBodyVeil.endPoint = CGPointMake(0.5, 1.0);
         _gfBodyVeil.zPosition = 19.0;
         [self.layer addSublayer:_gfBodyVeil];
 
-        // Use the exact accepted lock11 contour and coverage. The legacy
-        // class name is retained so existing lock-screen paths stay intact.
-        _gfCardRim = [[GFLockRimView alloc] initWithFrame:CGRectZero];
+        // App Library gets a wider horizontal bevel; the lock-screen rim
+        // continues using its accepted lighting and widths unchanged.
+        _gfCardRim = [[GFHorizontalGlassRimView alloc] initWithFrame:CGRectZero];
         [self addSubview:_gfCardRim];
         [self gfRefreshMaterial];
     }
@@ -75,20 +77,26 @@
 
 - (void)gfRefreshMaterial {
     BOOL dark = GFUsesDarkAppearance(self);
-    NSInteger style = GFResolvedAppLibraryStyle();
+    NSInteger style = self.gfDockVariant ? 1 : GFResolvedAppLibraryStyle();
     // Pod hooks run on layout. Reuse filters and layers until their material
     // changes, including updates while App Library is already on screen.
-    if (self.gfHasMaterial && self.gfMaterialDark == dark && self.gfMaterialStyle == style) return;
+    if (self.gfHasMaterial && self.gfMaterialDark == dark && self.gfMaterialStyle == style &&
+        self.gfMaterialSearchVariant == self.gfSearchVariant &&
+        self.gfMaterialDockVariant == self.gfDockVariant) return;
     self.gfHasMaterial = YES;
     self.gfMaterialDark = dark;
     self.gfMaterialStyle = style;
-    GFAppLibraryMaterialRecipe recipe = GFAppLibraryRecipe(self.gfSearchVariant, dark);
+    self.gfMaterialSearchVariant = self.gfSearchVariant;
+    self.gfMaterialDockVariant = self.gfDockVariant;
+    GFAppLibraryMaterialRecipe recipe = self.gfDockVariant ?
+        (GFAppLibraryMaterialRecipe){10.0, 1.04, 1.0} : GFAppLibraryRecipe(self.gfSearchVariant, dark);
     CALayer *backdrop = self.gfBackdropSampleView.layer;
     BOOL hasBlur = NO;
     if ([NSStringFromClass(backdrop.class) containsString:@"Backdrop"]) {
         SEL group = NSSelectorFromString(@"setGroupName:");
         if ([backdrop respondsToSelector:group])
             ((void (*)(id, SEL, id))objc_msgSend)(backdrop, group,
+                self.gfDockVariant ? @"com.kulinich.glassfolders.dock.glass" :
                 style == 1 ? @"com.kulinich.glassfolders.applibrary.liquid" :
                              @"com.kulinich.glassfolders.applibrary.clear");
         SEL inPlace = NSSelectorFromString(@"setAllowsInPlaceFiltering:");
@@ -125,12 +133,14 @@
 
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
-    CGFloat density = recipe.veilStrength;
+    CGFloat density = recipe.veilStrength * (self.gfSearchVariant ? 0.8 : 1.0);
     self.gfBodyVeil.colors = @[
-        (id)[UIColor colorWithWhite:1.0 alpha:0.018 * density].CGColor,
-        (id)[UIColor colorWithWhite:0.0 alpha:0.008 * density].CGColor,
+        (id)[UIColor colorWithWhite:1.0 alpha:0.060 * density].CGColor,
+        (id)[UIColor colorWithWhite:1.0 alpha:0.020 * density].CGColor,
         (id)[UIColor colorWithWhite:0.0 alpha:0.012 * density].CGColor,
-        (id)[UIColor colorWithWhite:1.0 alpha:0.006 * density].CGColor
+        (id)[UIColor colorWithWhite:0.0 alpha:0.020 * density].CGColor,
+        (id)[UIColor colorWithWhite:1.0 alpha:0.014 * density].CGColor,
+        (id)[UIColor colorWithWhite:1.0 alpha:0.048 * density].CGColor
     ];
     [CATransaction commit];
     [self setNeedsLayout];
@@ -150,8 +160,13 @@
     radius = MIN(radius, limit);
     self.layer.cornerRadius = radius;
     self.gfBodyVeil.frame = self.bounds;
+    CGFloat height = MAX(1.0, CGRectGetHeight(self.bounds));
+    CGFloat lip = MIN(0.16, (self.gfSearchVariant ? 8.0 : (self.gfDockVariant ? 12.0 : 18.0)) / height);
+    self.gfBodyVeil.locations = @[@0.0, @(lip), @0.40, @0.65, @(1.0 - lip), @1.0];
     self.gfCardRim.frame = self.bounds;
     self.gfCardRim.gfRadius = radius;
+    self.gfCardRim.gfSearchVariant = self.gfSearchVariant;
+    self.gfCardRim.gfDockVariant = self.gfDockVariant;
     [self.gfCardRim setNeedsLayout];
     [CATransaction commit];
 }

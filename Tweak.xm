@@ -3768,9 +3768,17 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
 
 // A distinct class keeps live folder-style changes away from the Dock recipe.
-@interface GFDockGlassView : GFPanelGlassView
+@interface GFDockGlassView : GFAppLibraryGlassView
 @end
 @implementation GFDockGlassView
+- (instancetype)initWithStrength:(CGFloat)strength {
+    self = [super initWithStrength:strength];
+    if (self) {
+        self.gfDockVariant = YES;
+        [self gfRefreshMaterial];
+    }
+    return self;
+}
 @end
 
 @interface GFDockBackgroundState : NSObject
@@ -3870,7 +3878,7 @@ static void GFUpdateDockBackground(UIView *host) {
 
     if (GFDockMode == 1) {
         if (!state.glass) {
-            state.glass = [[GFDockGlassView alloc] initWithStyle:1 strength:0.55];
+            state.glass = [[GFDockGlassView alloc] initWithStrength:1.0];
             state.glass.isAccessibilityElement = NO;
             state.glass.accessibilityElementsHidden = YES;
         }
