@@ -4485,29 +4485,53 @@ static void GFUpdateDockBackground(UIView *host) {
 
 %group GFLockNotificationHooks
 %hook NCNotificationShortLookView
-- (void)layoutSubviews { %orig; GFUpdateLockScreenSurface((UIView *)self); }
-- (void)didMoveToWindow { %orig; GFUpdateLockScreenSurface((UIView *)self); }
+- (void)layoutSubviews {
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+- (void)didMoveToWindow {
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
 %end
 %end
 
 %group GFLockMusicHooks
 %hook CSAdjunctItemView
-- (void)layoutSubviews { %orig; GFUpdateLockScreenSurface((UIView *)self); }
-- (void)didMoveToWindow { %orig; GFUpdateLockScreenSurface((UIView *)self); }
+- (void)layoutSubviews {
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+- (void)didMoveToWindow {
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
 %end
 %end
 
 %group GFLockActivityHooks
 %hook NCNotificationListSupplementaryHostingView
-- (void)layoutSubviews { %orig; GFUpdateLockScreenSurface((UIView *)self); }
-- (void)didMoveToWindow { %orig; GFUpdateLockScreenSurface((UIView *)self); }
+- (void)layoutSubviews {
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+- (void)didMoveToWindow {
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
 %end
 %end
 
 %group GFLockQuickActionHooks
 %hook CSQuickActionsButton
-- (void)layoutSubviews { %orig; GFUpdateLockScreenSurface((UIView *)self); }
-- (void)didMoveToWindow { %orig; GFUpdateLockScreenSurface((UIView *)self); }
+- (void)layoutSubviews {
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+- (void)didMoveToWindow {
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
 - (void)setSelected:(BOOL)selected {
     GFRestoreLockScreenSurface((UIView *)self);
     %orig;
@@ -4535,19 +4559,28 @@ static void GFUpdateDockBackground(UIView *host) {
 
 %group GFLockStateHooks
 %hook SBLockScreenManager
-- (void)_setUILocked:(BOOL)locked { %orig; GFLockScheduleRefresh(); }
+- (void)_setUILocked:(BOOL)locked {
+    %orig;
+    GFLockScheduleRefresh();
+}
 %end
 %end
 
 %group GFLockPresentedHooks
 %hook SBLockScreenManager
-- (void)lockScreenViewControllerDidPresent { %orig; GFLockScheduleRefresh(); }
+- (void)lockScreenViewControllerDidPresent {
+    %orig;
+    GFLockScheduleRefresh();
+}
 %end
 %end
 
 %group GFLockDismissedHooks
 %hook SBLockScreenManager
-- (void)lockScreenViewControllerDidDismiss { %orig; GFLockScheduleRefresh(); }
+- (void)lockScreenViewControllerDidDismiss {
+    %orig;
+    GFLockScheduleRefresh();
+}
 %end
 %end
 
@@ -4894,11 +4927,17 @@ static void GFUpdateOpenedFolderBackground(
         GFLoadPreferences();
 
         Class notificationClass = objc_getClass("NCNotificationShortLookView");
-        if ([notificationClass isSubclassOfClass:UIView.class]) { %init(GFLockNotificationHooks); }
+        if ([notificationClass isSubclassOfClass:UIView.class]) {
+            %init(GFLockNotificationHooks);
+        }
         Class adjunctClass = objc_getClass("CSAdjunctItemView");
-        if ([adjunctClass isSubclassOfClass:UIView.class]) { %init(GFLockMusicHooks); }
+        if ([adjunctClass isSubclassOfClass:UIView.class]) {
+            %init(GFLockMusicHooks);
+        }
         Class activityClass = objc_getClass("NCNotificationListSupplementaryHostingView");
-        if ([activityClass isSubclassOfClass:UIView.class]) { %init(GFLockActivityHooks); }
+        if ([activityClass isSubclassOfClass:UIView.class]) {
+            %init(GFLockActivityHooks);
+        }
         Class quickClass = objc_getClass("CSQuickActionsButton");
         if ([quickClass isSubclassOfClass:UIControl.class]) {
             %init(GFLockQuickActionHooks);
@@ -4907,9 +4946,15 @@ static void GFUpdateOpenedFolderBackground(
             }
         }
         Class lockClass = objc_getClass("SBLockScreenManager");
-        if (class_getInstanceMethod(lockClass, NSSelectorFromString(@"_setUILocked:"))) { %init(GFLockStateHooks); }
-        if (class_getInstanceMethod(lockClass, NSSelectorFromString(@"lockScreenViewControllerDidPresent"))) { %init(GFLockPresentedHooks); }
-        if (class_getInstanceMethod(lockClass, NSSelectorFromString(@"lockScreenViewControllerDidDismiss"))) { %init(GFLockDismissedHooks); }
+        if (class_getInstanceMethod(lockClass, NSSelectorFromString(@"_setUILocked:"))) {
+            %init(GFLockStateHooks);
+        }
+        if (class_getInstanceMethod(lockClass, NSSelectorFromString(@"lockScreenViewControllerDidPresent"))) {
+            %init(GFLockPresentedHooks);
+        }
+        if (class_getInstanceMethod(lockClass, NSSelectorFromString(@"lockScreenViewControllerDidDismiss"))) {
+            %init(GFLockDismissedHooks);
+        }
 
         Class dockClass = objc_getClass("SBDockView");
         if ([dockClass isSubclassOfClass:UIView.class]) {

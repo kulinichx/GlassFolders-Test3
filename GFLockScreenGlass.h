@@ -133,9 +133,10 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     } else if (GFLockIsKind(host, "CSQuickActionsButton")) {
         circle = YES;
         UIControl *button = (UIControl *)host;
+        // Latching/pronounced describe button configuration, not whether the
+        // flashlight is currently on. Use selection and actual press state.
         enabled = GFLockQuickActionsEnabled && !button.selected && !button.highlighted &&
-                  button.enabled && !GFLockBool(host, @"isLatching", NO) &&
-                  !GFLockBool(host, @"isPronounced", NO) &&
+                  button.enabled &&
                   ![objc_getAssociatedObject(host, &kGFLockPressKey) boolValue];
         background = GFLockView(GFLockIvar(host, "_backgroundEffectView"));
         if (![background isKindOfClass:UIVisualEffectView.class]) background = nil;
