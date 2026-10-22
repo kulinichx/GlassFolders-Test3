@@ -6,7 +6,7 @@ include $(THEOS)/makefiles/common.mk
 
 BUNDLE_NAME = GlassFoldersPrefs
 GlassFoldersPrefs_FILES = GFRootListController.m GFLivePreferencesNotifier.m
-GlassFoldersPrefs_FRAMEWORKS = UIKit CoreFoundation
+GlassFoldersPrefs_FRAMEWORKS = UIKit CoreFoundation Security
 GlassFoldersPrefs_PRIVATE_FRAMEWORKS = Preferences
 GlassFoldersPrefs_CFLAGS = -fobjc-arc
 GlassFoldersPrefs_RESOURCE_FILES = Resources/GlassFolders.png Resources/GlassFolders@2x.png Resources/GlassFolders@3x.png Resources/GlassFoldersLarge.png

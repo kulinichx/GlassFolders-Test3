@@ -1,0 +1,19 @@
+name: Offline issuer checks
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+jobs:
+  issuer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test CNG signatures, independent interoperability and issuer state
+        shell: powershell
+        run: .\tests\Test-Issuer.ps1
+      - name: Compile console-free Windows launcher
+        shell: powershell
+        run: .\tools\issuer\Build-Launcher.ps1

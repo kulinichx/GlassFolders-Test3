@@ -1,4 +1,10 @@
-# GlassFolders 1.0.0
+# GlassFolders 1.1.0 — offline license candidate
+
+This branch adds an independent offline GlassFolders issuer and device-bound activation. Candidate package: `1.1.0~license1`. Target systems: iOS / iPadOS **16.0–17.3.1**, with a compatible jailbreak and SpringBoard injection environment. Device validation on iOS 17 is still required; the source target is not a claim of tested compatibility.
+
+See [离线授权、使用流程与兼容性检查](docs/离线授权与兼容性.md) and [Windows 签发器说明](tools/issuer/README.md). Issuer private keys and records must remain outside the repository. Existing RC7 licenses are not accepted. The previous 1.0.0-fix1 binary does not contain these changes.
+
+For installation behavior, activation steps, and the console-free Windows launcher, see [安装状态与激活指南](docs/安装状态与激活指南.md).
 
 GlassFolders brings refined Clear and Liquid Glass materials to iOS folders and App Library, with independent controls for each surface and dedicated light/dark appearance tuning.
 
@@ -24,8 +30,10 @@ App Library uses fixed, tuned material recipes rather than exposing engineering 
 ## Compatibility
 
 - Package identifier: `com.kulinich.glassfolders`
-- Version: `1.0.0`
+- Candidate package version: `1.1.0~license1`
 - Minimum firmware declared by the package: iOS / iPadOS 16.0
+- Maximum target: iOS / iPadOS 17.3.1 (package dependency `< 17.3.2`)
+- Runtime/device validation: pending for this candidate; see the compatibility checklist above
 - Section: Tweaks
 - Settings integration: PreferenceLoader
 

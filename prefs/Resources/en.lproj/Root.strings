@@ -14,3 +14,37 @@
 "Keeps the material clear while adding blur and depth." = "Keeps the material clear while adding blur and depth.";
 "Increases glass structure, highlights, and blur." = "Increases glass structure, highlights, and blur.";
 "Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material." = "Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material.";
+
+/* Offline license */
+"Offline License" = "Offline License";
+"License Status" = "License Status";
+"1. Copy Device Code" = "1. Copy Device Code";
+"2. Bind This Device" = "2. Bind This Device";
+"3. Paste License" = "3. Paste License";
+"Remove License" = "Remove License";
+"Copy Device Code, bind this device, then paste your license. Glass effects require activation. Apply & Respring after changing the license." = "Copy Device Code, bind this device, then paste your license. Glass effects require activation. Apply & Respring after changing the license.";
+"Activated" = "Activated";
+"Not Activated" = "Not Activated";
+"OK" = "OK";
+"Cancel" = "Cancel";
+"Activate" = "Activate";
+"Bind This Device" = "Bind This Device";
+"Paste License" = "Paste License";
+"Create Device Proof" = "Create Device Proof";
+"Paste the binding challenge from the developer. It expires after five minutes." = "Paste the binding challenge from the developer. It expires after five minutes.";
+"Paste the GlassFolders license from the developer." = "Paste the GlassFolders license from the developer.";
+"Device Code copied. Send it to the developer to receive a binding challenge." = "Device Code copied. Send it to the developer to receive a binding challenge.";
+"Device proof copied. Send it to the developer for verification and signing." = "Device proof copied. Send it to the developer for verification and signing.";
+"License saved. Tap Apply & Respring to enable glass effects." = "License saved. Tap Apply & Respring to enable glass effects.";
+"Remove this device's saved license? Glass effects will stop after respring." = "Remove this device's saved license? Glass effects will stop after respring.";
+"License removed. Tap Apply & Respring." = "License removed. Tap Apply & Respring.";
+"Invalid license format" = "Invalid license format";
+"Invalid license signature" = "Invalid license signature";
+"Unsupported license payload" = "Unsupported license payload";
+"Device identifier unavailable" = "Device identifier unavailable";
+"License is for another device" = "License is for another device";
+"Unable to save license" = "Unable to save license";
+"Invalid binding challenge" = "Invalid binding challenge";
+"Binding challenge expired" = "Binding challenge expired";
+"Binding challenge is for another device" = "Binding challenge is for another device";
+"Secure Enclave device proof unavailable" = "Secure Enclave device proof unavailable";

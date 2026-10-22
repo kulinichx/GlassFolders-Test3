@@ -1,7 +1,8 @@
-name: GlassFolders 1.0.0 Release
+name: GlassFolders 1.1.0 Release
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches:
       - main
@@ -21,7 +22,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 1.0.0 / ROOTHIDE ARM64E ==="
+          echo "=== GLASSFOLDERS 1.1.0 / ROOTHIDE ARM64E ==="
 
       - name: Install dependencies
         shell: bash
@@ -127,7 +128,8 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -q '^Version: 1.0.0-fix1$' ctrl/control
+          grep -q '^Version: 1.1.0~license1$' ctrl/control
+          grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64e$' ctrl/control
 
           DYLIB="$(find root -type f -name 'GlassFolders.dylib' | head -n 1)"
@@ -166,7 +168,7 @@ jobs:
               p = plistlib.load(f)
           assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
           assert p["CFBundleName"] == "GlassFoldersPrefs"
-          assert p["CFBundleShortVersionString"] == "1.0.0"
+          assert p["CFBundleShortVersionString"] == "1.1.0"
           assert p["NSPrincipalClass"] == "GFRootListController"
           print("Preference bundle Info.plist verified.")
           PY
@@ -216,7 +218,7 @@ jobs:
       - name: Upload RootHide deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.0.0-fix1-RootHide-arm64e
+          name: GlassFolders-1.1.0-license1-RootHide-arm64e
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
@@ -234,7 +236,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 1.0.0 / STANDARD ROOTLESS ARM64 ==="
+          echo "=== GLASSFOLDERS 1.1.0 / STANDARD ROOTLESS ARM64 ==="
 
       - name: Install dependencies
         shell: bash
@@ -346,7 +348,8 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -q '^Version: 1.0.0-fix1$' ctrl/control
+          grep -q '^Version: 1.1.0~license1$' ctrl/control
+          grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64$' ctrl/control
 
           DYLIB="$(find root -type f -name 'GlassFolders.dylib' | head -n 1)"
@@ -401,7 +404,7 @@ jobs:
               p = plistlib.load(f)
           assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
           assert p["CFBundleName"] == "GlassFoldersPrefs"
-          assert p["CFBundleShortVersionString"] == "1.0.0"
+          assert p["CFBundleShortVersionString"] == "1.1.0"
           assert p["NSPrincipalClass"] == "GFRootListController"
           print("Preference bundle Info.plist verified.")
           PY
@@ -452,7 +455,7 @@ jobs:
       - name: Upload rootless deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.0.0-fix1-Rootless-arm64
+          name: GlassFolders-1.1.0-license1-Rootless-arm64
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14

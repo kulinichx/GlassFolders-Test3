@@ -6,6 +6,7 @@
 #import <spawn.h>
 #import <roothide.h>
 #import <math.h>
+#import "../GFLicense.h"
 
 extern char **environ;
 
@@ -267,6 +268,99 @@ extern char **environ;
 
 
 @implementation GFRootListController
+
+- (NSString *)gfText:(NSString *)key {
+    return [[NSBundle bundleForClass:self.class] localizedStringForKey:key value:key table:@"Root"];
+}
+
+- (void)gfShowMessage:(NSString *)message {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:[self gfText:@"Offline License"]
+        message:message preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:[self gfText:@"OK"] style:UIAlertActionStyleDefault handler:nil]];
+    // Action handlers may run while the input alert is still dismissing.
+    // Wait for that transition before presenting the result.
+    UIViewController *presented = self.presentedViewController;
+    id<UIViewControllerTransitionCoordinator> transition = presented.transitionCoordinator;
+    if (transition && [transition animateAlongsideTransition:nil completion:^(__unused id<UIViewControllerTransitionCoordinatorContext> context) {
+        [self presentViewController:alert animated:YES completion:nil];
+    }]) return;
+    if (presented) {
+        [self dismissViewControllerAnimated:YES completion:^{
+            [self presentViewController:alert animated:YES completion:nil];
+        }];
+    } else [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (NSString *)licenseStatus:(PSSpecifier *)specifier {
+    (void)specifier;
+    NSDictionary *info = GFLicenseCurrentInfo();
+    return info ? [NSString stringWithFormat:@"%@ · %@", [self gfText:@"Activated"], info[@"sid"]]
+                : [self gfText:@"Not Activated"];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    [self reloadSpecifiers];
+}
+
+- (void)copyDeviceCode {
+    NSString *code = GFLicenseDeviceCode();
+    if (!code.length) { [self gfShowMessage:[self gfText:@"Device identifier unavailable"]]; return; }
+    UIPasteboard.generalPasteboard.string = code;
+    [self gfShowMessage:[self gfText:@"Device Code copied. Send it to the developer to receive a binding challenge."]];
+}
+
+- (void)gfPresentInputForBinding:(BOOL)binding {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:
+        [self gfText:binding ? @"Bind This Device" : @"Paste License"]
+        message:[self gfText:binding ? @"Paste the binding challenge from the developer. It expires after five minutes."
+                                    : @"Paste the GlassFolders license from the developer."]
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.autocorrectionType = UITextAutocorrectionTypeNo;
+        field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        field.spellCheckingType = UITextSpellCheckingTypeNo;
+        field.placeholder = binding ? @"GFC1…" : @"GF1.…";
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:[self gfText:@"Cancel"] style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:[self gfText:binding ? @"Create Device Proof" : @"Activate"]
+        style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+            NSString *input = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+            NSError *error = nil;
+            if (binding) {
+                NSString *proof = GFLicenseCreateProof(input, &error);
+                if (proof) {
+                    UIPasteboard.generalPasteboard.string = proof;
+                    [self gfShowMessage:[self gfText:@"Device proof copied. Send it to the developer for verification and signing."]];
+                } else [self gfShowMessage:[self gfText:error.localizedDescription]];
+            } else {
+                if (GFLicenseStore(input, &error)) {
+                    [self reloadSpecifiers];
+                    [self gfShowMessage:[self gfText:@"License saved. Tap Apply & Respring to enable glass effects."]];
+                } else [self gfShowMessage:[self gfText:error.localizedDescription]];
+            }
+        }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)bindDevice { [self gfPresentInputForBinding:YES]; }
+- (void)pasteLicense { [self gfPresentInputForBinding:NO]; }
+
+- (void)removeLicense {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:[self gfText:@"Remove License"]
+        message:[self gfText:@"Remove this device's saved license? Glass effects will stop after respring."]
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:[self gfText:@"Cancel"] style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:[self gfText:@"Remove License"] style:UIAlertActionStyleDestructive
+        handler:^(__unused UIAlertAction *action) {
+            NSError *error = nil;
+            if (GFLicenseStore(nil, &error)) {
+                [self reloadSpecifiers];
+                [self gfShowMessage:[self gfText:@"License removed. Tap Apply & Respring."]];
+            } else [self gfShowMessage:[self gfText:error.localizedDescription]];
+        }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
 
 - (NSArray *)specifiers {
     if (!_specifiers) {

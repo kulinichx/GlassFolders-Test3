@@ -1,3 +1,11 @@
 .theos/
 packages/
 .DS_Store
+tools/issuer/private/
+*.dpapi
+*.pem
+*.pfx
+*.key
+tests/.tmp/
+tools/issuer/*.exe
+tools/issuer/launcher-check.log

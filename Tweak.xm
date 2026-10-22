@@ -4,9 +4,10 @@
 #import <objc/runtime.h>
 #import <dispatch/dispatch.h>
 #import <math.h>
+#import "GFLicense.h"
 
 /*
- * GlassFolders 1.0.0 — release
+ * GlassFolders 1.1.0 — release
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -32,7 +33,7 @@
 
 static CFStringRef const GFPreferencesDomain = CFSTR("com.kulinich.glassfolders");
 
-static BOOL GFEnabled = YES;  // Folder glass only; legacy preference key: Enabled
+static BOOL GFEnabled = NO;  // Folder glass only; requires a verified offline license.
 static NSInteger GFStyle = 0;          // 0 Clear, 1 Liquid Glass
 static CGFloat GFClearStrength = 0.0;        // 0.0 ... 1.0, Clear blur authority
 static CGFloat GFLiquidGlassStrength = 0.0;  // 0.0 ... 1.0, Liquid composite authority
@@ -113,7 +114,10 @@ static CGFloat GFReadPercent(CFStringRef key, CGFloat fallbackPercent) {
 static void GFLoadPreferences(void) {
     CFPreferencesAppSynchronize(GFPreferencesDomain);
 
-    GFEnabled = GFReadBool(CFSTR("Enabled"), YES);
+    // Verify signed entitlement when loading preferences, never in frame/layout
+    // callbacks. Both folder and App Library gates use the same result.
+    BOOL licensed = GFLicenseCurrentInfo() != nil;
+    GFEnabled = licensed && GFReadBool(CFSTR("Enabled"), YES);
     GFStyle = GFReadInteger(CFSTR("Style"), 0);
 
     /*
@@ -133,7 +137,7 @@ static void GFLoadPreferences(void) {
     );
 
     GFAppLibraryGlassEnabled =
-        GFReadBool(CFSTR("AppLibraryGlassEnabled"), NO);
+        licensed && GFReadBool(CFSTR("AppLibraryGlassEnabled"), NO);
 
     GFAppLibraryStyle =
         GFReadInteger(CFSTR("AppLibraryStyle"), 0);
@@ -200,7 +204,11 @@ static id GFCreateCAFilter(NSString *type) {
     IMP imp = [filterClass methodForSelector:selector];
     typedef id (*GFFilterFactoryIMP)(id, SEL, id);
     GFFilterFactoryIMP func = (GFFilterFactoryIMP)imp;
-    return func(filterClass, selector, type);
+    @try {
+        return func(filterClass, selector, type);
+    } @catch (__unused NSException *exception) {
+        return nil;
+    }
 }
 
 
@@ -1170,7 +1178,7 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
 
 + (Class)layerClass {
     Class backdropClass = NSClassFromString(@"CABackdropLayer");
-    return backdropClass ?: [CALayer class];
+    return [backdropClass isSubclassOfClass:CALayer.class] ? backdropClass : CALayer.class;
 }
 
 - (instancetype)initWithStrength:(CGFloat)strength {
@@ -2659,7 +2667,7 @@ static void GFRefreshAppLibraryController(
 
 + (Class)layerClass {
     Class backdropClass = NSClassFromString(@"CABackdropLayer");
-    return backdropClass ?: [CALayer class];
+    return [backdropClass isSubclassOfClass:CALayer.class] ? backdropClass : CALayer.class;
 }
 
 - (instancetype)initWithStyle:(NSInteger)style
@@ -3721,7 +3729,7 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     Class backdropClass =
         NSClassFromString(@"CABackdropLayer");
 
-    return backdropClass ?: [CALayer class];
+    return [backdropClass isSubclassOfClass:CALayer.class] ? backdropClass : CALayer.class;
 }
 
 @end
@@ -4623,11 +4631,16 @@ static void GFUpdateOpenedFolderBackground(
 
         GFLoadPreferences();
 
-        if (objc_getClass("SBFolderIconImageView")) {
+        // Private SpringBoard classes can change between iOS releases. Hook
+        // only compatible UIKit subclasses and existing private selectors.
+        Class iconClass = objc_getClass("SBFolderIconImageView");
+        if ([iconClass isSubclassOfClass:UIView.class] &&
+            class_getInstanceMethod(iconClass, @selector(setBackgroundView:))) {
             %init(GFIconHooks);
         }
 
-        if (objc_getClass("SBFolderBackgroundView")) {
+        Class panelClass = objc_getClass("SBFolderBackgroundView");
+        if ([panelClass isSubclassOfClass:UIView.class]) {
             %init(GFOpenedPanelHooks);
         }
 
@@ -4636,7 +4649,8 @@ static void GFUpdateOpenedFolderBackground(
          * SBLibraryViewController belongs to SpringBoard and is present on
          * systems that provide App Library.
          */
-        if (objc_getClass("SBLibraryViewController")) {
+        Class libraryClass = objc_getClass("SBLibraryViewController");
+        if ([libraryClass isSubclassOfClass:UIViewController.class]) {
             %init(GFAppLibraryControllerHooks);
         }
 
@@ -4645,7 +4659,8 @@ static void GFUpdateOpenedFolderBackground(
          * that private SpringBoardHome class is already loaded here.
          * Controller traversal above does not depend on this succeeding.
          */
-        if (objc_getClass("SBHLibraryCategoryPodBackgroundView")) {
+        Class podClass = objc_getClass("SBHLibraryCategoryPodBackgroundView");
+        if ([podClass isSubclassOfClass:UIView.class]) {
             %init(GFAppLibraryHooks);
         }
     }

@@ -7,10 +7,40 @@
 	<key>items</key>
 	<array>
 		<dict>
+			<key>cell</key><string>PSGroupCell</string>
+			<key>label</key><string>Offline License</string>
+			<key>footerText</key><string>Copy Device Code, bind this device, then paste your license. Glass effects require activation. Apply &amp; Respring after changing the license.</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSTitleValueCell</string>
+			<key>label</key><string>License Status</string>
+			<key>get</key><string>licenseStatus:</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSButtonCell</string>
+			<key>label</key><string>1. Copy Device Code</string>
+			<key>action</key><string>copyDeviceCode</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSButtonCell</string>
+			<key>label</key><string>2. Bind This Device</string>
+			<key>action</key><string>bindDevice</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSButtonCell</string>
+			<key>label</key><string>3. Paste License</string>
+			<key>action</key><string>pasteLicense</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSButtonCell</string>
+			<key>label</key><string>Remove License</string>
+			<key>action</key><string>removeLicense</string>
+		</dict>
+		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 1.0.0</string>
+			<string>GlassFolders 1.1.0</string>
 		</dict>
 		<dict>
 			<key>cell</key>
