@@ -54,8 +54,8 @@ static CAGradientLayer *GFLockRimBand(NSArray *colors) {
     CALayer *mask = [CALayer layer];
     mask.backgroundColor = UIColor.clearColor.CGColor;
     mask.contentsScale = UIScreen.mainScreen.scale;
-    // Feather inward as well as around the perimeter. Fixed layers are reused
-    // on layout; no bitmap generation or animation timer is needed.
+    // Fixed layers are reused on layout. Card reflections/shoulders overlap
+    // on a shared outer curve; no bitmap generation or animation timer.
     for (NSNumber *opacity in @[@1.0, @0.80, @0.46, @0.18, @0.035]) {
         CALayer *ring = [CALayer layer];
         ring.borderColor = UIColor.whiteColor.CGColor;
@@ -87,6 +87,25 @@ static CGFloat GFLockRimCoverage(GFLockRimProfile profile, CGFloat t) {
     CGFloat rise = GFLockRimSmoothstep(t / 0.30);
     CGFloat fall = 1.0 - GFLockRimSmoothstep((t - 0.30) / 0.70);
     return 0.14 * rise * fall;
+}
+
+static CGFloat GFLockRimSampleCoverage(GFLockRimProfile profile, NSUInteger index, NSUInteger count) {
+    if (index >= count) return 0.0;
+    if (profile == GFLockRimProfileLegacy) {
+        const CGFloat coverage[] = {1.0, 0.80, 0.46, 0.18, 0.035};
+        return coverage[MIN(index, (NSUInteger)4)];
+    }
+    return GFLockRimCoverage(profile, (index + 0.5) / count);
+}
+
+// For a decreasing profile, cumulative borders reconstruct the same coverage
+// without abutting separately antialiased subpixel rings. Every border shares
+// the native outer continuous curve; only its inward reach varies. Compensate
+// source-over alpha so overlapping layers do not brighten the reflection.
+static CGFloat GFLockRimCumulativeOpacity(GFLockRimProfile profile, NSUInteger index, NSUInteger count) {
+    CGFloat target = GFLockRimSampleCoverage(profile, index, count);
+    CGFloat underneath = GFLockRimSampleCoverage(profile, index + 1, count);
+    return MAX(0.0, MIN(1.0, (target - underneath) / MAX(0.0001, 1.0 - underneath)));
 }
 
 @interface GFLockRimView : UIView
@@ -180,7 +199,9 @@ static CGFloat GFLockRimCoverage(GFLockRimProfile profile, CGFloat t) {
         rect.size.width = MAX(0.0, rect.size.width);
         rect.size.height = MAX(0.0, rect.size.height);
         band.frame = rect;
+        band.contentsScale = scale;
         band.mask.frame = (CGRect){CGPointZero, rect.size};
+        band.mask.contentsScale = scale;
         while (band.mask.sublayers.count > count) [band.mask.sublayers.lastObject removeFromSuperlayer];
         while (band.mask.sublayers.count < count) {
             CALayer *ring = [CALayer layer];
@@ -188,18 +209,21 @@ static CGFloat GFLockRimCoverage(GFLockRimProfile profile, CGFloat t) {
             ring.allowsEdgeAntialiasing = YES;
             [band.mask addSublayer:ring];
         }
-        const float legacyOpacity[] = {1.0, 0.80, 0.46, 0.18, 0.035};
+        // Keep circular controls and the very faint non-monotonic shade on
+        // their existing recipe. The two bright card bands need no adjacent
+        // contours: gaps between those contours were visible at the corners.
+        BOOL cumulative = !self.gfCircular && band != self.gfInnerShade;
         NSUInteger index = 0;
         for (CALayer *ring in band.mask.sublayers) {
-            CGFloat featherInset = width * index / count;
+            CGFloat featherInset = cumulative ? 0.0 : width * index / count;
             CGRect ringRect = CGRectInset((CGRect){CGPointZero, rect.size}, featherInset, featherInset);
             ringRect.size.width = MAX(0.0, ringRect.size.width);
             ringRect.size.height = MAX(0.0, ringRect.size.height);
             ring.frame = ringRect;
             ring.contentsScale = scale;
-            ring.opacity = profile == GFLockRimProfileLegacy ? legacyOpacity[index] :
-                GFLockRimCoverage(profile, (index + 0.5) / count);
-            ring.borderWidth = width / count;
+            ring.opacity = cumulative ? GFLockRimCumulativeOpacity(profile, index, count) :
+                GFLockRimSampleCoverage(profile, index, count);
+            ring.borderWidth = cumulative ? width * (index + 1) / count : width / count;
             ring.cornerRadius = MAX(0.0, self.gfRadius - inset - featherInset);
             ring.cornerCurve = self.gfCircular ? kCACornerCurveCircular : kCACornerCurveContinuous;
             index++;
