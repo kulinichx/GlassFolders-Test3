@@ -81,12 +81,12 @@ static CGFloat GFLockRimSmoothstep(CGFloat t) {
 
 static CGFloat GFLockRimCoverage(GFLockRimProfile profile, CGFloat t) {
     if (profile == GFLockRimProfileShoulder)
-        return 0.75 * (1.0 - GFLockRimSmoothstep(t));
+        return 0.55 * (1.0 - GFLockRimSmoothstep(t));
     // The inner shade must start transparent too. A hard, fully opaque start
     // at an inset draws a second contour even when its inward tail is soft.
     CGFloat rise = GFLockRimSmoothstep(t / 0.30);
     CGFloat fall = 1.0 - GFLockRimSmoothstep((t - 0.30) / 0.70);
-    return 0.35 * rise * fall;
+    return 0.14 * rise * fall;
 }
 
 @interface GFLockRimView : UIView
@@ -144,11 +144,12 @@ static CGFloat GFLockRimCoverage(GFLockRimProfile profile, CGFloat t) {
     [super layoutSubviews];
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
-    // The shoulder is intentionally faint and narrower on small controls.
-    // Rear strips never receive the full bevel of a foreground card.
-    self.gfShoulder.opacity = self.gfSubdued ? 0.12 : 1.0;
-    self.gfReflection.opacity = self.gfSubdued ? 0.36 : 1.0;
-    self.gfInnerShade.opacity = self.gfSubdued ? 0.40 : 1.0;
+    // Keep a substantial, compact reflection like the existing folder rim.
+    // Thickness belongs at the edge, not in a broad inward gray/white halo.
+    // Rear strips need an identifiable rim even after native stack fading.
+    self.gfShoulder.opacity = self.gfSubdued ? 0.30 : 1.0;
+    self.gfReflection.opacity = self.gfSubdued ? 0.78 : 1.0;
+    self.gfInnerShade.opacity = self.gfSubdued ? 0.90 : 1.0;
     for (CAGradientLayer *band in @[self.gfInnerShade, self.gfShoulder, self.gfReflection]) {
         // A collapsed stack reveals mostly bottom strips. A diagonal light
         // leaves their middle almost invisible; distribute the restrained
@@ -158,15 +159,16 @@ static CGFloat GFLockRimCoverage(GFLockRimProfile profile, CGFloat t) {
         GFLockRimProfile profile = GFLockRimProfileLegacy;
         if (!self.gfCircular && band == self.gfShoulder) profile = GFLockRimProfileShoulder;
         if (!self.gfCircular && band == self.gfInnerShade) profile = GFLockRimProfileShade;
-        CGFloat inset = (band == self.gfInnerShade) ? (self.gfCircular ? 1.2 : 0.35) : 0.0;
-        CGFloat width = band == self.gfShoulder ? (self.gfCircular ? 1.6 : 4.8) :
-                        (band == self.gfReflection ? 0.8 : (self.gfCircular ? 1.2 : 5.6));
+        CGFloat inset = (band == self.gfInnerShade) ? (self.gfCircular ? 1.2 : 0.25) : 0.0;
+        CGFloat width = band == self.gfShoulder ? (self.gfCircular ? 1.6 : 2.4) :
+                        (band == self.gfReflection ? (self.gfCircular ? 0.8 : 1.2) :
+                         (self.gfCircular ? 1.2 : 1.6));
         CGFloat scale = self.window.screen.scale ?: UIScreen.mainScreen.scale;
         NSUInteger count = 5;
         if (profile != GFLockRimProfileLegacy) {
             // Sample the smooth profile at display-pixel intervals, instead
-            // of five broad, visibly stepped bands. Keep the fine reflection
-            // and small circular-button recipe unchanged.
+            // of broad, visibly stepped bands. The reflection has a thicker
+            // core with the existing soft tail; circular controls stay intact.
             count = MAX((NSUInteger)1, (NSUInteger)ceil(width * scale));
             width = count / scale;
             inset = round(inset * scale) / scale;
@@ -236,8 +238,8 @@ static CGFloat GFLockRimCoverage(GFLockRimProfile profile, CGFloat t) {
             [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterial];
         self.gfFallbackBlurView.alpha = 0.22;
     }
-    // The neutral, low-alpha veil gives the body a little density without
-    // additive brightness or a flat opaque fill. Folder strength stays separate.
+    // Keep the body neutral and low density; edge thickness comes from the
+    // compact reflection. Folder strength stays separate.
     self.gfTintView.alpha = 0.0;
     self.gfOpticalLayer.hidden = YES;
     self.layer.borderWidth = 0.0;
@@ -247,15 +249,29 @@ static CGFloat GFLockRimCoverage(GFLockRimProfile profile, CGFloat t) {
 - (void)gfRefreshBodyVeil {
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
-    self.gfBodyVeil.colors = @[
-        (id)[UIColor colorWithWhite:1.0 alpha:0.045].CGColor,
-        (id)[UIColor colorWithWhite:0.0 alpha:0.018].CGColor,
-        (id)[UIColor colorWithWhite:0.0 alpha:0.035].CGColor,
-        (id)[UIColor colorWithWhite:1.0 alpha:0.016].CGColor
-    ];
-    // Rear strips and circular buttons stay clear; do not accumulate a veil
-    // under overlapping notifications or change native selected button states.
-    self.gfBodyVeil.hidden = self.gfCircular || self.gfLockRim.gfSubdued;
+    if (self.gfLockRim.gfSubdued) {
+        // A little neutral absorption separates exposed rear strips from the
+        // wallpaper. No white fill or additive lift that can wash out a stack.
+        self.gfBodyVeil.colors = @[
+            (id)[UIColor colorWithWhite:0.0 alpha:0.025].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.040].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.055].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.065].CGColor
+        ];
+        self.gfBodyVeil.startPoint = CGPointMake(0.5, 0.0);
+        self.gfBodyVeil.endPoint = CGPointMake(0.5, 1.0);
+    } else {
+        self.gfBodyVeil.colors = @[
+            (id)[UIColor colorWithWhite:1.0 alpha:0.018].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.008].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.012].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.006].CGColor
+        ];
+        self.gfBodyVeil.startPoint = CGPointMake(0.3, 0.0);
+        self.gfBodyVeil.endPoint = CGPointMake(0.7, 1.0);
+    }
+    // Circular controls retain their own recipe and native selected states.
+    self.gfBodyVeil.hidden = self.gfCircular;
     [CATransaction commit];
 }
 - (void)layoutSubviews {
@@ -270,7 +286,7 @@ static CGFloat GFLockRimCoverage(GFLockRimProfile profile, CGFloat t) {
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     self.gfBodyVeil.frame = self.bounds;
-    self.gfBodyVeil.hidden = self.gfCircular || self.gfLockRim.gfSubdued;
+    self.gfBodyVeil.hidden = self.gfCircular;
     [CATransaction commit];
     [self.gfLockRim setNeedsLayout];
 }
