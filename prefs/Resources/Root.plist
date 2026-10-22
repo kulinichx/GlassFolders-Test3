@@ -22,7 +22,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>GlassFolders 1.3.0 (lock2)</string>
+			<string>GlassFolders 1.3.0 (lock3)</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -197,7 +197,7 @@
 			<key>cell</key><string>PSGroupCell</string>
 			<key>label</key><string>Lock Screen Glass</string>
 			<key>footerText</key>
-			<string>Independent switches. Changes take effect immediately; turn off to restore the system appearance. A valid GlassFolders license is required.</string>
+			<string>Independent switches. Blur follows the strength of the selected folder style, with lighter blur for flashlight and camera. Changes take effect immediately. A valid GlassFolders license is required.</string>
 		</dict>
 		<dict>
 			<key>cell</key><string>PSSwitchCell</string>

@@ -66,23 +66,19 @@ extern char **environ;
 
 - (void)gfPersistDetent:(NSInteger)detent {
     detent = MAX(0, MIN(100, detent));
-
-    double storedValue = (double)detent;
-    CFNumberRef number = CFNumberCreate(
-        kCFAllocatorDefault,
-        kCFNumberDoubleType,
-        &storedValue
-    );
-
-    if (number) {
-        CFPreferencesSetAppValue(
-            CFSTR("GlassStrength"),
-            number,
-            CFSTR("com.local.glassfolders")
-        );
-        CFPreferencesAppSynchronize(CFSTR("com.local.glassfolders"));
-        CFRelease(number);
-    }
+    // Settle the actual slider's key, including separate Clear/Liquid values.
+    // Standard Preferences writes still handle continuous dragging.
+    PSSpecifier *specifier = [self specifier];
+    NSString *key = [specifier propertyForKey:@"key"];
+    NSString *domain = [specifier propertyForKey:@"defaults"];
+    if (![key isKindOfClass:NSString.class] || key.length == 0 ||
+        ![domain isEqualToString:@"com.kulinich.glassfolders"]) return;
+    CFPreferencesSetAppValue((__bridge CFStringRef)key,
+                             (__bridge CFNumberRef)@(detent),
+                             (__bridge CFStringRef)domain);
+    CFPreferencesAppSynchronize((__bridge CFStringRef)domain);
+    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+        CFSTR("com.kulinich.glassfolders/preferenceschanged"), NULL, NULL, true);
 }
 
 - (void)gfEnsureImpactGenerator {

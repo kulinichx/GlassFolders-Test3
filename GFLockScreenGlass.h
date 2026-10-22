@@ -3,6 +3,17 @@
 #ifndef GF_LOCK_SCREEN_GLASS_H
 #define GF_LOCK_SCREEN_GLASS_H
 
+static CGFloat GFLockBlurStrength(void) {
+    return isfinite(GFGlassStrength) ? GFClamp01(GFGlassStrength) : 0.55;
+}
+
+static CGFloat GFLockBlurRadius(CGFloat strength) {
+    // Preserve lock2's 6 pt card / 3 pt button baseline at the existing 55%.
+    // Higher values add diffusion, never additive luminance or stronger rims.
+    return strength <= 0.55 ? 6.0 * strength / 0.55 :
+        6.0 + 12.0 * (strength - 0.55) / 0.45;
+}
+
 static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, CGFloat radius) {
     CALayer *backdrop = glass.gfBackdropSampleView.layer;
     if ([NSStringFromClass(backdrop.class) containsString:@"Backdrop"]) {
@@ -35,11 +46,19 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 
 @interface GFLockScreenGlassView : GFPanelGlassView
 @property (nonatomic, assign) BOOL gfCircular;
+@property (nonatomic, assign) CGFloat gfAppliedBlurStrength;
 @end
 @implementation GFLockScreenGlassView
 - (void)gfRefreshMaterial {
     [super gfRefreshMaterial];
-    GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.cards", 6.0);
+    self.gfAppliedBlurStrength = GFLockBlurStrength();
+    GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.cards",
+                             GFLockBlurRadius(self.gfAppliedBlurStrength));
+    if (self.gfFallbackBlurView) {
+        self.gfFallbackBlurView.effect =
+            [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterial];
+        self.gfFallbackBlurView.alpha = 0.40 * self.gfAppliedBlurStrength;
+    }
     // Keep the body neutral; directional lighting belongs at the edge, not
     // in a white fill that becomes brighter with every overlapping card.
     self.gfTintView.alpha = 0.0;
@@ -48,6 +67,28 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 - (void)layoutSubviews {
     [super layoutSubviews];
     if (self.gfCircular) self.layer.cornerCurve = kCACornerCurveCircular;
+}
+@end
+
+// Rear cards expose only a narrow strip. Reusing the large panel's optical
+// rail there turns that strip into a bright slab on light wallpapers.
+@interface GFNotificationGlassView : GFLockScreenGlassView
+@property (nonatomic, assign) BOOL gfStacked;
+@end
+@implementation GFNotificationGlassView
+- (void)setGfStacked:(BOOL)stacked {
+    if (_gfStacked == stacked) return;
+    _gfStacked = stacked;
+    [self gfRefreshMaterial];
+}
+- (void)gfRefreshMaterial {
+    [super gfRefreshMaterial];
+    self.gfOpticalLayer.hidden = self.gfStacked;
+    if (self.gfStacked) {
+        // A single subdued outline, with no filled optical shoulder.
+        self.layer.borderWidth = 0.35;
+        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.06].CGColor;
+    }
 }
 @end
 
@@ -90,11 +131,12 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
     [super gfRefreshMaterial];
     // Keep wallpaper detail at button scale, with a small neutral lift. No
     // opaque grey disc, copied wallpaper image, or overlay over the icon.
-    GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.buttons", 3.0);
+    GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.buttons",
+                             0.5 * GFLockBlurRadius(self.gfAppliedBlurStrength));
     if (self.gfFallbackBlurView) {
         self.gfFallbackBlurView.effect =
             [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterial];
-        self.gfFallbackBlurView.alpha = 0.18;
+        self.gfFallbackBlurView.alpha = (0.18 / 0.55) * self.gfAppliedBlurStrength;
     }
     self.gfTintView.alpha = GFUsesDarkAppearance(self) ? 0.045 : 0.028;
     self.layer.borderWidth = 0.0;
@@ -126,11 +168,15 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 @property (nonatomic, weak) UIView *background;
 @property (nonatomic, strong) GFLockScreenGlassView *glass;
 @property (nonatomic, assign) BOOL originalHidden;
+@property (nonatomic, weak) UIView *stackOverlay;
+@property (nonatomic, assign) BOOL originalStackOverlayHidden;
 - (void)restore;
 @end
 @implementation GFLockBackgroundState
 - (void)restore {
     if (self.background) self.background.hidden = self.originalHidden;
+    if (self.stackOverlay) self.stackOverlay.hidden = self.originalStackOverlayHidden;
+    self.stackOverlay = nil;
     [self.glass removeFromSuperview];
     self.glass = nil;
     self.background = nil;
@@ -140,6 +186,7 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 
 static char kGFLockBackgroundKey;
 static char kGFLockPressKey;
+static char kGFLockStackedKey;
 
 static BOOL GFLockIsKind(id object, const char *name) {
     Class cls = objc_getClass(name);
@@ -223,6 +270,42 @@ static void GFRestoreLockScreenSurface(UIView *host) {
     objc_setAssociatedObject(host, &kGFLockBackgroundKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
+static BOOL GFLockTransformIsStacked(CGAffineTransform transform) {
+    CGFloat scaleX = hypot(transform.a, transform.b);
+    CGFloat scaleY = hypot(transform.c, transform.d);
+    return isfinite(scaleX) && isfinite(scaleY) &&
+           (scaleX < 0.999 || scaleY < 0.999);
+}
+
+static BOOL GFLockNotificationIsStacked(UIView *host) {
+    if ([objc_getAssociatedObject(host, &kGFLockStackedKey) boolValue] ||
+        GFLockBool(host, @"isNotificationContentViewHidden", NO)) return YES;
+    // Initial/reused views may be laid out before the dimming callback. Check
+    // only this card's wrappers, stopping before the list's own transform.
+    UIView *node = host;
+    for (NSUInteger depth = 0; node && depth < 8; depth++, node = node.superview) {
+        if (GFLockIsKind(node, "NCNotificationListView")) break;
+        if (GFLockTransformIsStacked(node.transform)) return YES;
+        if (GFLockIsKind(node, "NCNotificationListCell")) break;
+    }
+    return NO;
+}
+
+static void GFLockSyncStackOverlay(UIView *host, GFLockBackgroundState *state) {
+    // Apple's separate stacking overlay is tuned for an opaque system
+    // platter. Retaining it over transparent glass can add a bright rear slab.
+    // Suppress only this known decorative view while our replacement exists.
+    UIView *overlay = GFLockView(GFLockIvar(host, "_stackDimmingOverlayView"));
+    if (!GFLockIsKind(overlay, "NCNotificationListStackDimmingOverlayView") ||
+        ![overlay isDescendantOfView:host]) overlay = nil;
+    if (state.stackOverlay != overlay) {
+        if (state.stackOverlay) state.stackOverlay.hidden = state.originalStackOverlayHidden;
+        state.stackOverlay = overlay;
+        state.originalStackOverlayHidden = overlay.hidden;
+    }
+    if (overlay) overlay.hidden = YES;
+}
+
 static void GFUpdateLockScreenSurface(UIView *host) {
     if (!host) return;
     GFLockBackgroundState *state = objc_getAssociatedObject(host, &kGFLockBackgroundKey);
@@ -231,10 +314,11 @@ static void GFUpdateLockScreenSurface(UIView *host) {
 
     BOOL enabled = NO;
     BOOL circle = NO;
+    BOOL notification = GFLockIsKind(host, "NCNotificationShortLookView");
     UIView *background = nil;
     UIView *content = nil;
     id radiusOwner = host;
-    if (GFLockIsKind(host, "NCNotificationShortLookView")) {
+    if (notification) {
         enabled = GFLockNotificationsEnabled && !GFLockBool(host, @"_isBanner", YES);
         background = GFLockMaterial(host);
         content = GFLockView(GFLockObject(host, @"notificationContentView"));
@@ -285,7 +369,8 @@ static void GFUpdateLockScreenSurface(UIView *host) {
         state = [GFLockBackgroundState new];
         state.background = background;
         state.originalHidden = background.hidden;
-        Class glassClass = circle ? GFQuickActionGlassView.class : GFLockScreenGlassView.class;
+        Class glassClass = circle ? GFQuickActionGlassView.class :
+            (notification ? GFNotificationGlassView.class : GFLockScreenGlassView.class);
         state.glass = [[glassClass alloc] initWithStyle:1 strength:0.55];
         state.glass.isAccessibilityElement = NO;
         state.glass.accessibilityElementsHidden = YES;
@@ -293,6 +378,12 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     }
     UIView *container = background.superview;
     GFLockScreenGlassView *glass = state.glass;
+    if (fabs(glass.gfAppliedBlurStrength - GFLockBlurStrength()) > 0.0001)
+        [glass gfRefreshMaterial];
+    if (notification) {
+        ((GFNotificationGlassView *)glass).gfStacked = GFLockNotificationIsStacked(host);
+        GFLockSyncStackOverlay(host, state);
+    }
     NSUInteger index = [container.subviews indexOfObjectIdenticalTo:background];
     if (glass.superview != container ||
         [container.subviews indexOfObjectIdenticalTo:glass] != index + 1)

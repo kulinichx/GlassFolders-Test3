@@ -4,6 +4,7 @@
 #import <objc/runtime.h>
 #import <dispatch/dispatch.h>
 #import <math.h>
+#import <string.h>
 #import "GFLicense.h"
 
 /*
@@ -4273,9 +4274,9 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             radius
         ) > 0.35;
 
-    if (self.gfOpticalLayer.contents == nil ||
+    if (!self.gfOpticalLayer.hidden && (self.gfOpticalLayer.contents == nil ||
         sizeChanged ||
-        radiusChanged) {
+        radiusChanged)) {
 
         UIImage *lighting =
             GFCreateOpenedPanelLightingImage(
@@ -4491,6 +4492,17 @@ static void GFUpdateDockBackground(UIView *host) {
 }
 - (void)didMoveToWindow {
     %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+%end
+%end
+
+%group GFLockNotificationStackHooks
+%hook NCNotificationShortLookView
+- (void)configureStackDimmingForTransform:(CGAffineTransform)transform {
+    %orig;
+    objc_setAssociatedObject(self, &kGFLockStackedKey,
+        @(GFLockTransformIsStacked(transform)), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     GFUpdateLockScreenSurface((UIView *)self);
 }
 %end
@@ -4957,6 +4969,17 @@ static void GFUpdateOpenedFolderBackground(
         Class notificationClass = objc_getClass("NCNotificationShortLookView");
         if ([notificationClass isSubclassOfClass:UIView.class]) {
             %init(GFLockNotificationHooks);
+            Method stackMethod = class_getInstanceMethod(notificationClass,
+                NSSelectorFromString(@"configureStackDimmingForTransform:"));
+            char stackReturn[8] = {0};
+            char stackArgument[128] = {0};
+            if (stackMethod && method_getNumberOfArguments(stackMethod) == 3) {
+                method_getReturnType(stackMethod, stackReturn, sizeof(stackReturn));
+                method_getArgumentType(stackMethod, 2, stackArgument, sizeof(stackArgument));
+                if (stackReturn[0] == 'v' && strcmp(stackArgument, @encode(CGAffineTransform)) == 0) {
+                    %init(GFLockNotificationStackHooks);
+                }
+            }
         }
         Class adjunctClass = objc_getClass("CSAdjunctItemView");
         if ([adjunctClass isSubclassOfClass:UIView.class]) {
