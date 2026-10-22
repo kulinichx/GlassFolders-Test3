@@ -85,7 +85,6 @@
 "Switches and appearance changes take effect immediately." = "开关与外观调整即时生效。";
 "Lock screen glass is independent of folder strength." = "锁屏玻璃不受文件夹强度影响。";
 "Reload after installing an update or changing the license." = "安装新版或更改授权后使用，日常调整无需重新载入。";
-"%ld/%ld enabled" = "已开启 %ld/%ld";
 "Expanded" = "已展开";
 "Collapsed" = "已收起";
 "Tap to expand or collapse." = "轻点展开或收起。";

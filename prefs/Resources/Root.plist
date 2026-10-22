@@ -41,8 +41,6 @@
 			<string>GFSectionhome</string>
 			<key>gfCollapseID</key>
 			<string>home</string>
-			<key>get</key>
-			<string>sectionSummary:</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -115,8 +113,6 @@
 			<string>GFSectionlock</string>
 			<key>gfCollapseID</key>
 			<string>lock</string>
-			<key>get</key>
-			<string>sectionSummary:</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -326,7 +322,7 @@
 			<key>label</key>
 			<string>About</string>
 			<key>footerText</key>
-			<string>GlassFolders 1.3.0 (lock15) · kulinich</string>
+			<string>GlassFolders 1.3.0 (lock16) · kulinich</string>
 		</dict>
 		<dict>
 			<key>cell</key>

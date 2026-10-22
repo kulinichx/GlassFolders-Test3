@@ -9,8 +9,6 @@
 @interface GFRootListController : GFPreferencesController
 - (NSString *)authorValue:(PSSpecifier *)specifier;
 - (NSString *)licenseSummary:(PSSpecifier *)specifier;
-- (NSString *)sectionSummary:(PSSpecifier *)specifier;
-- (void)refreshSectionSummaries;
 @end
 
 @interface GFLicenseListController : GFPreferencesController

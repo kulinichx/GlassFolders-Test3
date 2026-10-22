@@ -355,32 +355,17 @@ extern char **environ;
     return [[self layoutPreferences] boolForKey:section];
 }
 
-- (NSString *)sectionSummary:(PSSpecifier *)specifier {
-    NSString *section = [specifier propertyForKey:@"gfCollapseID"];
-    NSArray *keys = [section isEqualToString:@"home"]
-        ? @[@"Enabled", @"AppLibraryGlassEnabled", @"DockEnabled", @"BannerNotificationsEnabled"]
-        : @[@"LockNotificationsEnabled", @"LockQuickActionsEnabled", @"LockMusicEnabled", @"LockActivitiesEnabled"];
-    NSInteger enabled = 0;
-    for (NSString *key in keys) {
-        NSNumber *value = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)key,
-            CFSTR("com.kulinich.glassfolders")));
-        if (value ? value.boolValue : [key isEqualToString:@"Enabled"]) enabled++;
-    }
-    return [NSString stringWithFormat:[self gfText:@"%ld/%ld enabled"], (long)enabled, (long)keys.count];
-}
-
 - (void)configureSectionCell:(UITableViewCell *)cell specifier:(PSSpecifier *)specifier {
     NSString *section = [specifier propertyForKey:@"gfCollapseID"];
     BOOL expanded = [self sectionExpanded:section];
     cell.textLabel.textColor = UIColor.labelColor;
-    cell.detailTextLabel.text = [self sectionSummary:specifier];
+    cell.detailTextLabel.text = nil;
     UIImageView *arrow = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:expanded ? @"chevron.up" : @"chevron.down"]];
     arrow.tintColor = UIColor.tertiaryLabelColor;
     arrow.isAccessibilityElement = NO;
     cell.accessoryView = arrow;
     cell.accessibilityTraits |= UIAccessibilityTraitButton;
-    cell.accessibilityValue = [NSString stringWithFormat:@"%@, %@", cell.detailTextLabel.text,
-        [self gfText:expanded ? @"Expanded" : @"Collapsed"]];
+    cell.accessibilityValue = [self gfText:expanded ? @"Expanded" : @"Collapsed"];
     cell.accessibilityHint = [self gfText:@"Tap to expand or collapse."];
 }
 
@@ -391,16 +376,6 @@ extern char **environ;
         [self configureSectionCell:cell specifier:specifier];
     }
     return cell;
-}
-
-- (void)refreshSectionSummaries {
-    for (UITableViewCell *cell in self.table.visibleCells) {
-        NSIndexPath *indexPath = [self.table indexPathForCell:cell];
-        PSSpecifier *specifier = [self specifierAtIndexPath:indexPath];
-        if ([specifier propertyForKey:@"gfCollapseID"]) {
-            [self configureSectionCell:cell specifier:specifier];
-        }
-    }
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
