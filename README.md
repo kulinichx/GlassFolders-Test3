@@ -1,6 +1,6 @@
-# GlassFolders 1.3.0 — Lock screen candidate
+# GlassFolders 1.3.0 — App Library glass candidate
 
-This branch adds an independent offline GlassFolders issuer and device-bound activation. Candidate package: `1.3.0~lock11`. Target systems: iOS / iPadOS **16.0–17.3.1**, with a compatible jailbreak and SpringBoard injection environment. Device validation is still required; the source target is not a claim of tested compatibility.
+This branch adds an independent offline GlassFolders issuer and device-bound activation. Candidate package: `1.3.0~lock12`. Target systems: iOS / iPadOS **16.0–17.3.1**, with a compatible jailbreak and SpringBoard injection environment. Device validation is still required; the source target is not a claim of tested compatibility.
 
 See [离线授权、使用流程与兼容性检查](docs/离线授权与兼容性.md) and [Windows 签发器说明](tools/issuer/README.md). Issuer private keys and records must remain outside the repository. Existing RC7 licenses are not accepted. The previous 1.0.0-fix1 binary does not contain these changes.
 
@@ -25,7 +25,8 @@ GlassFolders brings refined Clear and Liquid Glass materials to iOS folders and 
 - `lock8`: soften the inward card rim with pixel-spaced smoothstep coverage, a wider lower-peak shoulder and a shade that fades in before fading out. Restore collapsed-stack definition with a restrained reflection distributed along the lower edge. Preserve lock7 body/blur, foreground fine reflection, circular buttons and working banner routing. User reports lock7 glass and notification banners working on iPhone 14 Pro / iOS 16.6; lock8 edge refinement still requires device retesting.
 - `lock9`: use the existing folder appearance as a visual reference for a thicker, compact card reflection (1.2 pt), while reducing the wide inward shoulder/shade and body haze. Rear notification strips receive a stronger lower rim and a faint black-only absorption veil for separation without additive whitening. Folder rendering, fixed blur, circular controls and banner routing remain unchanged; device retesting is required.
 - `lock10`: after positive lock9 feedback, widen only the compact card reflection from 1.2 pt to 1.6 pt (1.4 pt on rear strips). Retain lock9 inward feathering, body density, lighting alpha and circular-button geometry; notification banners share the thicker rim. Device comparison is pending.
-- `lock11`: address corner seams in the thicker rim by replacing adjacent subpixel reflection/shoulder rings with overlapping cumulative borders that share one native continuous outer curve. Compensated source-over opacity preserves the lock10 coverage profile and widths; no high-resolution card bitmap or additional backdrop blur. Circular controls and inner shade retain their existing geometry. Device corner/transition checks remain pending.
+- `lock11`: address corner seams in the thicker rim by replacing adjacent subpixel reflection/shoulder rings with overlapping cumulative borders that share one native continuous outer curve. Compensated source-over opacity preserves the lock10 coverage profile and widths; no high-resolution card bitmap or additional backdrop blur. Circular controls and inner shade retain their existing geometry. User subsequently confirmed the lock11 appearance on iPhone 14 Pro / iOS 16.6; this is not validation of all target systems.
+- `lock12`: adapt App Library category cards and the search pill to the accepted lock11 shared continuous rim, with compact 1.6 pt reflections, soft inward shoulders, overscanned background sampling and a lighter neutral body. Suppress native background haze with restoration on disable; retain native icons, text and input, independent switches and the three style modes. See [资源库玻璃使用与测试](docs/资源库玻璃使用与测试.md). App Library device retesting is pending.
 - Independent Clear and Liquid Glass strength controls for folders
 - App Library modes: Follow Folder, Clear, or Liquid Glass
 - Matched App Library category-card and search-field materials
@@ -37,14 +38,15 @@ GlassFolders brings refined Clear and Liquid Glass materials to iOS folders and 
 
 App Library uses fixed, tuned material recipes rather than exposing engineering presets:
 
-- Clear uses the Apple Bright baseline
-- Liquid Glass uses the Crystal baseline
-- Follow Folder synchronizes the material family while preserving App Library-specific tuning
+- Clear uses a fixed 10 pt blur and a slightly denser neutral veil
+- Liquid Glass uses a fixed 8 pt blur and a lighter neutral veil
+- Follow Folder synchronizes only the material family, keeping App Library independent of folder strength
+- Category cards and the search pill share the accepted lock11 rim, adapted to their native corner radii; native text, icons and search interaction remain in place
 
 ## Compatibility
 
 - Package identifier: `com.kulinich.glassfolders`
-- Candidate package version: `1.3.0~lock11`
+- Candidate package version: `1.3.0~lock12`
 - Minimum firmware declared by the package: iOS / iPadOS 16.0
 - Maximum target: iOS / iPadOS 17.3.1 (package dependency `< 17.3.2`)
 - Runtime/device validation: pending for this candidate; see the compatibility checklist above

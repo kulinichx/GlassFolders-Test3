@@ -1006,17 +1006,12 @@ static UIView *GFCreateNativeAppLibraryPodVisual(CGFloat strength) {
 }
 
 
-#pragma mark - Beta 3.6 App Library Fixed Material Recipes
+#pragma mark - App Library Fixed Glass Recipes
 
 typedef struct {
     CGFloat blur;
     CGFloat saturation;
-    CGFloat brightness;
-    CGFloat tintAlpha;
-    CGFloat borderWidth;
-    CGFloat borderAlpha;
-    CGFloat nativePodAlpha;
-    CGFloat nativeSearchAlpha;
+    CGFloat veilStrength;
 } GFAppLibraryMaterialRecipe;
 
 
@@ -1044,544 +1039,19 @@ static NSInteger GFResolvedAppLibraryStyle(void) {
 
 
 static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
-    BOOL searchVariant,
+    __unused BOOL searchVariant,
     BOOL dark
 ) {
-    GFAppLibraryMaterialRecipe r = {
-        8.0, 1.10, 0.010, 0.020,
-        0.34, 0.14, 0.22, 0.08
+    // Category cards and the search pill share a fixed recipe. Follow Folder
+    // selects a family only; the folder strength never enters this material.
+    BOOL liquid = GFResolvedAppLibraryStyle() == 1;
+    return (GFAppLibraryMaterialRecipe){
+        liquid ? 8.0 : 10.0, 1.04,
+        liquid ? 1.0 : (dark ? 1.35 : 1.5)
     };
-
-    NSInteger resolvedStyle = GFResolvedAppLibraryStyle();
-
-    if (resolvedStyle == 0) {
-        /*
-         * CLEAR
-         *
-         * The reference is intentionally bright and luminous. Unlike normal
-         * Clear folder strength, these are fixed design presets so the whole
-         * App Library remains visually coherent.
-         */
-        switch (GFAppLibraryClearPreset) {
-            case 1: // Balanced
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        9.3, 1.13, 0.032, 0.038,
-                        0.34, 0.145, 0.22, 0.065
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        9.2, 1.13, 0.038, 0.052,
-                        0.34, 0.155, 0.25, 0.07
-                    };
-                }
-                break;
-
-            case 2: // Soft
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        11.6, 1.09, 0.026, 0.049,
-                        0.32, 0.130, 0.25, 0.075
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        12.6, 1.08, 0.030, 0.068,
-                        0.32, 0.140, 0.28, 0.08
-                    };
-                }
-                break;
-
-            case 0:
-            default: // Apple Bright
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        9.9, 1.15, 0.043, 0.047,
-                        0.36, 0.160, 0.21, 0.058
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        10.8, 1.15, 0.058, 0.076,
-                        0.36, 0.175, 0.24, 0.06
-                    };
-                }
-                break;
-        }
-
-        /*
-         * Search is an interactive control, so lift it only a tiny amount.
-         * Beta 3.5 was deliberately much brighter and looked disconnected.
-         */
-        /*
-         * Beta 4.4:
-         * searchVariant intentionally does NOT alter the material recipe.
-         * Search is the same Clear material as a category card.
-         */
-    } else {
-        /*
-         * LIQUID GLASS
-         *
-         * Lower blur and body tint. Wallpaper transmission stays strong and
-         * the object is identified mainly by the thin optical edge/native
-         * shading, matching the transparent Liquid Glass reference.
-         */
-        switch (GFAppLibraryLiquidPreset) {
-            case 1: // Balanced
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        7.4, 1.21, 0.019, 0.015,
-                        0.35, 0.155, 0.15, 0.052
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        7.2, 1.23, 0.019, 0.014,
-                        0.34, 0.155, 0.17, 0.052
-                    };
-                }
-                break;
-
-            case 2: // Deep
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        9.2, 1.14, 0.010, 0.020,
-                        0.37, 0.160, 0.21, 0.070
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        9.0, 1.15, 0.009, 0.020,
-                        0.35, 0.150, 0.22, 0.070
-                    };
-                }
-                break;
-
-            case 0:
-            default: // Crystal
-                if (dark) {
-                    r = (GFAppLibraryMaterialRecipe){
-                        5.6, 1.27, 0.024, 0.0095,
-                        0.37, 0.180, 0.11, 0.036
-                    };
-                } else {
-                    r = (GFAppLibraryMaterialRecipe){
-                        5.4, 1.30, 0.027, 0.0085,
-                        0.36, 0.175, 0.12, 0.032
-                    };
-                }
-                break;
-        }
-
-        /*
-         * Beta 4.4:
-         * searchVariant intentionally does NOT alter the material recipe.
-         * Search is the same Liquid Glass material as a category card.
-         */
-    }
-
-    return r;
 }
 
-
-#pragma mark - Beta 3.2 App Library Glass
-
-@interface GFAppLibraryGlassView : UIView
-@property (nonatomic, strong) UIView *gfTintView;
-@property (nonatomic, strong) CAGradientLayer *gfUpperLeftBloomLayer;
-@property (nonatomic, strong) CAShapeLayer *gfPartialRimLayer;
-@property (nonatomic, strong) CAGradientLayer *gfLowerLeftGlintLayer;
-@property (nonatomic, assign) CGFloat gfStrength;
-@property (nonatomic, assign) CGFloat gfPreferredRadius;
-@property (nonatomic, assign) BOOL gfSearchVariant;
-- (instancetype)initWithStrength:(CGFloat)strength;
-- (void)setPreferredRadius:(CGFloat)radius;
-- (void)gfRefreshMaterial;
-@end
-
-@implementation GFAppLibraryGlassView
-
-+ (Class)layerClass {
-    Class backdropClass = NSClassFromString(@"CABackdropLayer");
-    return [backdropClass isSubclassOfClass:CALayer.class] ? backdropClass : CALayer.class;
-}
-
-- (instancetype)initWithStrength:(CGFloat)strength {
-    self = [super initWithFrame:CGRectZero];
-
-    if (self) {
-        _gfStrength = GFClamp01(strength);
-        self.userInteractionEnabled = NO;
-        self.backgroundColor = UIColor.clearColor;
-        self.clipsToBounds = YES;
-        self.layer.masksToBounds = YES;
-        self.layer.cornerCurve = kCACornerCurveContinuous;
-
-        _gfTintView = [[UIView alloc] initWithFrame:CGRectZero];
-        _gfTintView.userInteractionEnabled = NO;
-        _gfTintView.backgroundColor = UIColor.whiteColor;
-        [self addSubview:_gfTintView];
-
-        /*
-         * Beta 4.2 starts from the proven Beta 3.6 visual base.
-         * These are intentionally LOCAL optical cues:
-         *
-         * - broad upper-left luminosity bloom
-         * - a thin rim only around the upper corners/top
-         * - a tiny lower-left reflection
-         *
-         * No horizontal white cap. No full second outline.
-         */
-        _gfUpperLeftBloomLayer =
-            [CAGradientLayer layer];
-        _gfUpperLeftBloomLayer.startPoint =
-            CGPointMake(0.0, 0.0);
-        _gfUpperLeftBloomLayer.endPoint =
-            CGPointMake(1.0, 1.0);
-        _gfUpperLeftBloomLayer.cornerCurve =
-            kCACornerCurveContinuous;
-        [self.layer addSublayer:_gfUpperLeftBloomLayer];
-
-        _gfPartialRimLayer =
-            [CAShapeLayer layer];
-        _gfPartialRimLayer.fillColor =
-            UIColor.clearColor.CGColor;
-        _gfPartialRimLayer.lineCap =
-            kCALineCapRound;
-        _gfPartialRimLayer.lineJoin =
-            kCALineJoinRound;
-        [self.layer addSublayer:_gfPartialRimLayer];
-
-        _gfLowerLeftGlintLayer =
-            [CAGradientLayer layer];
-        _gfLowerLeftGlintLayer.startPoint =
-            CGPointMake(0.0, 0.5);
-        _gfLowerLeftGlintLayer.endPoint =
-            CGPointMake(1.0, 0.5);
-        _gfLowerLeftGlintLayer.cornerCurve =
-            kCACornerCurveContinuous;
-        [self.layer addSublayer:_gfLowerLeftGlintLayer];
-
-        [self gfRefreshMaterial];
-    }
-
-    return self;
-}
-
-- (void)setPreferredRadius:(CGFloat)radius {
-    _gfPreferredRadius = MAX(0.0, radius);
-    self.layer.cornerRadius = _gfPreferredRadius;
-    self.layer.cornerCurve = kCACornerCurveContinuous;
-    [self setNeedsLayout];
-}
-
-- (void)gfRefreshMaterial {
-    BOOL dark = GFUsesDarkAppearance(self);
-
-    BOOL isBackdropLayer =
-        [NSStringFromClass(self.layer.class) containsString:@"Backdrop"];
-
-    GFAppLibraryMaterialRecipe recipe =
-        GFAppLibraryRecipe(
-            self.gfSearchVariant,
-            dark
-        );
-
-    CGFloat blurRadius = recipe.blur;
-    CGFloat saturation = recipe.saturation;
-    CGFloat brightness = recipe.brightness;
-
-    if (isBackdropLayer) {
-        id saturate = GFCreateCAFilter(@"colorSaturate");
-        id brighten = GFCreateCAFilter(@"colorBrightness");
-        id blur = GFCreateCAFilter(@"gaussianBlur");
-
-        NSMutableArray *filters = [NSMutableArray array];
-
-        if (saturate) {
-            [saturate setValue:@(saturation) forKey:@"inputAmount"];
-            [filters addObject:saturate];
-        }
-
-        if (brighten) {
-            [brighten setValue:@(brightness) forKey:@"inputAmount"];
-            [filters addObject:brighten];
-        }
-
-        if (blur) {
-            [blur setValue:@(blurRadius) forKey:@"inputRadius"];
-            [blur setValue:@YES forKey:@"inputNormalizeEdges"];
-            [blur setValue:@YES forKey:@"inputHardEdges"];
-            [filters addObject:blur];
-        }
-
-        [self.layer setValue:filters forKey:@"filters"];
-        [self.layer setValue:@1.0 forKey:@"scale"];
-    }
-
-    self.gfTintView.alpha =
-        recipe.tintAlpha;
-
-    self.layer.borderWidth =
-        recipe.borderWidth;
-
-    self.layer.borderColor =
-        [UIColor colorWithWhite:1.0
-                          alpha:recipe.borderAlpha]
-            .CGColor;
-
-    BOOL liquid =
-        (GFResolvedAppLibraryStyle() == 1);
-
-    CGFloat bloomAlpha = 0.0;
-    CGFloat rimAlpha = 0.0;
-    CGFloat glintAlpha = 0.0;
-
-    if (liquid) {
-        switch (GFAppLibraryLiquidPreset) {
-            case 1: // Balanced
-                bloomAlpha = dark ? 0.108 : 0.105;
-                rimAlpha = dark ? 0.132 : 0.130;
-                glintAlpha = dark ? 0.048 : 0.050;
-                break;
-
-            case 2: // Deep
-                bloomAlpha = dark ? 0.082 : 0.080;
-                rimAlpha = dark ? 0.112 : 0.110;
-                glintAlpha = dark ? 0.038 : 0.040;
-                break;
-
-            case 0:
-            default: // Crystal
-                bloomAlpha = dark ? 0.132 : 0.135;
-                rimAlpha = dark ? 0.156 : 0.155;
-                glintAlpha = dark ? 0.058 : 0.060;
-                break;
-        }
-    } else {
-        /*
-         * Clear keeps its Beta3.6 luminous/frosted body. Only very subtle
-         * corner light is added so Clear does not turn into Liquid Glass.
-         */
-        switch (GFAppLibraryClearPreset) {
-            case 1:
-                bloomAlpha = dark ? 0.050 : 0.050;
-                rimAlpha = dark ? 0.056 : 0.055;
-                glintAlpha = dark ? 0.021 : 0.018;
-                break;
-
-            case 2:
-                bloomAlpha = dark ? 0.038 : 0.040;
-                rimAlpha = dark ? 0.044 : 0.045;
-                glintAlpha = dark ? 0.017 : 0.014;
-                break;
-
-            case 0:
-            default:
-                bloomAlpha = dark ? 0.057 : 0.060;
-                rimAlpha = dark ? 0.063 : 0.065;
-                glintAlpha = dark ? 0.024 : 0.020;
-                break;
-        }
-    }
-
-    /*
-     * Beta 4.4:
-     * search and category cards use the same optical alpha values.
-     * No search-specific bloom/rim/glint suppression or amplification.
-     */
-
-    self.gfUpperLeftBloomLayer.colors = @[
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:bloomAlpha * 0.82].CGColor,
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:bloomAlpha * 0.48].CGColor,
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:bloomAlpha * 0.18].CGColor,
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:0.0].CGColor
-    ];
-
-    self.gfUpperLeftBloomLayer.locations =
-        @[@0.00, @0.28, @0.58, @1.00];
-
-    self.gfPartialRimLayer.strokeColor =
-        [UIColor colorWithWhite:1.0
-                          alpha:rimAlpha]
-            .CGColor;
-
-    self.gfPartialRimLayer.lineWidth =
-        liquid ? 0.68 : 0.52;
-
-    self.gfLowerLeftGlintLayer.colors = @[
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:0.0].CGColor,
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:glintAlpha].CGColor,
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:glintAlpha * 0.34].CGColor,
-        (id)[UIColor colorWithWhite:1.0
-                              alpha:0.0].CGColor
-    ];
-
-    self.gfLowerLeftGlintLayer.locations =
-        @[@0.00, @0.34, @0.60, @1.00];
-}
-
-- (void)layoutSubviews {
-    [super layoutSubviews];
-
-    self.gfTintView.frame =
-        self.bounds;
-
-    CGRect bounds =
-        self.bounds;
-
-    CGFloat radius =
-        self.gfPreferredRadius;
-
-    if (radius <= 0.0) {
-        radius =
-            MIN(
-                CGRectGetWidth(bounds),
-                CGRectGetHeight(bounds)
-            ) * 0.18;
-    }
-
-    BOOL liquid =
-        (GFResolvedAppLibraryStyle() == 1);
-
-    /*
-     * Broad corner luminosity. It occupies AREA, not an edge strip.
-     */
-    CGFloat bloomWidth =
-        CGRectGetWidth(bounds) *
-        (self.gfSearchVariant
-            ? (liquid ? 0.52 : 0.46)
-            : (liquid ? 0.52 : 0.46));
-
-    CGFloat bloomHeight =
-        CGRectGetHeight(bounds) *
-        (self.gfSearchVariant
-            ? (liquid ? 0.48 : 0.42)
-            : (liquid ? 0.48 : 0.42));
-
-    self.gfUpperLeftBloomLayer.frame =
-        CGRectMake(
-            -radius * 0.10,
-            -radius * 0.08,
-            MAX(1.0, bloomWidth),
-            MAX(1.0, bloomHeight)
-        );
-
-    self.gfUpperLeftBloomLayer.cornerRadius =
-        MIN(
-            radius,
-            MIN(bloomWidth, bloomHeight) * 0.44
-        );
-
-    /*
-     * A single partial rim follows ONLY the upper corners/top.
-     * The existing Beta3.6 base border remains the only full silhouette.
-     */
-    CGRect rimRect =
-        CGRectInset(bounds, 0.80, 0.80);
-
-    CGFloat rimRadius =
-        MIN(
-            MAX(0.0, radius - 0.80),
-            MIN(
-                CGRectGetWidth(rimRect),
-                CGRectGetHeight(rimRect)
-            ) * 0.50
-        );
-
-    UIBezierPath *rimPath =
-        [UIBezierPath bezierPath];
-
-    CGFloat minX = CGRectGetMinX(rimRect);
-    CGFloat maxX = CGRectGetMaxX(rimRect);
-    CGFloat minY = CGRectGetMinY(rimRect);
-
-    [rimPath moveToPoint:
-        CGPointMake(
-            minX,
-            minY + rimRadius * 1.15
-        )];
-
-    [rimPath addArcWithCenter:
-        CGPointMake(
-            minX + rimRadius,
-            minY + rimRadius
-        )
-        radius:rimRadius
-        startAngle:(CGFloat)M_PI
-        endAngle:(CGFloat)(M_PI * 1.5)
-        clockwise:YES];
-
-    [rimPath addLineToPoint:
-        CGPointMake(
-            maxX - rimRadius,
-            minY
-        )];
-
-    [rimPath addArcWithCenter:
-        CGPointMake(
-            maxX - rimRadius,
-            minY + rimRadius
-        )
-        radius:rimRadius
-        startAngle:(CGFloat)(M_PI * 1.5)
-        endAngle:0.0
-        clockwise:YES];
-
-    self.gfPartialRimLayer.frame =
-        bounds;
-    self.gfPartialRimLayer.path =
-        rimPath.CGPath;
-
-    /*
-     * Very small lower-left reflection.
-     */
-    CGFloat glintWidth =
-        MIN(
-            CGRectGetWidth(bounds) * 0.18,
-            MAX(
-                28.0,
-                radius * 1.12
-            )
-        );
-
-    CGFloat glintHeight =
-        MIN(
-            3.6,
-            MAX(
-                2.0,
-                radius * 0.095
-            )
-        );
-
-    self.gfLowerLeftGlintLayer.frame =
-        CGRectMake(
-            MAX(4.0, radius * 0.30),
-            MAX(
-                0.0,
-                CGRectGetHeight(bounds) -
-                glintHeight -
-                1.0
-            ),
-            glintWidth,
-            glintHeight
-        );
-
-    self.gfLowerLeftGlintLayer.cornerRadius =
-        glintHeight * 0.5;
-}
-
-- (void)traitCollectionDidChange:
-    (UITraitCollection *)previousTraitCollection {
-
-    [super traitCollectionDidChange:previousTraitCollection];
-    [self gfRefreshMaterial];
-}
-
-@end
+#import "GFAppLibraryGlass.h"
 
 
 static GFAppLibraryGlassView *GFAppLibraryOverlayForPod(UIView *pod) {
@@ -1701,22 +1171,11 @@ static void GFUpdateRealAppLibraryPod(UIView *pod) {
 
     [overlay setPreferredRadius:radius];
 
-    /*
-     * Keep just enough of Apple's native background to preserve its visual
-     * identity, while the new sibling overlay supplies the real wallpaper
-     * transmission. This view is background-only; app icons are not children
-     * of SBHLibraryCategoryPodBackgroundView.
-     */
-    BOOL dark = GFUsesDarkAppearance(pod);
-
-    GFAppLibraryMaterialRecipe recipe =
-        GFAppLibraryRecipe(
-            NO,
-            dark
-        );
-
-    pod.alpha =
-        recipe.nativePodAlpha;
+    // This is a background-only view. Its saved alpha is restored when the
+    // feature is disabled; leaving native material over the new glass would
+    // reintroduce haze and a second contour. Icons are outside this view.
+    pod.alpha = 0.0;
+    [overlay gfRefreshMaterial];
 }
 
 
@@ -2164,10 +1623,22 @@ static UIView *GFFindAppLibrarySearchContainer(
 }
 
 
+// A private background-named wrapper may also contain the native search
+// field or cancel control. Only suppress its background descendants then.
+static BOOL GFSearchViewContainsForeground(UIView *view) {
+    if ([view isKindOfClass:UIControl.class] ||
+        [view isKindOfClass:UILabel.class] ||
+        [view isKindOfClass:UITextView.class]) return YES;
+    for (UIView *child in view.subviews) {
+        if (GFSearchViewContainsForeground(child)) return YES;
+    }
+    return NO;
+}
+
 static BOOL GFLooksLikeNativeSearchBackgroundView(
     UIView *view
 ) {
-    if (!view ||
+    if (!view || GFSearchViewContainsForeground(view) ||
         [view isKindOfClass:[GFAppLibraryGlassView class]]) {
         return NO;
     }
@@ -2223,23 +1694,9 @@ static void GFSetNativeSearchBackgroundsDimmed(
                     );
                 }
 
-                /*
-                 * Keep a trace of Apple's original search material so its
-                 * internal shading still participates, but remove the dark
-                 * opaque slab that was visible in Beta 3.3.
-                 */
-                GFAppLibraryMaterialRecipe searchRecipe =
-                    GFAppLibraryRecipe(
-                        YES,
-                        GFUsesDarkAppearance(view)
-                    );
-
-                /*
-                 * Beta 4.4: keep native search material participation aligned
-                 * with the category-card material, not independently reduced.
-                 */
-                child.alpha =
-                    searchRecipe.nativePodAlpha;
+                // Suppress only identified native background views. Keep
+                // their saved alpha for restoration; text/icons stay intact.
+                child.alpha = 0.0;
             } else if (original) {
                 child.alpha = original.doubleValue;
 
