@@ -1,6 +1,6 @@
 Package: com.kulinich.glassfolders
 Name: GlassFolders
-Version: 1.1.0~license1
+Version: 1.1.0~license2
 Architecture: iphoneos-arm64e
 Description: Bring refined Clear and Liquid Glass materials to iOS folders and App Library, with independent controls, light/dark appearance tuning, and a clean bilingual Settings experience.
 Maintainer: kulinich

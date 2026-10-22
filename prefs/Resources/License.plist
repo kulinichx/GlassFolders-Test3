@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key><string>License Management</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key><string>PSGroupCell</string>
+			<key>id</key><string>GFLicenseInfo</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSTitleValueCell</string>
+			<key>label</key><string>License Status</string>
+			<key>id</key><string>GFLicenseStatus</string>
+			<key>get</key><string>licenseStatus:</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSTitleValueCell</string>
+			<key>label</key><string>License ID</string>
+			<key>get</key><string>licenseIdentifier:</string>
+			<key>gfVisibility</key><string>activated</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSGroupCell</string>
+			<key>label</key><string>Device Activation</string>
+			<key>footerText</key><string>Send the Device Code to the developer. Use their binding challenge to create a device proof, then send the proof back. Complete binding and signing within five minutes. Finally, paste the license to activate.</string>
+			<key>gfVisibility</key><string>flow</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSButtonCell</string>
+			<key>label</key><string>1. Copy Device Code</string>
+			<key>id</key><string>GFCopyDeviceCode</string>
+			<key>action</key><string>copyDeviceCode</string>
+			<key>gfVisibility</key><string>flow</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSButtonCell</string>
+			<key>label</key><string>2. Bind This Device</string>
+			<key>id</key><string>GFBindDevice</string>
+			<key>action</key><string>bindDevice</string>
+			<key>gfVisibility</key><string>flow</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSButtonCell</string>
+			<key>label</key><string>3. Paste License</string>
+			<key>action</key><string>pasteLicense</string>
+			<key>gfVisibility</key><string>flow</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSGroupCell</string>
+			<key>gfVisibility</key><string>replacement</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSButtonCell</string>
+			<key>label</key><string>Change License</string>
+			<key>action</key><string>beginLicenseReplacement</string>
+			<key>gfVisibility</key><string>replacement</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSGroupCell</string>
+			<key>footerText</key><string>Your current license remains active until a new license is saved.</string>
+			<key>gfVisibility</key><string>cancelReplacement</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSButtonCell</string>
+			<key>label</key><string>Cancel License Change</string>
+			<key>action</key><string>cancelLicenseReplacement</string>
+			<key>gfVisibility</key><string>cancelReplacement</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSGroupCell</string>
+			<key>footerText</key><string>Apply &amp; Respring after changing the license.</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSButtonCell</string>
+			<key>label</key><string>Apply &amp; Respring</string>
+			<key>action</key><string>respring</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSGroupCell</string>
+			<key>gfVisibility</key><string>activated</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSButtonCell</string>
+			<key>label</key><string>Remove License</string>
+			<key>id</key><string>GFRemoveLicense</string>
+			<key>action</key><string>removeLicense</string>
+			<key>gfVisibility</key><string>activated</string>
+		</dict>
+	</array>
+</dict>
+</plist>

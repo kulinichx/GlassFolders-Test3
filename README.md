@@ -1,10 +1,12 @@
 # GlassFolders 1.1.0 — offline license candidate
 
-This branch adds an independent offline GlassFolders issuer and device-bound activation. Candidate package: `1.1.0~license1`. Target systems: iOS / iPadOS **16.0–17.3.1**, with a compatible jailbreak and SpringBoard injection environment. Device validation on iOS 17 is still required; the source target is not a claim of tested compatibility.
+This branch adds an independent offline GlassFolders issuer and device-bound activation. Candidate package: `1.1.0~license2`. Target systems: iOS / iPadOS **16.0–17.3.1**, with a compatible jailbreak and SpringBoard injection environment. Device validation on iOS 17 is still required; the source target is not a claim of tested compatibility.
 
 See [离线授权、使用流程与兼容性检查](docs/离线授权与兼容性.md) and [Windows 签发器说明](tools/issuer/README.md). Issuer private keys and records must remain outside the repository. Existing RC7 licenses are not accepted. The previous 1.0.0-fix1 binary does not contain these changes.
 
 For installation behavior, activation steps, and the console-free Windows launcher, see [安装状态与激活指南](docs/安装状态与激活指南.md).
+
+The `license2` candidate moves activation into a dedicated License Management page. The home page prioritizes glass controls, shows a short activation prompt only while unactivated, and keeps a status link in About. Activated users can reveal the workflow with Change License; their current license stays saved until a replacement passes validation. Existing licenses and issuer keys remain compatible.
 
 GlassFolders brings refined Clear and Liquid Glass materials to iOS folders and App Library, with independent controls for each surface and dedicated light/dark appearance tuning.
 
@@ -30,7 +32,7 @@ App Library uses fixed, tuned material recipes rather than exposing engineering 
 ## Compatibility
 
 - Package identifier: `com.kulinich.glassfolders`
-- Candidate package version: `1.1.0~license1`
+- Candidate package version: `1.1.0~license2`
 - Minimum firmware declared by the package: iOS / iPadOS 16.0
 - Maximum target: iOS / iPadOS 17.3.1 (package dependency `< 17.3.2`)
 - Runtime/device validation: pending for this candidate; see the compatibility checklist above

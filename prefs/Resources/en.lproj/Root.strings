@@ -16,6 +16,20 @@
 "Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material." = "Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material.";
 
 /* Offline license */
+"Activate GlassFolders" = "Activate GlassFolders";
+"Activate to enable glass effects." = "Activate to enable glass effects.";
+"Activate Now" = "Activate Now";
+"License Management" = "License Management";
+"License ID" = "License ID";
+"Permanent license for this device." = "Permanent license for this device.";
+"Device Activation" = "Device Activation";
+"Change License" = "Change License";
+"Cancel License Change" = "Cancel License Change";
+"1. Device Code Copied ✓" = "1. Device Code Copied ✓";
+"2. Device Proof Copied ✓" = "2. Device Proof Copied ✓";
+"Send the Device Code to the developer. Use their binding challenge to create a device proof, then send the proof back. Complete binding and signing within five minutes. Finally, paste the license to activate." = "Send the Device Code to the developer. Use their binding challenge to create a device proof, then send the proof back. Complete binding and signing within five minutes. Finally, paste the license to activate.";
+"Your current license remains active until a new license is saved." = "Your current license remains active until a new license is saved.";
+"Apply & Respring after changing the license." = "Apply & Respring after changing the license.";
 "Offline License" = "Offline License";
 "License Status" = "License Status";
 "1. Copy Device Code" = "1. Copy Device Code";

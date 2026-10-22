@@ -8,33 +8,15 @@
 	<array>
 		<dict>
 			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>Offline License</string>
-			<key>footerText</key><string>Copy Device Code, bind this device, then paste your license. Glass effects require activation. Apply &amp; Respring after changing the license.</string>
+			<key>label</key><string>Activate GlassFolders</string>
+			<key>footerText</key><string>Activate to enable glass effects.</string>
+			<key>gfVisibility</key><string>unactivated</string>
 		</dict>
 		<dict>
-			<key>cell</key><string>PSTitleValueCell</string>
-			<key>label</key><string>License Status</string>
-			<key>get</key><string>licenseStatus:</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSButtonCell</string>
-			<key>label</key><string>1. Copy Device Code</string>
-			<key>action</key><string>copyDeviceCode</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSButtonCell</string>
-			<key>label</key><string>2. Bind This Device</string>
-			<key>action</key><string>bindDevice</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSButtonCell</string>
-			<key>label</key><string>3. Paste License</string>
-			<key>action</key><string>pasteLicense</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSButtonCell</string>
-			<key>label</key><string>Remove License</string>
-			<key>action</key><string>removeLicense</string>
+			<key>cell</key><string>PSLinkCell</string>
+			<key>label</key><string>Activate Now</string>
+			<key>detail</key><string>GFLicenseListController</string>
+			<key>gfVisibility</key><string>unactivated</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -199,6 +181,13 @@
 			<string>PSGroupCell</string>
 			<key>label</key>
 			<string>About</string>
+		</dict>
+		<dict>
+			<key>cell</key><string>PSLinkCell</string>
+			<key>label</key><string>License Management</string>
+			<key>id</key><string>GFLicenseManagement</string>
+			<key>detail</key><string>GFLicenseListController</string>
+			<key>get</key><string>licenseSummary:</string>
 		</dict>
 		<dict>
 			<key>cell</key>

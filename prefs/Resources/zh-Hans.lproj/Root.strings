@@ -11,7 +11,21 @@
 "About" = "关于";
 "Developer" = "作者";
 
-"Offline License" = "离线授权";
+"Activate GlassFolders" = "激活 GlassFolders";
+"Activate to enable glass effects." = "完成设备授权后即可启用玻璃效果。";
+"Activate Now" = "前往激活";
+"License Management" = "授权管理";
+"License ID" = "授权编号";
+"Permanent license for this device." = "本机永久授权。";
+"Device Activation" = "设备激活";
+"Change License" = "更换授权";
+"Cancel License Change" = "取消更换授权";
+"1. Device Code Copied ✓" = "1. 设备码已复制 ✓";
+"2. Device Proof Copied ✓" = "2. 设备回执已复制 ✓";
+"Send the Device Code to the developer. Use their binding challenge to create a device proof, then send the proof back. Complete binding and signing within five minutes. Finally, paste the license to activate." = "将设备码发给开发者，收到绑定码后生成设备回执并发回。绑定与签发需在五分钟内完成，最后粘贴收到的授权即可激活。";
+"Your current license remains active until a new license is saved." = "新授权保存成功前，原授权继续有效。";
+"Apply & Respring after changing the license." = "更改授权后，请点击“应用并注销”。";
+"Offline License" = "授权管理";
 "License Status" = "授权状态";
 "1. Copy Device Code" = "1. 复制设备码";
 "2. Bind This Device" = "2. 绑定本机";

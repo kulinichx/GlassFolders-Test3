@@ -128,7 +128,7 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -q '^Version: 1.1.0~license1$' ctrl/control
+          grep -q '^Version: 1.1.0~license2$' ctrl/control
           grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64e$' ctrl/control
 
@@ -136,6 +136,7 @@ jobs:
           PREFBIN="$(find root -type f -path '*GlassFoldersPrefs.bundle/GlassFoldersPrefs' | head -n 1)"
           FILTER="$(find root -type f -path '*MobileSubstrate/DynamicLibraries/GlassFolders.plist' | head -n 1)"
           ROOT_PLIST="$(find root -type f -path '*GlassFoldersPrefs.bundle/Root.plist' | head -n 1)"
+          LICENSE_PLIST="$(find root -type f -path '*GlassFoldersPrefs.bundle/License.plist' | head -n 1)"
           PREF_INFO="$(find root -type f -path '*GlassFoldersPrefs.bundle/Info.plist' | head -n 1)"
           BUNDLE_ICON="$(find root -type f -path '*GlassFoldersPrefs.bundle/GlassFolders.png' | head -n 1)"
           BUNDLE_ICON_2X="$(find root -type f -path '*GlassFoldersPrefs.bundle/GlassFolders@2x.png' | head -n 1)"
@@ -148,7 +149,7 @@ jobs:
           ZH_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/zh-Hans.lproj/Root.strings' | head -n 1)"
 
           test -n "$DYLIB" -a -n "$PREFBIN" -a -n "$FILTER" -a -n "$ROOT_PLIST"
-          test -n "$PREF_INFO"
+          test -n "$PREF_INFO" -a -n "$LICENSE_PLIST"
           test -n "$BUNDLE_ICON" -a -n "$BUNDLE_ICON_2X" -a -n "$BUNDLE_ICON_3X"
           test -n "$PREF_ENTRY" -a -n "$EN_STRINGS" -a -n "$ZH_STRINGS"
           test -n "$PREF_ICON" -a -n "$PREF_ICON_2X" -a -n "$PREF_ICON_3X"
@@ -200,13 +201,20 @@ jobs:
           done
           echo "PreferenceBundle icon resources verified."
 
-          python3 - "$ROOT_PLIST" <<'PY'
+          python3 - "$ROOT_PLIST" "$LICENSE_PLIST" <<'PY'
           import plistlib, sys
           with open(sys.argv[1], "rb") as f:
               p = plistlib.load(f)
           items = p["items"]
           defaults = {x.get("key"): x.get("defaults") for x in items if x.get("key")}
           assert set(defaults.values()) == {"com.kulinich.glassfolders"}
+          with open(sys.argv[2], "rb") as f:
+              license_items = plistlib.load(f)["items"]
+          assert not any(x.get("action") in {"copyDeviceCode", "bindDevice", "pasteLicense", "removeLicense"} for x in p["items"])
+          assert any(x.get("detail") == "GFLicenseListController" for x in p["items"])
+          assert {"copyDeviceCode", "bindDevice", "pasteLicense", "removeLicense", "respring"}.issubset({x.get("action") for x in license_items})
+          assert any(x.get("id") == "GFRemoveLicense" and x.get("gfVisibility") == "activated" for x in license_items)
+          print("Dedicated license page and compact home entry verified.")
           assert any(x.get("label") == "Folders" for x in items)
           assert any(x.get("label") == "App Library" for x in items)
           print("RootHide product identity/localization resources verified.")
@@ -218,7 +226,7 @@ jobs:
       - name: Upload RootHide deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.1.0-license1-RootHide-arm64e
+          name: GlassFolders-1.1.0-license2-RootHide-arm64e
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
@@ -348,7 +356,7 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -q '^Version: 1.1.0~license1$' ctrl/control
+          grep -q '^Version: 1.1.0~license2$' ctrl/control
           grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64$' ctrl/control
 
@@ -356,6 +364,7 @@ jobs:
           PREFBIN="$(find root -type f -path '*GlassFoldersPrefs.bundle/GlassFoldersPrefs' | head -n 1)"
           FILTER="$(find root -type f -path '*MobileSubstrate/DynamicLibraries/GlassFolders.plist' | head -n 1)"
           ROOT_PLIST="$(find root -type f -path '*GlassFoldersPrefs.bundle/Root.plist' | head -n 1)"
+          LICENSE_PLIST="$(find root -type f -path '*GlassFoldersPrefs.bundle/License.plist' | head -n 1)"
           PREF_INFO="$(find root -type f -path '*GlassFoldersPrefs.bundle/Info.plist' | head -n 1)"
           BUNDLE_ICON="$(find root -type f -path '*GlassFoldersPrefs.bundle/GlassFolders.png' | head -n 1)"
           BUNDLE_ICON_2X="$(find root -type f -path '*GlassFoldersPrefs.bundle/GlassFolders@2x.png' | head -n 1)"
@@ -368,7 +377,7 @@ jobs:
           ZH_STRINGS="$(find root -type f -path '*GlassFoldersPrefs.bundle/zh-Hans.lproj/Root.strings' | head -n 1)"
 
           test -n "$DYLIB" -a -n "$PREFBIN" -a -n "$FILTER" -a -n "$ROOT_PLIST"
-          test -n "$PREF_INFO"
+          test -n "$PREF_INFO" -a -n "$LICENSE_PLIST"
           test -n "$BUNDLE_ICON" -a -n "$BUNDLE_ICON_2X" -a -n "$BUNDLE_ICON_3X"
           test -n "$PREF_ENTRY" -a -n "$EN_STRINGS" -a -n "$ZH_STRINGS"
           test -n "$PREF_ICON" -a -n "$PREF_ICON_2X" -a -n "$PREF_ICON_3X"
@@ -436,7 +445,7 @@ jobs:
           done
           echo "PreferenceBundle icon resources verified."
 
-          python3 - "$ROOT_PLIST" <<'PY'
+          python3 - "$ROOT_PLIST" "$LICENSE_PLIST" <<'PY'
           import plistlib, sys
           with open(sys.argv[1], "rb") as f:
               p = plistlib.load(f)
@@ -446,6 +455,13 @@ jobs:
               if x.get("key")
           }
           assert set(defaults.values()) == {"com.kulinich.glassfolders"}
+          with open(sys.argv[2], "rb") as f:
+              license_items = plistlib.load(f)["items"]
+          assert not any(x.get("action") in {"copyDeviceCode", "bindDevice", "pasteLicense", "removeLicense"} for x in p["items"])
+          assert any(x.get("detail") == "GFLicenseListController" for x in p["items"])
+          assert {"copyDeviceCode", "bindDevice", "pasteLicense", "removeLicense", "respring"}.issubset({x.get("action") for x in license_items})
+          assert any(x.get("id") == "GFRemoveLicense" and x.get("gfVisibility") == "activated" for x in license_items)
+          print("Dedicated license page and compact home entry verified.")
           print("Standard rootless product identity/localization resources verified.")
           PY
 
@@ -455,7 +471,7 @@ jobs:
       - name: Upload rootless deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.1.0-license1-Rootless-arm64
+          name: GlassFolders-1.1.0-license2-Rootless-arm64
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
