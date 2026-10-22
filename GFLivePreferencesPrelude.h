@@ -30,6 +30,7 @@ static void GFUpdateRealAppLibraryPod(UIView *pod);
 static void GFRefreshAppLibraryController(UIViewController *controller);
 static void GFUpdateDockBackground(UIView *host);
 static void GFUpdateLockScreenSurface(UIView *host);
+static void GFUpdateNotificationContainer(UIView *container);
 
 static NSUInteger GFLiveRefreshGeneration = 0;
 
@@ -151,6 +152,10 @@ static void GFLiveSetNumberForKey(
 
 static void GFLiveRefreshViewTree(UIView *view) {
     if (!view) return;
+
+    Class notificationContainerClass = NSClassFromString(@"NCNotificationViewControllerView");
+    if (notificationContainerClass && [view isKindOfClass:notificationContainerClass])
+        GFUpdateNotificationContainer(view);
 
     NSString *className =
         NSStringFromClass(view.class);

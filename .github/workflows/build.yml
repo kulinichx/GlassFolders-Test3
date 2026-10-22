@@ -1,4 +1,4 @@
-name: GlassFolders 1.3.0 Lock6
+name: GlassFolders 1.3.0 Lock7
 
 on:
   workflow_dispatch:
@@ -128,7 +128,7 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -q '^Version: 1.3.0~lock6$' ctrl/control
+          grep -q '^Version: 1.3.0~lock7$' ctrl/control
           grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64e$' ctrl/control
 
@@ -172,7 +172,7 @@ jobs:
           assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
           assert p["CFBundleName"] == "GlassFoldersPrefs"
           assert p["CFBundleShortVersionString"] == "1.3.0"
-          assert p["CFBundleVersion"] == "1.3.0.6"
+          assert p["CFBundleVersion"] == "1.3.0.7"
           assert p["NSPrincipalClass"] == "GFRootListController"
           print("Preference bundle Info.plist verified.")
           PY
@@ -245,7 +245,7 @@ jobs:
       - name: Upload RootHide deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.3.0-lock6-RootHide-arm64e
+          name: GlassFolders-1.3.0-lock7-RootHide-arm64e
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
@@ -375,7 +375,7 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -q '^Version: 1.3.0~lock6$' ctrl/control
+          grep -q '^Version: 1.3.0~lock7$' ctrl/control
           grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64$' ctrl/control
 
@@ -435,7 +435,7 @@ jobs:
           assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
           assert p["CFBundleName"] == "GlassFoldersPrefs"
           assert p["CFBundleShortVersionString"] == "1.3.0"
-          assert p["CFBundleVersion"] == "1.3.0.6"
+          assert p["CFBundleVersion"] == "1.3.0.7"
           assert p["NSPrincipalClass"] == "GFRootListController"
           print("Preference bundle Info.plist verified.")
           PY
@@ -509,7 +509,7 @@ jobs:
       - name: Upload rootless deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.3.0-lock6-Rootless-arm64
+          name: GlassFolders-1.3.0-lock7-Rootless-arm64
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14

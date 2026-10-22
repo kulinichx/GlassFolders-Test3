@@ -4499,6 +4499,19 @@ static void GFUpdateDockBackground(UIView *host) {
 %end
 %end
 
+%group GFNotificationContainerHooks
+%hook NCNotificationViewControllerView
+- (void)layoutSubviews {
+    %orig;
+    GFUpdateNotificationContainer((UIView *)self);
+}
+- (void)didMoveToWindow {
+    %orig;
+    GFUpdateNotificationContainer((UIView *)self);
+}
+%end
+%end
+
 %group GFLockNotificationStackHooks
 %hook NCNotificationShortLookView
 - (void)configureStackDimmingForTransform:(CGAffineTransform)transform {
@@ -5031,6 +5044,10 @@ static void GFUpdateOpenedFolderBackground(
         }
 
         Class notificationClass = objc_getClass("NCNotificationShortLookView");
+        Class notificationContainerClass = objc_getClass("NCNotificationViewControllerView");
+        if ([notificationContainerClass isSubclassOfClass:UIView.class]) {
+            %init(GFNotificationContainerHooks);
+        }
         if ([notificationClass isSubclassOfClass:UIView.class]) {
             %init(GFLockNotificationHooks);
             if (GFLockHasBoolArgumentMethod(notificationClass, NSSelectorFromString(@"_setBanner:"))) {

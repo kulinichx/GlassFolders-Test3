@@ -5,7 +5,7 @@
 
 // Lock-screen optics have a fixed recipe, independent of folder preferences.
 // Keep wallpaper detail behind cards, and use still less blur for small buttons.
-static const CGFloat GFLockCardBlurRadius = 6.0;
+static const CGFloat GFLockCardBlurRadius = 8.0;
 static const CGFloat GFLockButtonBlurRadius = 3.0;
 
 static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, CGFloat radius) {
@@ -84,8 +84,8 @@ static CAGradientLayer *GFLockRimBand(NSArray *colors) {
         self.backgroundColor = UIColor.clearColor;
         self.layer.zPosition = 21.0;
         self.gfShoulder = GFLockRimBand(@[
-            (id)[UIColor colorWithWhite:1.0 alpha:0.18].CGColor,
-            (id)[UIColor colorWithWhite:1.0 alpha:0.165].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.16].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.15].CGColor,
             (id)[UIColor colorWithWhite:1.0 alpha:0.085].CGColor,
             (id)[UIColor colorWithWhite:1.0 alpha:0.024].CGColor,
             (id)[UIColor colorWithWhite:1.0 alpha:0.008].CGColor,
@@ -104,8 +104,8 @@ static CAGradientLayer *GFLockRimBand(NSArray *colors) {
             (id)[UIColor colorWithWhite:0.0 alpha:0.12].CGColor
         ]);
         self.gfReflection = GFLockRimBand(@[
-            (id)[UIColor colorWithWhite:1.0 alpha:0.48].CGColor,
-            (id)[UIColor colorWithWhite:1.0 alpha:0.44].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.42].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.39].CGColor,
             (id)[UIColor colorWithWhite:1.0 alpha:0.24].CGColor,
             (id)[UIColor colorWithWhite:1.0 alpha:0.065].CGColor,
             (id)[UIColor colorWithWhite:1.0 alpha:0.015].CGColor,
@@ -129,9 +129,9 @@ static CAGradientLayer *GFLockRimBand(NSArray *colors) {
     self.gfReflection.opacity = self.gfSubdued ? 0.16 : 1.0;
     self.gfInnerShade.opacity = self.gfSubdued ? 0.18 : 1.0;
     for (CAGradientLayer *band in @[self.gfInnerShade, self.gfShoulder, self.gfReflection]) {
-        CGFloat inset = (band == self.gfInnerShade) ? 1.2 : 0.0;
-        CGFloat width = band == self.gfShoulder ? (self.gfCircular ? 1.6 : 2.4) :
-                        (band == self.gfReflection ? 0.8 : 1.2);
+        CGFloat inset = (band == self.gfInnerShade) ? (self.gfCircular ? 1.2 : 1.6) : 0.0;
+        CGFloat width = band == self.gfShoulder ? (self.gfCircular ? 1.6 : 3.6) :
+                        (band == self.gfReflection ? 0.8 : (self.gfCircular ? 1.2 : 2.4));
         CGRect rect = CGRectInset(self.bounds, inset, inset);
         rect.size.width = MAX(0.0, rect.size.width);
         rect.size.height = MAX(0.0, rect.size.height);
@@ -157,11 +157,19 @@ static CAGradientLayer *GFLockRimBand(NSArray *colors) {
 @interface GFLockScreenGlassView : GFPanelGlassView
 @property (nonatomic, assign) BOOL gfCircular;
 @property (nonatomic, strong) GFLockRimView *gfLockRim;
+@property (nonatomic, strong) CAGradientLayer *gfBodyVeil;
+- (void)gfRefreshBodyVeil;
 @end
 @implementation GFLockScreenGlassView
 - (instancetype)initWithStyle:(NSInteger)style strength:(CGFloat)strength {
     self = [super initWithStyle:style strength:strength];
     if (self) {
+        self.gfBodyVeil = [CAGradientLayer layer];
+        self.gfBodyVeil.startPoint = CGPointMake(0.3, 0.0);
+        self.gfBodyVeil.endPoint = CGPointMake(0.7, 1.0);
+        self.gfBodyVeil.locations = @[@0.0, @0.36, @0.72, @1.0];
+        self.gfBodyVeil.zPosition = 19.0;
+        [self.layer addSublayer:self.gfBodyVeil];
         self.gfLockRim = [[GFLockRimView alloc] initWithFrame:self.bounds];
         [self addSubview:self.gfLockRim];
         // The superclass refreshes during init, before the rim exists.
@@ -178,12 +186,27 @@ static CAGradientLayer *GFLockRimBand(NSArray *colors) {
             [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterial];
         self.gfFallbackBlurView.alpha = 0.22;
     }
-    // Preserve transmission and the fixed blur. Thickness lives at the rim,
-    // without a new grey/white body fill or a uniform hard outline.
+    // The neutral, low-alpha veil gives the body a little density without
+    // additive brightness or a flat opaque fill. Folder strength stays separate.
     self.gfTintView.alpha = 0.0;
     self.gfOpticalLayer.hidden = YES;
     self.layer.borderWidth = 0.0;
+    [self gfRefreshBodyVeil];
     [self.gfLockRim setNeedsLayout];
+}
+- (void)gfRefreshBodyVeil {
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    self.gfBodyVeil.colors = @[
+        (id)[UIColor colorWithWhite:1.0 alpha:0.045].CGColor,
+        (id)[UIColor colorWithWhite:0.0 alpha:0.018].CGColor,
+        (id)[UIColor colorWithWhite:0.0 alpha:0.035].CGColor,
+        (id)[UIColor colorWithWhite:1.0 alpha:0.016].CGColor
+    ];
+    // Rear strips and circular buttons stay clear; do not accumulate a veil
+    // under overlapping notifications or change native selected button states.
+    self.gfBodyVeil.hidden = self.gfCircular || self.gfLockRim.gfSubdued;
+    [CATransaction commit];
 }
 - (void)layoutSubviews {
     [super layoutSubviews];
@@ -194,6 +217,11 @@ static CAGradientLayer *GFLockRimBand(NSArray *colors) {
     self.gfLockRim.frame = self.bounds;
     self.gfLockRim.gfRadius = self.layer.cornerRadius;
     self.gfLockRim.gfCircular = self.gfCircular;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    self.gfBodyVeil.frame = self.bounds;
+    self.gfBodyVeil.hidden = self.gfCircular || self.gfLockRim.gfSubdued;
+    [CATransaction commit];
     [self.gfLockRim setNeedsLayout];
 }
 @end
@@ -222,6 +250,7 @@ static CAGradientLayer *GFLockRimBand(NSArray *colors) {
 - (void)gfRefreshMaterial {
     [super gfRefreshMaterial];
     self.gfLockRim.gfSubdued = self.gfStacked;
+    [self gfRefreshBodyVeil];
     [self.gfLockRim setNeedsLayout];
 }
 @end
@@ -398,6 +427,67 @@ static UIView *GFLockMaterial(id owner) {
     return nil;
 }
 
+static BOOL GFNotificationBannerPresentation(UIView *host, BOOL *banner) {
+    // A short look can be attached before its private flag is updated. Prefer
+    // an actual banner container; never infer banners merely from an unlocked
+    // phone (Notification Center also uses short looks on the Home Screen).
+    BOOL inBanner = NO;
+    UIResponder *node = host;
+    for (NSUInteger depth = 0; node && depth < 64; depth++, node = node.nextResponder) {
+        if (GFLockIsKind(node, "NCNotificationLongLookView") ||
+            GFLockIsKind(node, "NCNotificationLongLookViewController")) return NO;
+        if (GFLockIsKind(node, "SBBannerContainerView") ||
+            GFLockIsKind(node, "SBNotificationBannerWindow") ||
+            GFLockIsKind(node, "SBBannerWindow") ||
+            GFLockIsKind(node, "BNBannerWindow") ||
+            GFLockIsKind(node, "BNBannerViewController") ||
+            GFLockIsKind(node, "NCNotificationBannerViewController")) inBanner = YES;
+    }
+    if (inBanner) { *banner = YES; return YES; }
+    if (GFLockCoverSheetOwner(host)) { *banner = NO; return YES; }
+    return GFLockReadBool(host, @"_isBanner", banner) ||
+           GFLockReadBool(host, @"isBanner", banner);
+}
+
+static UIView *GFNotificationMaterial(UIView *host, UIView *content) {
+    UIView *material = GFLockMaterial(host);
+    if (material) return material;
+    // Some presentations wrap the material in a dedicated background shell.
+    // Search only that explicit branch, never the text/remote-content tree.
+    UIView *shell = GFLockView(GFLockObject(host, @"backgroundView"));
+    if (!shell) shell = GFLockView(GFLockIvar(host, "_backgroundView"));
+    if (!shell || shell == host || ![shell isDescendantOfView:host] ||
+        !content || [content isDescendantOfView:shell] ||
+        [shell isDescendantOfView:content]) return nil;
+    NSArray<UIView *> *level = @[shell];
+    UIView *found = nil;
+    for (NSUInteger depth = 0; depth < 4 && level.count; depth++) {
+        NSMutableArray<UIView *> *next = [NSMutableArray array];
+        for (UIView *view in level) {
+            if ([view isKindOfClass:GFLockScreenGlassView.class]) continue;
+            if (GFLockIsKind(view, "MTMaterialView") ||
+                [view isKindOfClass:UIVisualEffectView.class]) {
+                // Multiple independent materials are ambiguous: stay native.
+                if (found && found != view) return nil;
+                found = view;
+            } else {
+                [next addObjectsFromArray:view.subviews];
+            }
+        }
+        level = next;
+    }
+    return found;
+}
+
+static void GFUpdateNotificationContainer(UIView *container) {
+    // The wrapper lays out after its short look, and may assign the background
+    // or banner context there. Refresh only its identified notification child.
+    UIView *content = GFLockView(GFLockObject(container, @"contentView"));
+    if (!content) content = GFLockView(GFLockIvar(container, "_contentView"));
+    if (GFLockIsKind(content, "NCNotificationShortLookView") &&
+        [content isDescendantOfView:container]) GFUpdateLockScreenSurface(content);
+}
+
 static void GFRestoreLockScreenSurface(UIView *host) {
     GFLockBackgroundState *state = objc_getAssociatedObject(host, &kGFLockBackgroundKey);
     [state restore];
@@ -454,13 +544,12 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     UIView *content = nil;
     id radiusOwner = host;
     if (notification) {
-        // Unknown presentation stays native; a missing getter must never be
-        // mistaken for a banner just because the banner option is enabled.
-        BOOL knownPresentation = GFLockReadBool(host, @"_isBanner", &banner);
+        BOOL knownPresentation = GFNotificationBannerPresentation(host, &banner);
         enabled = knownPresentation && (banner ? GFBannerNotificationsEnabled : GFLockNotificationsEnabled);
-        background = GFLockMaterial(host);
-        content = GFLockView(GFLockObject(host, @"notificationContentView"));
+        content = GFLockView(GFLockObject(host, @"_notificationContentView"));
+        if (!content) content = GFLockView(GFLockObject(host, @"notificationContentView"));
         if (!content) content = GFLockView(GFLockIvar(host, "_notificationContentView"));
+        background = GFNotificationMaterial(host, content);
     } else if (GFLockIsKind(host, "CSQuickActionsButton")) {
         circle = YES;
         UIControl *button = (UIControl *)host;
@@ -517,6 +606,10 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     }
     UIView *container = background.superview;
     GFLockScreenGlassView *glass = state.glass;
+    // UIKit may initially hide a banner material until presentation finishes.
+    // Observe a subsequent native reveal instead of freezing that initial
+    // hidden state for the entire lifetime of the replacement.
+    if (!background.hidden) state.originalHidden = NO;
     if (notification && !banner) {
         ((GFNotificationGlassView *)glass).gfStacked = GFLockNotificationIsStacked(host);
         GFLockSyncStackOverlay(host, state);
