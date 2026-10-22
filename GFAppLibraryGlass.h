@@ -58,7 +58,7 @@
         _gfBodyVeil.zPosition = 19.0;
         [self.layer addSublayer:_gfBodyVeil];
 
-        // App Library gets a wider horizontal bevel; the lock-screen rim
+        // App Library gets a restrained horizontal bevel; the lock-screen rim
         // continues using its accepted lighting and widths unchanged.
         _gfCardRim = [[GFHorizontalGlassRimView alloc] initWithFrame:CGRectZero];
         [self addSubview:_gfCardRim];
@@ -135,12 +135,12 @@
     [CATransaction setDisableActions:YES];
     CGFloat density = recipe.veilStrength * (self.gfSearchVariant ? 0.8 : 1.0);
     self.gfBodyVeil.colors = @[
-        (id)[UIColor colorWithWhite:1.0 alpha:0.060 * density].CGColor,
-        (id)[UIColor colorWithWhite:1.0 alpha:0.020 * density].CGColor,
-        (id)[UIColor colorWithWhite:0.0 alpha:0.012 * density].CGColor,
-        (id)[UIColor colorWithWhite:0.0 alpha:0.020 * density].CGColor,
-        (id)[UIColor colorWithWhite:1.0 alpha:0.014 * density].CGColor,
-        (id)[UIColor colorWithWhite:1.0 alpha:0.048 * density].CGColor
+        (id)[UIColor colorWithWhite:1.0 alpha:0.012 * density].CGColor,
+        (id)[UIColor colorWithWhite:1.0 alpha:0.004 * density].CGColor,
+        (id)[UIColor colorWithWhite:0.0 alpha:0.004 * density].CGColor,
+        (id)[UIColor colorWithWhite:0.0 alpha:0.008 * density].CGColor,
+        (id)[UIColor colorWithWhite:1.0 alpha:0.003 * density].CGColor,
+        (id)[UIColor colorWithWhite:1.0 alpha:0.006 * density].CGColor
     ];
     [CATransaction commit];
     [self setNeedsLayout];

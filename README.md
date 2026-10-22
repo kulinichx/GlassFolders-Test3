@@ -1,6 +1,6 @@
 # GlassFolders 1.3.0 — App Library and Dock glass candidate
 
-This branch adds an independent offline GlassFolders issuer and device-bound activation. Candidate package: `1.3.0~lock13`. Target systems: iOS / iPadOS **16.0–17.3.1**, with a compatible jailbreak and SpringBoard injection environment. Device validation is still required; the source target is not a claim of tested compatibility.
+This branch adds an independent offline GlassFolders issuer and device-bound activation. Candidate package: `1.3.0~lock14`. Target systems: iOS / iPadOS **16.0–17.3.1**, with a compatible jailbreak and SpringBoard injection environment. Device validation is still required; the source target is not a claim of tested compatibility.
 
 See [离线授权、使用流程与兼容性检查](docs/离线授权与兼容性.md) and [Windows 签发器说明](tools/issuer/README.md). Issuer private keys and records must remain outside the repository. Existing RC7 licenses are not accepted. The previous 1.0.0-fix1 binary does not contain these changes.
 
@@ -28,6 +28,7 @@ GlassFolders brings refined Clear and Liquid Glass materials to iOS folders and 
 - `lock11`: address corner seams in the thicker rim by replacing adjacent subpixel reflection/shoulder rings with overlapping cumulative borders that share one native continuous outer curve. Compensated source-over opacity preserves the lock10 coverage profile and widths; no high-resolution card bitmap or additional backdrop blur. Circular controls and inner shade retain their existing geometry. User subsequently confirmed the lock11 appearance on iPhone 14 Pro / iOS 16.6; this is not validation of all target systems.
 - `lock12`: adapt App Library category cards and the search pill to the accepted lock11 shared continuous rim, with compact 1.6 pt reflections, soft inward shoulders, overscanned background sampling and a lighter neutral body. Suppress native background haze with restoration on disable; retain native icons, text and input, independent switches and the three style modes. See [资源库玻璃使用与测试](docs/资源库玻璃使用与测试.md). App Library device retesting is pending.
 - `lock13`: give App Library and glass-mode Dock a dedicated horizontal rim: stronger top/bottom reflections with radius-aware fading around the corners, nearly unlit side middles, and a compact wider bevel. Search pills use a narrower profile. Add restrained vertical body transmission; Dock uses fixed optics and a separate capture group independent of folder/App Library settings. Hide-background mode and lock11 notification/lock-screen rendering are preserved. Device comparison is pending.
+- `lock14`: correct the overly bright, uniform rails seen in lock13 App Library and Dock device captures. Feather the reflection immediately, narrow the bright core, reduce shoulder/shade and body caps, and smoothly modulate light across the surface width. Preserve top/bottom emphasis with a faint connected side contour. Existing geometry, fixed blur, controls, folder/notification rendering and activation remain unchanged. Device comparison is pending.
 - Independent Clear and Liquid Glass strength controls for folders
 - App Library modes: Follow Folder, Clear, or Liquid Glass
 - Matched App Library category-card and search-field materials
@@ -43,12 +44,12 @@ App Library uses fixed, tuned material recipes rather than exposing engineering 
 - Liquid Glass uses a fixed 8 pt blur and a lighter neutral veil
 - Follow Folder synchronizes only the material family, keeping App Library independent of folder strength
 - Category cards, the search pill and glass-mode Dock use a dedicated horizontal rim with surface-specific widths, adapted to native corner radii; native text, icons and interaction remain in place
-- Top/bottom reflections ease around the corners into quiet sides; a faint vertical body gradient provides restrained material depth
+- Top/bottom reflections vary gently across the width and ease around the corners into faint connected sides; a low-density neutral body avoids broad white caps
 
 ## Compatibility
 
 - Package identifier: `com.kulinich.glassfolders`
-- Candidate package version: `1.3.0~lock13`
+- Candidate package version: `1.3.0~lock14`
 - Minimum firmware declared by the package: iOS / iPadOS 16.0
 - Maximum target: iOS / iPadOS 17.3.1 (package dependency `< 17.3.2`)
 - Runtime/device validation: pending for this candidate; see the compatibility checklist above
