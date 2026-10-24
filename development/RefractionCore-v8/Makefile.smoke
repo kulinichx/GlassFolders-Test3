@@ -1,0 +1,9 @@
+# Optional test-only iPad command-line executable (NOT injected or packaged).
+TARGET = iphone:clang:latest:16.0
+ARCHS ?= arm64 arm64e
+include $(THEOS)/makefiles/common.mk
+TOOL_NAME = GFRefractionSmoke
+GFRefractionSmoke_FILES = tools/gpu-smoke.mm src/GFRefractionRenderer.mm
+GFRefractionSmoke_FRAMEWORKS = Foundation Metal CoreGraphics
+GFRefractionSmoke_CFLAGS = -fobjc-arc -std=c++17 -Wall -Wextra
+include $(THEOS_MAKE_PATH)/tool.mk

@@ -1,0 +1,45 @@
+name: GF v8 independent Metal compile gate
+'on':
+  workflow_dispatch:
+  push:
+    paths:
+      - 'development/RefractionCore-v8/**'
+      - '.github/workflows/gf-refractioncore-v8.yml'
+  pull_request:
+    paths:
+      - 'development/RefractionCore-v8/**'
+      - '.github/workflows/gf-refractioncore-v8.yml'
+
+jobs:
+  apple-metal-and-objcxx:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install CPU reference dependencies
+        run: python -m pip install 'numpy>=2.3.4,<3' 'pillow>=12,<13'
+      - name: CPU/contract tests
+        run: python -m unittest discover -s development/RefractionCore-v8/tests -p 'test_*.py' -v
+      - name: Confirm Xcode and SDK
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+      - name: Apple Metal IR + iOS ObjC++/dylib compile gate
+        run: bash development/RefractionCore-v8/tools/verify-apple-build.sh
+      - name: Standalone macOS GPU smoke compile (does not need an active GPU)
+        run: bash development/RefractionCore-v8/tools/verify-macos-smoke-build.sh
+
+  theos-standalone-arm64:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch Theos (upstream; no RootHide plugin required for compile gate)
+        run: git clone --depth 1 --recurse-submodules https://github.com/theos/theos.git "$RUNNER_TEMP/theos"
+      - name: Build independent Theos dylib for arm64
+        env:
+          THEOS: ${{ runner.temp }}/theos
+        run: make -C development/RefractionCore-v8 ARCHS=arm64

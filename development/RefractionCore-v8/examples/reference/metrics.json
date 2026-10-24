@@ -1,0 +1,9 @@
+{
+  "changed_rgb_pixels_gt4": 5494,
+  "alpha_center": 0.0,
+  "alpha_edge": 0.7777624726295471,
+  "alpha_outside_corner": 0.0,
+  "alpha_max": 0.7777811288833618,
+  "premultiplied_alpha": true,
+  "source": "synthetic scene only; NOT a live iPad/Metal render"
+}
