@@ -2158,6 +2158,86 @@ static void GFRefreshAppLibraryController(
 %end
 
 
+/*
+ * The inactive App Library search capsule can be rebuilt when returning to
+ * the library in landscape. The separate search controller's appearance
+ * callbacks are not guaranteed to run when the library page becomes visible.
+ * Refresh the nested search controller from the library host, without
+ * touching category cards or creating a second overlay root.
+ */
+static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
+    if (!host.isViewLoaded) return;
+    UIViewController *target = host;
+    SEL getter = NSSelectorFromString(@"containerViewController");
+    if ([host respondsToSelector:getter]) {
+        id nested = ((id (*)(id, SEL))objc_msgSend)(host, getter);
+        if ([nested isKindOfClass:UIViewController.class] &&
+            ((UIViewController *)nested).isViewLoaded) {
+            target = (UIViewController *)nested;
+        }
+    }
+    GFUpdateAppLibrarySearchView(target.view);
+}
+
+@interface SBHLibraryViewController : UIViewController
+@end
+
+%group GFIPadLibraryHostSearchHooks
+
+%hook SBHLibraryViewController
+
+- (void)viewWillAppear:(BOOL)animated {
+    %orig(animated);
+    GFRefreshIPadLibraryHostSearch(self);
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    %orig(animated);
+    if (!self.isViewLoaded) return;
+
+    GFRefreshIPadLibraryHostSearch(self);
+
+    // SpringBoard may restore the native background after the transition.
+    __weak UIViewController *weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        UIViewController *host = weakSelf;
+        if (host && host.isViewLoaded && host.view.window) {
+            GFRefreshIPadLibraryHostSearch(host);
+        }
+    });
+}
+
+- (void)viewDidLayoutSubviews {
+    %orig;
+    GFRefreshIPadLibraryHostSearch(self);
+}
+
+%end
+
+%end
+
+
+/*
+ * The search bar may be reconstructed by the search controller after its
+ * normal layout. Hook only if the private method exists on this iPadOS build.
+ */
+%group GFIPadLibrarySearchLayoutHooks
+
+%hook SBHLibrarySearchController
+
+- (void)_layoutSearchViews {
+    %orig;
+    if (self.isViewLoaded && self.view.window) {
+        GFUpdateAppLibrarySearchView(self.view);
+    }
+}
+
+%end
+
+%end
+
+
 %group GFAppLibraryHooks
 
 %hook SBHLibraryCategoryPodBackgroundView
@@ -4678,6 +4758,18 @@ static void GFUpdateOpenedFolderBackground(
         if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad &&
             [librarySearchClass isSubclassOfClass:UIViewController.class]) {
             %init(GFIPadAppLibrarySearchControllerHooks);
+            if (class_getInstanceMethod(librarySearchClass,
+                                        NSSelectorFromString(@"_layoutSearchViews"))) {
+                %init(GFIPadLibrarySearchLayoutHooks);
+            }
+        }
+
+        // On iPad the library host can appear without activating search.
+        // This is the path used when swiping out and back to App Library.
+        Class libraryHostClass = objc_getClass("SBHLibraryViewController");
+        if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad &&
+            [libraryHostClass isSubclassOfClass:UIViewController.class]) {
+            %init(GFIPadLibraryHostSearchHooks);
         }
 
         /*
