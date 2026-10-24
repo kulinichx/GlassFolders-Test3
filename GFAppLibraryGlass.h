@@ -38,6 +38,7 @@
 @property (nonatomic, assign) BOOL gfMaterialDockVariant;
 @property (nonatomic, assign) BOOL gfMaterialAppleLiquid;
 @property (nonatomic, assign) BOOL gfMaterialDockLens;
+@property (nonatomic, assign) BOOL gfMaterialLibraryLens;
 - (instancetype)initWithStrength:(CGFloat)strength;
 - (void)setPreferredRadius:(CGFloat)radius;
 - (void)gfRefreshMaterial;
@@ -107,14 +108,18 @@
     BOOL dark = GFUsesDarkAppearance(self);
     NSInteger style = self.gfDockVariant ? 1 : GFResolvedAppLibraryStyle();
     BOOL dockLens = self.gfDockVariant && GFDockLensMaterialEnabled;
-    BOOL appleLiquid = GFAppleLiquidMaterialEnabled && !dockLens;
+    // App Library has its own high-transmission recipe. It takes precedence
+    // over the old volume experiment ONLY for pods and the search capsule.
+    BOOL libraryLens = !self.gfDockVariant && GFAppLibraryLensMaterialEnabled;
+    BOOL appleLiquid = GFAppleLiquidMaterialEnabled && !dockLens && !libraryLens;
     // Pod hooks run on layout. Reuse filters and layers until their material
     // changes, including updates while App Library is already on screen.
     if (self.gfHasMaterial && self.gfMaterialDark == dark && self.gfMaterialStyle == style &&
         self.gfMaterialSearchVariant == self.gfSearchVariant &&
         self.gfMaterialDockVariant == self.gfDockVariant &&
         self.gfMaterialAppleLiquid == appleLiquid &&
-        self.gfMaterialDockLens == dockLens) return;
+        self.gfMaterialDockLens == dockLens &&
+        self.gfMaterialLibraryLens == libraryLens) return;
     self.gfHasMaterial = YES;
     self.gfMaterialDark = dark;
     self.gfMaterialStyle = style;
@@ -122,6 +127,7 @@
     self.gfMaterialDockVariant = self.gfDockVariant;
     self.gfMaterialAppleLiquid = appleLiquid;
     self.gfMaterialDockLens = dockLens;
+    self.gfMaterialLibraryLens = libraryLens;
     GFAppLibraryMaterialRecipe recipe = self.gfDockVariant ?
         (GFAppLibraryMaterialRecipe){10.0, 1.04, 1.0} : GFAppLibraryRecipe(self.gfSearchVariant, dark);
     if (appleLiquid) {
@@ -133,6 +139,14 @@
             self.gfDockVariant ?
             (GFAppLibraryMaterialRecipe){12.0, 1.28, 1.0} :
             (GFAppLibraryMaterialRecipe){11.0, 1.30, 1.0};
+    }
+    if (libraryLens) {
+        // Pods are already seen through SpringBoard's blurred library page;
+        // additional 11pt blur and high-opacity veils make a muddy card.
+        // Use one existing live sample per surface, with no second edge layer.
+        recipe = self.gfSearchVariant ?
+            (GFAppLibraryMaterialRecipe){2.0, 1.10, 1.0} :
+            (GFAppLibraryMaterialRecipe){3.0, 1.12, 1.0};
     }
     if (dockLens) {
         // 12pt blur in the earlier prototype obscured the wallpaper. A small
@@ -231,7 +245,7 @@
         }
         self.gfFallbackBlurView.effect = [UIBlurEffect effectWithStyle:
             style == 1 ? UIBlurEffectStyleSystemUltraThinMaterial : UIBlurEffectStyleSystemThinMaterial];
-        self.gfFallbackBlurView.alpha = dockLens ? 0.12 :
+        self.gfFallbackBlurView.alpha = (dockLens || libraryLens) ? 0.12 :
             (style == 1 ? 0.22 : 0.28);
     }
     self.gfFallbackBlurView.hidden = hasBlur;
@@ -239,7 +253,33 @@
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     CGFloat density = recipe.veilStrength * (self.gfSearchVariant ? 0.8 : 1.0);
-    if (dockLens) {
+    if (libraryLens) {
+        // Unlike the old iOS 27 volume test, this does not add a dense gray
+        // layer. Color and existing wallpaper detail should stay visible.
+        // The broad, quiet top reflection comes from the material volume,
+        // not from an extra hard highlight line.
+        self.gfBodyVeil.colors = @[
+            (id)[UIColor colorWithWhite:1.0 alpha:0.035].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.014].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.002].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.002].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.018].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.008].CGColor
+        ];
+        self.gfVolumeFalloff.colors = @[
+            (id)[UIColor colorWithWhite:1.0 alpha:0.003].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.000].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.008].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.023].CGColor
+        ];
+        self.gfDockLensSheen.colors = @[
+            (id)[UIColor colorWithWhite:1.0 alpha:0.055].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.024].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.004].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.0].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.0].CGColor
+        ];
+    } else if (dockLens) {
         // High transmission is the base. Keep the center close to untouched
         // backdrop; a broad sheen follows the curvature without a white rail.
         self.gfBodyVeil.colors = @[
@@ -292,10 +332,11 @@
             (id)[UIColor colorWithWhite:1.0 alpha:0.006 * density].CGColor
         ];
     }
-    self.gfVolumeFalloff.hidden = !(appleLiquid || dockLens);
-    self.gfDockLensSheen.hidden = !dockLens;
-    // Existing curved rim remains subordinate to the real wallpaper sample.
-    self.gfCardRim.alpha = dockLens ? 0.62 : (appleLiquid ? 0.40 : 1.0);
+    self.gfVolumeFalloff.hidden = !(appleLiquid || dockLens || libraryLens);
+    self.gfDockLensSheen.hidden = !(dockLens || libraryLens);
+    // Quiet down the old bevel for pods/search without affecting the Dock.
+    self.gfCardRim.alpha = libraryLens ? 0.28 :
+        (dockLens ? 0.62 : (appleLiquid ? 0.40 : 1.0));
     [CATransaction commit];
     [self setNeedsLayout];
 }

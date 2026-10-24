@@ -44,6 +44,9 @@ static CGFloat GFGlassStrength = 0.0;        // active style strength for existi
 static BOOL GFAppLibraryGlassEnabled = NO;
 // Experimental volume-first material. Off by default; no extra rim glints.
 static BOOL GFAppleLiquidMaterialEnabled = NO;
+// Isolated clear-lens experiment for App Library search and category pods.
+// Does not change Dock or the page-wide SpringBoard wallpaper blur.
+static BOOL GFAppLibraryLensMaterialEnabled = NO;
 
 // Dock is independent of folder/App Library preferences, and opt-in on upgrade.
 static BOOL GFDockEnabled = NO;
@@ -157,6 +160,8 @@ static void GFLoadPreferences(void) {
         licensed && GFReadBool(CFSTR("AppLibraryGlassEnabled"), NO);
     GFAppleLiquidMaterialEnabled = licensed &&
         GFReadBool(CFSTR("AppleLiquidMaterialEnabled"), NO);
+    GFAppLibraryLensMaterialEnabled = licensed &&
+        GFReadBool(CFSTR("AppLibraryLensMaterialEnabled"), NO);
 
     GFDockEnabled = licensed && GFReadBool(CFSTR("DockEnabled"), NO);
     GFDockMode = GFReadInteger(CFSTR("DockMode"), 0) == 1 ? 1 : 0;
