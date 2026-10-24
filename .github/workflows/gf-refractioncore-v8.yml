@@ -39,6 +39,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Fetch Theos (upstream; no RootHide plugin required for compile gate)
         run: git clone --depth 1 --recurse-submodules https://github.com/theos/theos.git "$RUNNER_TEMP/theos"
+      - name: Install and verify Theos signing tool
+        run: |
+          brew install ldid
+          command -v ldid
       - name: Build independent Theos dylib for arm64
         env:
           THEOS: ${{ runner.temp }}/theos

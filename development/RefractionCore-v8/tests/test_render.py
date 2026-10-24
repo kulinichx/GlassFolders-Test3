@@ -53,6 +53,13 @@ if __name__=='__main__':
     unittest.main()
 
 class BuildAndSafetyContractTests(unittest.TestCase):
+    def test_theos_ci_installs_signer_before_build(self):
+        workflow=(BASE/'ci/gf-refractioncore-v8.yml').read_text()
+        self.assertIn('brew install ldid', workflow)
+        self.assertIn('command -v ldid', workflow)
+        self.assertLess(workflow.index('brew install ldid'),
+                        workflow.index('make -C development/RefractionCore-v8'))
+
     def test_cpp17_does_not_use_cxx20_designated_initializers(self):
         renderer=(BASE/'src/GFRefractionRenderer.mm').read_text()
         self.assertIn('GFUniforms u = {};', renderer)
