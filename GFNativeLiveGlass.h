@@ -47,9 +47,104 @@ static BOOL GFNativeLiveGlassEnabled = NO;
 }
 @end
 
+// GlassFolders-owned backdrop host. Unlike v7, this does not need the
+// LGLiveBackdropView Objective-C class. It still requires a renderer-registered
+// *custom refractive CAFilter*; QuartzCore does not register one for us.
+// This does not snapshot, alter, hide, or recolor the stock material.
+@interface GFNativeDirectBackdropView : UIView
+@property (nonatomic, copy) NSString *gfRefractiveType;
+@property (nonatomic, assign) BOOL gfFilterAttached;
+- (void)gfApplyFilterIfPossible;
+@end
+
+static id GFNativeRegisteredFilter(NSString *type) {
+    Class cls = NSClassFromString(@"CAFilter");
+    SEL factory = NSSelectorFromString(@"filterWithType:");
+    if (!cls || ![cls respondsToSelector:factory]) return nil;
+    @try {
+        id filter = ((id (*)(Class, SEL, id))objc_msgSend)(cls, factory, type);
+        if (!filter) return nil;
+        // Do not accept a generic blur substituted for a custom refraction.
+        NSString *reported = [filter valueForKey:@"type"];
+        if (![reported isKindOfClass:[NSString class]] ||
+            ![reported isEqualToString:type]) return nil;
+        return filter;
+    } @catch (__unused NSException *e) {
+        return nil;
+    }
+}
+
+static NSString *GFNativeAvailableFilterType(void) {
+    // Do not cache a failure: renderer registration can finish after launch.
+    for (NSString *type in @[@"dylv.liquidglass.refraction",
+                            @"dylv.liquidglass.dock"]) {
+        if (GFNativeRegisteredFilter(type)) return type;
+    }
+    return nil;
+}
+
+@implementation GFNativeDirectBackdropView
++ (Class)layerClass {
+    Class layerType = NSClassFromString(@"CABackdropLayer");
+    return layerType ?: [CALayer class];
+}
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.opaque = NO;
+        self.backgroundColor = UIColor.clearColor;
+        self.userInteractionEnabled = NO;
+        self.layer.masksToBounds = YES;
+    }
+    return self;
+}
+- (void)didMoveToWindow {
+    [super didMoveToWindow];
+    if (self.window) [self gfApplyFilterIfPossible];
+}
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (self.window && !self.gfFilterAttached)
+        [self gfApplyFilterIfPossible];
+}
+- (void)gfApplyFilterIfPossible {
+    if (!self.window || !self.gfRefractiveType.length) return;
+    Class cls = NSClassFromString(@"CABackdropLayer");
+    if (!cls || ![self.layer isKindOfClass:cls]) return;
+    if (self.gfFilterAttached) return;
+    id filter = GFNativeRegisteredFilter(self.gfRefractiveType);
+    if (!filter) return;
+    // iOS private KVC keys vary by firmware: best effort, never block the
+    // actual registered CAFilter merely because an optional flag is missing.
+    @try { [self.layer setValue:@NO forKey:@"layerUsesCoreImageFilters"]; }
+    @catch (__unused NSException *e) {}
+    @try { [self.layer setValue:@YES forKey:@"windowServerAware"]; }
+    @catch (__unused NSException *e) {}
+    @try {
+        self.layer.filters = @[filter];
+        id installed = self.layer.filters.firstObject;
+        NSString *actualType = [installed valueForKey:@"type"];
+        self.gfFilterAttached = [actualType isEqualToString:self.gfRefractiveType];
+        if (!self.gfFilterAttached) self.layer.filters = nil;
+    } @catch (__unused NSException *e) {
+        self.gfFilterAttached = NO;
+        self.layer.filters = nil;
+    }
+}
+@end
+
 // Preferred: use a separately installed, already-loaded live compositor
 // provider if one is available. We do not bundle or copy its implementation.
 static UIView *GFNativeLiveVendorView(CGRect frame) {
+    // Prefer our own system backdrop host when a registered refractive filter
+    // is visible. Fall back to the v7 compatibility adapter otherwise.
+    NSString *filterType = GFNativeAvailableFilterType();
+    if (filterType && NSClassFromString(@"CABackdropLayer")) {
+        GFNativeDirectBackdropView *native =
+            [[GFNativeDirectBackdropView alloc] initWithFrame:frame];
+        native.gfRefractiveType = filterType;
+        return native;
+    }
     Class cls = NSClassFromString(@"LGLiveBackdropView");
     SEL initializer = NSSelectorFromString(@"initWithFrame:groupName:filterType:");
     SEL verified = NSSelectorFromString(@"lgFilterAttached");
@@ -69,6 +164,11 @@ static UIView *GFNativeLiveVendorView(CGRect frame) {
 }
 
 static BOOL GFNativeLiveVendorAttached(UIView *view) {
+    if ([view isKindOfClass:[GFNativeDirectBackdropView class]]) {
+        GFNativeDirectBackdropView *native = (GFNativeDirectBackdropView *)view;
+        [native gfApplyFilterIfPossible];
+        return native.gfFilterAttached;
+    }
     SEL query = NSSelectorFromString(@"lgFilterAttached");
     if (!view || ![view respondsToSelector:query]) return NO;
     @try {
