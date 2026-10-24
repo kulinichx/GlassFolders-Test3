@@ -110,6 +110,18 @@ class BuildAndSafetyContractTests(unittest.TestCase):
         self.assertIn('MTLCommandBufferStatusCompleted', smoke)
         self.assertIn('GPU displacement made too little difference', smoke)
 
+    def test_device_gpu_smoke_build_and_artifact(self):
+        script=(BASE/'tools/verify-ios-smoke-build.sh').read_text()
+        workflow=(BASE/'ci/gf-refractioncore-v8.yml').read_text()
+        self.assertIn('GFRefractionRenderer.mm', script)
+        self.assertIn('tools/gpu-smoke.mm', script)
+        self.assertIn('-arch arm64', script)
+        self.assertIn('ldid -S', script)
+        self.assertIn('GFMetalSmoke-ios-arm64.zip', script)
+        self.assertIn('actions/upload-artifact@v4', workflow)
+        self.assertIn('verify-ios-smoke-build.sh', workflow)
+        self.assertNotIn('make package install', script)
+
     def test_no_screenshot_capture_or_private_hook(self):
         src='\n'.join(p.read_text(encoding='utf-8') for p in (BASE/'src').glob('*')
             if p.suffix in ('.h','.mm','.metal'))

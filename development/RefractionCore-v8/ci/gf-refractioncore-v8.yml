@@ -31,6 +31,21 @@ jobs:
         run: bash development/RefractionCore-v8/tools/verify-apple-build.sh
       - name: Standalone macOS GPU smoke compile (does not need an active GPU)
         run: bash development/RefractionCore-v8/tools/verify-macos-smoke-build.sh
+      - name: Install signing tool for iPad smoke executable
+        run: |
+          brew install ldid
+          command -v ldid
+      - name: Build signed iOS ARM64 synthetic GPU test
+        env:
+          GF_SMOKE_OUTPUT_DIR: ${{ runner.temp }}/gf-v8-device-gpu
+        run: bash development/RefractionCore-v8/tools/verify-ios-smoke-build.sh
+      - name: Upload iPad GPU test binary (not a tweak or deb)
+        uses: actions/upload-artifact@v4
+        with:
+          name: gf-v8-ios-arm64-gpu-smoke
+          path: ${{ runner.temp }}/gf-v8-device-gpu/GFMetalSmoke-ios-arm64.zip
+          if-no-files-found: error
+          retention-days: 7
 
   theos-standalone-arm64:
     runs-on: macos-15
