@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 /*
- * GlassFolders V5.1 - synthetic image displacement controls (read-only).
+ * GlassFolders V5.2 - input-map and channel displacement controls (read-only).
  * No SpringBoard view mutation, wallpaper capture, screenshots or networking.
  * The V4 diagnostics entry point still calls this function once per process.
  */
@@ -45,7 +45,7 @@ static void GFV5RunSyntheticRefractionProbeOnce(void) {
     dispatch_once(&onceToken, ^{
         @autoreleasepool {
             NSMutableArray<NSString *> *report = [NSMutableArray array];
-            [report addObject:@"GlassFolders V5.1: synthetic displacement with controls"];
+            [report addObject:@"GlassFolders V5.2: displacement channels and filter inputs"];
             [report addObject:@"NOT a live SpringBoard backdrop refraction test"];
             [report addObject:[NSString stringWithFormat:@"timestamp=%@", [NSDate date]]];
 
@@ -63,7 +63,12 @@ static void GFV5RunSyntheticRefractionProbeOnce(void) {
             BOOL metalContextCreated = NO;
             BOOL allRenderCallsCompleted = NO;
             NSUInteger affineChanged = 0, neutralChanged = 0, warpChanged = 0;
+            NSUInteger patternedChanged = 0, mapChanged = 0;
             NSUInteger affineSum = 0, neutralSum = 0, warpSum = 0;
+            NSUInteger patternedSum = 0, mapSum = 0;
+            BOOL displacementInputKeyPresent = NO;
+            BOOL displacementInputAccepted = NO;
+            BOOL outputImagesPresent = NO;
             NSString *errorSummary = @"none";
             CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
             CGColorSpaceRef colorSpace = NULL;
@@ -76,9 +81,11 @@ static void GFV5RunSyntheticRefractionProbeOnce(void) {
                     NSMutableData *source = [NSMutableData dataWithLength:W * H * BPP];
                     NSMutableData *mapNeutral = [NSMutableData dataWithLength:W * H * BPP];
                     NSMutableData *mapShifted = [NSMutableData dataWithLength:W * H * BPP];
+                    NSMutableData *mapPattern = [NSMutableData dataWithLength:W * H * BPP];
                     uint8_t *s = (uint8_t *)source.mutableBytes;
                     uint8_t *n = (uint8_t *)mapNeutral.mutableBytes;
                     uint8_t *d = (uint8_t *)mapShifted.mutableBytes;
+                    uint8_t *p = (uint8_t *)mapPattern.mutableBytes;
                     for (NSUInteger y = 0; y < H; ++y) {
                         for (NSUInteger x = 0; x < W; ++x) {
                             NSUInteger i = (y * W + x) * BPP;
@@ -88,12 +95,18 @@ static void GFV5RunSyntheticRefractionProbeOnce(void) {
                             s[i + 1] = (uint8_t)((x * 13 + y * 43 + (x * y) * 3) & 255);
                             s[i + 2] = (uint8_t)((x * 29 + y * 17 + (x ^ (y * 7))) & 255);
                             s[i + 3] = 255;
-                            // Neutral grayscale map versus deliberately
-                            // shifted grayscale map. Both use the same format.
+                            // 128/128 is the neutral red/green vector.
                             n[i] = 128; n[i + 1] = 128;
                             n[i + 2] = 128; n[i + 3] = 255;
-                            d[i] = 220; d[i + 1] = 220;
-                            d[i + 2] = 220; d[i + 3] = 255;
+                            // Strong and unequal R/G channels detect filters
+                            // which interpret the two channels as a 2D vector.
+                            d[i] = 240; d[i + 1] = 18;
+                            d[i + 2] = 128; d[i + 3] = 255;
+                            // Four quadrants: spatially varying displacement,
+                            // rather than a flat color or repetitive stripes.
+                            p[i] = (x < W / 2) ? 12 : 245;
+                            p[i + 1] = (y < H / 2) ? 240 : 10;
+                            p[i + 2] = 128; p[i + 3] = 255;
                         }
                     }
                     colorSpace = CGColorSpaceCreateDeviceRGB();
@@ -106,25 +119,47 @@ static void GFV5RunSyntheticRefractionProbeOnce(void) {
                     CIImage *shiftedImage = [[CIImage alloc] initWithBitmapData:mapShifted
                         bytesPerRow:W * BPP size:CGSizeMake(W, H)
                         format:kCIFormatRGBA8 colorSpace:colorSpace];
+                    CIImage *patternImage = [[CIImage alloc] initWithBitmapData:mapPattern
+                        bytesPerRow:W * BPP size:CGSizeMake(W, H)
+                        format:kCIFormatRGBA8 colorSpace:colorSpace];
                     CIContext *context = [CIContext contextWithMTLDevice:device
                         options:@{ kCIContextCacheIntermediates: @NO }];
                     metalContextCreated = (context != nil);
-                    if (context && sourceImage && neutralImage && shiftedImage) {
-                        [warp setValue:sourceImage forKey:kCIInputImageKey];
-                        [warp setValue:@16.0 forKey:kCIInputScaleKey];
-                        [warp setValue:neutralImage forKey:@"inputDisplacementImage"];
-                        CIImage *neutralOutput = warp.outputImage;
-                        [warp setValue:shiftedImage forKey:@"inputDisplacementImage"];
-                        CIImage *shiftedOutput = warp.outputImage;
-                        // Positive control: a known 5px translation should
-                        // change plenty of pixels even if CI warp fails.
+                    if (context && sourceImage && neutralImage && shiftedImage && patternImage) {
+                        // Three separate filter objects eliminate any possible
+                        // mutable CIFilter graph reuse between output images.
+                        CIFilter *neutralWarp = [CIFilter filterWithName:@"CIDisplacementDistortion"];
+                        CIFilter *channelWarp = [CIFilter filterWithName:@"CIDisplacementDistortion"];
+                        CIFilter *patternWarp = [CIFilter filterWithName:@"CIDisplacementDistortion"];
+                        displacementInputKeyPresent = [[warp inputKeys]
+                            containsObject:@"inputDisplacementImage"];
+                        for (CIFilter *f in @[neutralWarp, channelWarp, patternWarp]) {
+                            [f setValue:sourceImage forKey:kCIInputImageKey];
+                            [f setValue:@32.0 forKey:kCIInputScaleKey];
+                        }
+                        [neutralWarp setValue:neutralImage forKey:@"inputDisplacementImage"];
+                        [channelWarp setValue:shiftedImage forKey:@"inputDisplacementImage"];
+                        [patternWarp setValue:patternImage forKey:@"inputDisplacementImage"];
+                        displacementInputAccepted =
+                            [neutralWarp valueForKey:@"inputDisplacementImage"] != nil &&
+                            [channelWarp valueForKey:@"inputDisplacementImage"] != nil &&
+                            [patternWarp valueForKey:@"inputDisplacementImage"] != nil;
+                        CIImage *neutralOutput = neutralWarp.outputImage;
+                        CIImage *shiftedOutput = channelWarp.outputImage;
+                        CIImage *patternOutput = patternWarp.outputImage;
+                        // The affine control validates rendering and comparison.
                         CIImage *affineOutput = [sourceImage imageByApplyingTransform:
                             CGAffineTransformMakeTranslation(5.0, 0.0)];
-                        if (neutralOutput && shiftedOutput && affineOutput) {
+                        outputImagesPresent = neutralOutput && shiftedOutput &&
+                            patternOutput && affineOutput;
+                        if (outputImagesPresent) {
                             NSMutableData *baseline = [NSMutableData dataWithLength:W*H*BPP];
                             NSMutableData *affine = [NSMutableData dataWithLength:W*H*BPP];
                             NSMutableData *neutral = [NSMutableData dataWithLength:W*H*BPP];
                             NSMutableData *shifted = [NSMutableData dataWithLength:W*H*BPP];
+                            NSMutableData *patterned = [NSMutableData dataWithLength:W*H*BPP];
+                            NSMutableData *neutralMapRendered = [NSMutableData dataWithLength:W*H*BPP];
+                            NSMutableData *shiftedMapRendered = [NSMutableData dataWithLength:W*H*BPP];
                             CGRect bounds = CGRectMake(0, 0, W, H);
                             [context render:sourceImage toBitmap:baseline.mutableBytes
                                 rowBytes:W*BPP bounds:bounds format:kCIFormatRGBA8
@@ -138,10 +173,22 @@ static void GFV5RunSyntheticRefractionProbeOnce(void) {
                             [context render:shiftedOutput toBitmap:shifted.mutableBytes
                                 rowBytes:W*BPP bounds:bounds format:kCIFormatRGBA8
                                 colorSpace:colorSpace];
+                            [context render:patternOutput toBitmap:patterned.mutableBytes
+                                rowBytes:W*BPP bounds:bounds format:kCIFormatRGBA8
+                                colorSpace:colorSpace];
+                            [context render:neutralImage toBitmap:neutralMapRendered.mutableBytes
+                                rowBytes:W*BPP bounds:bounds format:kCIFormatRGBA8
+                                colorSpace:colorSpace];
+                            [context render:shiftedImage toBitmap:shiftedMapRendered.mutableBytes
+                                rowBytes:W*BPP bounds:bounds format:kCIFormatRGBA8
+                                colorSpace:colorSpace];
                             allRenderCallsCompleted = YES;
                             affineChanged = GFV51CountPixelDifferences(baseline, affine, &affineSum);
                             neutralChanged = GFV51CountPixelDifferences(baseline, neutral, &neutralSum);
                             warpChanged = GFV51CountPixelDifferences(baseline, shifted, &warpSum);
+                            patternedChanged = GFV51CountPixelDifferences(baseline, patterned, &patternedSum);
+                            mapChanged = GFV51CountPixelDifferences(neutralMapRendered,
+                                shiftedMapRendered, &mapSum);
                         }
                     }
                 }
@@ -152,32 +199,41 @@ static void GFV5RunSyntheticRefractionProbeOnce(void) {
             }
 
             BOOL affineControlWorks = allRenderCallsCompleted && affineChanged > 100;
-            BOOL syntheticWarpWorks = affineControlWorks && warpChanged > 100 &&
-                warpChanged > neutralChanged + 100 && warpSum > neutralSum * 3;
+            BOOL syntheticWarpWorks = affineControlWorks && mapChanged > 100 &&
+                displacementInputKeyPresent && displacementInputAccepted &&
+                ((warpChanged > neutralChanged + 100 && warpSum > neutralSum + 1000) ||
+                 (patternedChanged > neutralChanged + 100 && patternedSum > neutralSum + 1000));
             [report addObject:[NSString stringWithFormat:@"coreImageDisplacementAvailable=%d", filterAvailable]];
             [report addObject:[NSString stringWithFormat:@"metalContextCreated=%d", metalContextCreated]];
             [report addObject:[NSString stringWithFormat:@"allRenderCallsCompleted=%d", allRenderCallsCompleted]];
+            [report addObject:[NSString stringWithFormat:@"displacementInputKeyPresent=%d", displacementInputKeyPresent]];
+            [report addObject:[NSString stringWithFormat:@"displacementInputAccepted=%d", displacementInputAccepted]];
+            [report addObject:[NSString stringWithFormat:@"outputImagesPresent=%d", outputImagesPresent]];
+            [report addObject:[NSString stringWithFormat:@"inputMapsChangedPixels=%lu", (unsigned long)mapChanged]];
+            [report addObject:[NSString stringWithFormat:@"inputMapsAbsoluteDifference=%lu", (unsigned long)mapSum]];
             [report addObject:[NSString stringWithFormat:@"affineControlChangedPixels=%lu", (unsigned long)affineChanged]];
             [report addObject:[NSString stringWithFormat:@"neutralMapChangedPixels=%lu", (unsigned long)neutralChanged]];
             [report addObject:[NSString stringWithFormat:@"displacementMapChangedPixels=%lu", (unsigned long)warpChanged]];
+            [report addObject:[NSString stringWithFormat:@"patternMapChangedPixels=%lu", (unsigned long)patternedChanged]];
             [report addObject:[NSString stringWithFormat:@"affineAbsoluteDifference=%lu", (unsigned long)affineSum]];
             [report addObject:[NSString stringWithFormat:@"neutralAbsoluteDifference=%lu", (unsigned long)neutralSum]];
             [report addObject:[NSString stringWithFormat:@"displacementAbsoluteDifference=%lu", (unsigned long)warpSum]];
+            [report addObject:[NSString stringWithFormat:@"patternAbsoluteDifference=%lu", (unsigned long)patternedSum]];
             [report addObject:[NSString stringWithFormat:@"syntheticWarpWorks=%d", syntheticWarpWorks]];
             [report addObject:[NSString stringWithFormat:@"renderDurationMs=%.1f", (CFAbsoluteTimeGetCurrent() - start) * 1000.0]];
             [report addObject:[NSString stringWithFormat:@"error=%@", errorSummary]];
             [report addObject:@"liveBackdropAcquisitionVerified=0"];
-            [report addObject:@"note=Controls distinguish CI rendering from displacement; no live background was captured."];
+            [report addObject:@"note=Separate filters, R/G vectors, spatial map and rendered map control; no live background captured."];
 
             NSString *folder = @"/var/mobile/Library/Caches/GlassFolders";
             NSError *mkdirError = nil;
             [[NSFileManager defaultManager] createDirectoryAtPath:folder
                 withIntermediateDirectories:YES attributes:nil error:&mkdirError];
-            NSString *reportPath = [folder stringByAppendingPathComponent:@"LibraryRefraction-v5.1.txt"];
+            NSString *reportPath = [folder stringByAppendingPathComponent:@"LibraryRefraction-v5.2.txt"];
             NSError *writeError = nil;
             BOOL written = [[report componentsJoinedByString:@"\n"]
                 writeToFile:reportPath atomically:YES encoding:NSUTF8StringEncoding error:&writeError];
-            NSLog(@"[GlassFolders V5.1] controls complete: affine=%lu neutral=%lu shifted=%lu saved=%d error=%@",
+            NSLog(@"[GlassFolders V5.2] controls complete: affine=%lu neutral=%lu shifted=%lu saved=%d error=%@",
                 (unsigned long)affineChanged, (unsigned long)neutralChanged,
                 (unsigned long)warpChanged, written,
                 writeError ? writeError.domain : @"none");
