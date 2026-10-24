@@ -48,6 +48,9 @@ static BOOL GFAppleLiquidMaterialEnabled = NO;
 // Dock is independent of folder/App Library preferences, and opt-in on upgrade.
 static BOOL GFDockEnabled = NO;
 static NSInteger GFDockMode = 0; // 0 hide background, 1 glass
+// Independent, opt-in Dock-only material experiment. Overrides the older
+// volume prototype for Dock only, leaving App Library and folders unchanged.
+static BOOL GFDockLensMaterialEnabled = NO;
 
 // Lock-screen surfaces are independent, opt-in, and share the same entitlement.
 static BOOL GFLockNotificationsEnabled = NO;
@@ -157,6 +160,8 @@ static void GFLoadPreferences(void) {
 
     GFDockEnabled = licensed && GFReadBool(CFSTR("DockEnabled"), NO);
     GFDockMode = GFReadInteger(CFSTR("DockMode"), 0) == 1 ? 1 : 0;
+    GFDockLensMaterialEnabled = licensed &&
+        GFReadBool(CFSTR("DockLensMaterialEnabled"), NO);
 
     GFLockNotificationsEnabled = licensed && GFReadBool(CFSTR("LockNotificationsEnabled"), NO);
     GFLockQuickActionsEnabled = licensed && GFReadBool(CFSTR("LockQuickActionsEnabled"), NO);
@@ -4055,6 +4060,8 @@ static void GFUpdateDockBackground(UIView *host) {
         CGFloat radius = background.layer.cornerRadius;
         if (radius <= 0.0) radius = MIN(30.0, background.bounds.size.height * 0.5);
         [glass setPreferredRadius:radius];
+        // Apply Dock-only optical preset on live preference changes too.
+        [glass gfRefreshMaterial];
         [glass setNeedsLayout];
     } else {
         [state.glass removeFromSuperview];

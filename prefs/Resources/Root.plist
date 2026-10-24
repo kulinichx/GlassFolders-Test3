@@ -332,6 +332,18 @@
 		</dict>
 		<dict>
 			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Dock Clear Lens (Beta)</string>
+			<key>key</key>
+			<string>DockLensMaterialEnabled</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.kulinich.glassfolders</string>
+		</dict>
+		<dict>
+			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
 			<string>About</string>
