@@ -2102,6 +2102,62 @@ static void GFRefreshAppLibraryController(
 %end
 
 
+/*
+ * iPadOS can host the visible App Library search bar in the independent
+ * SBHLibrarySearchController, outside SBLibraryViewController.view.
+ * The category-pod controller hook therefore cannot always see the pill.
+ * Refresh only the search overlay in this controller; do not traverse or
+ * modify the category pods here.
+ */
+@interface SBHLibrarySearchController : UIViewController
+@end
+
+%group GFIPadAppLibrarySearchControllerHooks
+
+%hook SBHLibrarySearchController
+
+- (void)viewWillAppear:(BOOL)animated {
+    %orig(animated);
+    if (self.isViewLoaded) {
+        GFUpdateAppLibrarySearchView(self.view);
+    }
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    %orig(animated);
+    if (!self.isViewLoaded) return;
+
+    GFUpdateAppLibrarySearchView(self.view);
+
+    // The private search bar can attach after this callback on iPadOS.
+    __weak UIViewController *weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIViewController *strongSelf = weakSelf;
+        if (strongSelf && strongSelf.isViewLoaded) {
+            GFUpdateAppLibrarySearchView(strongSelf.view);
+        }
+    });
+}
+
+- (void)viewDidLayoutSubviews {
+    %orig;
+    if (self.isViewLoaded) {
+        GFUpdateAppLibrarySearchView(self.view);
+    }
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    %orig(previousTraitCollection);
+    if (self.isViewLoaded) {
+        GFUpdateAppLibrarySearchView(self.view);
+    }
+}
+
+%end
+
+%end
+
+
 %group GFAppLibraryHooks
 
 %hook SBHLibraryCategoryPodBackgroundView
@@ -4613,6 +4669,15 @@ static void GFUpdateOpenedFolderBackground(
         Class libraryClass = objc_getClass("SBLibraryViewController");
         if ([libraryClass isSubclassOfClass:UIViewController.class]) {
             %init(GFAppLibraryControllerHooks);
+        }
+
+        // iPad App Library search may be owned by a separate controller.
+        // Restrict this additional private-class hook to iPads so the existing
+        // iPhone path and all category-pod effects remain unchanged.
+        Class librarySearchClass = objc_getClass("SBHLibrarySearchController");
+        if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad &&
+            [librarySearchClass isSubclassOfClass:UIViewController.class]) {
+            %init(GFIPadAppLibrarySearchControllerHooks);
         }
 
         /*
