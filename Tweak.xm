@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#import "GFV6LiveLens.h"
 #import "GFV5RefractionProbe.h"
 #import <CoreFoundation/CoreFoundation.h>
 #import <QuartzCore/QuartzCore.h>
@@ -161,6 +162,8 @@ static void GFLoadPreferences(void) {
 
     GFAppLibraryGlassEnabled =
         licensed && GFReadBool(CFSTR("AppLibraryGlassEnabled"), NO);
+    GFV6RefractionEnabled = licensed &&
+        GFReadBool(CFSTR("AppLibraryV6RefractionEnabled"), NO);
     GFAppLibraryBlurDiagnosticsEnabled =
         GFReadBool(CFSTR("AppLibraryBlurDiagnosticsEnabled"), NO);
     GFAppleLiquidMaterialEnabled = licensed &&
@@ -2184,6 +2187,18 @@ static void GFV4RecordAppLibraryBlur(UIViewController *controller) {
 - (void)viewDidAppear:(BOOL)animated {
     %orig(animated);
     GFRefreshAppLibraryController(self);
+
+    // V6: one visible category only. A single in-memory snapshot on appearance;
+    // no timers, no persistent screenshot and no change to search/Dock hooks.
+    __weak UIViewController *gfV6Weak = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.55 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        UIViewController *controller = gfV6Weak;
+        if (controller && controller.isViewLoaded && controller.view.window) {
+            GFV6UpdateVisibleCard(controller.view,
+                GFV6RefractionEnabled && GFAppLibraryGlassEnabled);
+        }
+    });
 
     // Capture once per appearance, never on every layout pass.
     if (GFAppLibraryBlurDiagnosticsEnabled) {
