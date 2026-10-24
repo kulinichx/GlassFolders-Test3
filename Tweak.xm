@@ -1238,7 +1238,7 @@ static BOOL GFAppLibrarySearchGeometryMatches(
     BOOL isPad = root.traitCollection.userInterfaceIdiom == UIUserInterfaceIdiomPad ||
         (root.traitCollection.userInterfaceIdiom == UIUserInterfaceIdiomUnspecified &&
          rootWidth >= 700.0);
-    CGFloat minimumWidthRatio = isPad ? 0.30 : 0.52;
+    CGFloat minimumWidthRatio = isPad ? 0.20 : 0.52;
     BOOL wideEnough =
         width >= rootWidth * minimumWidthRatio &&
         width <= rootWidth * 0.98;
