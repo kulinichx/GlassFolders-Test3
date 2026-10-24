@@ -907,6 +907,7 @@ static char kGFAppLibraryRootMarkerKey;
 
 // Beta 3.4: App Library search field shares the App Library glass setting.
 static char kGFAppLibrarySearchOverlayAssociationKey;
+static char kGFAppLibrarySearchActiveCandidateKey;
 static char kGFAppLibrarySearchOriginalBackgroundColorKey;
 static char kGFAppLibrarySearchNativeBackgroundAlphaKey;
 
@@ -1229,12 +1230,17 @@ static BOOL GFAppLibrarySearchGeometryMatches(
     }
 
     /*
-     * Intentionally broad enough for iPhone display-scale/layout variants.
-     * The real App Library pill occupies roughly 65–92% of the page width,
-     * is shallow, and lives in the first quarter of the page.
+     * iPhone's pill is almost full width, but iPad uses a shorter centered
+     * search capsule. The old fixed 52% floor rejected the real iPad pill
+     * before the overlay could ever be installed (especially in portrait
+     * and Split View). Keep the remaining shape and position checks strict.
      */
+    BOOL isPad = root.traitCollection.userInterfaceIdiom == UIUserInterfaceIdiomPad ||
+        (root.traitCollection.userInterfaceIdiom == UIUserInterfaceIdiomUnspecified &&
+         rootWidth >= 700.0);
+    CGFloat minimumWidthRatio = isPad ? 0.30 : 0.52;
     BOOL wideEnough =
-        width >= rootWidth * 0.52 &&
+        width >= rootWidth * minimumWidthRatio &&
         width <= rootWidth * 0.98;
 
     BOOL shallowEnough =
@@ -1312,7 +1318,8 @@ static void GFFindBestAppLibrarySearchInput(
     if (!view ||
         !root ||
         !bestView ||
-        !bestScore) {
+        !bestScore ||
+        [view isKindOfClass:[GFAppLibraryGlassView class]]) {
         return;
     }
 
@@ -1386,6 +1393,10 @@ static CGFloat GFAppLibrarySearchContainerScore(
     UIView *view,
     UIView *root
 ) {
+    // Never mistake our own inserted glass for a native search capsule.
+    if ([view isKindOfClass:[GFAppLibraryGlassView class]]) {
+        return -CGFLOAT_MAX;
+    }
     if (!GFAppLibrarySearchGeometryMatches(
             view,
             root
@@ -1543,7 +1554,8 @@ static void GFFindGeometrySearchContainer(
     if (!view ||
         !root ||
         !bestView ||
-        !bestScore) {
+        !bestScore ||
+        [view isKindOfClass:[GFAppLibraryGlassView class]]) {
         return;
     }
 
@@ -1779,22 +1791,25 @@ static void GFUpdateAppLibrarySearchView(
 ) {
     if (!root) return;
 
-    UIView *candidate =
-        GFFindAppLibrarySearchContainer(
-            root
-        );
+    // The iPad search wrapper can be replaced after rotation or page changes.
+    // Restore the previous candidate even if geometry matching now fails.
+    UIView *previous = objc_getAssociatedObject(
+        root, &kGFAppLibrarySearchActiveCandidateKey);
+    UIView *candidate = GFFindAppLibrarySearchContainer(root);
+    BOOL enabled = GFAppLibraryGlassEnabled;
 
-    if (!candidate) {
+    if (previous && (previous != candidate || !enabled)) {
+        GFRestoreAppLibrarySearchView(previous);
+    }
+
+    if (!enabled || !candidate) {
+        objc_setAssociatedObject(root, &kGFAppLibrarySearchActiveCandidateKey,
+                                 nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         return;
     }
 
-    BOOL enabled =
-        GFAppLibraryGlassEnabled;
-
-    if (!enabled) {
-        GFRestoreAppLibrarySearchView(candidate);
-        return;
-    }
+    objc_setAssociatedObject(root, &kGFAppLibrarySearchActiveCandidateKey,
+                             candidate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
     id savedBackground =
         objc_getAssociatedObject(
