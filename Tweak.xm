@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#import "GFNativeLiveGlass.h"
 #import "GFV5RefractionProbe.h"
 #import <CoreFoundation/CoreFoundation.h>
 #import <QuartzCore/QuartzCore.h>
@@ -161,6 +162,7 @@ static void GFLoadPreferences(void) {
 
     GFAppLibraryGlassEnabled =
         licensed && GFReadBool(CFSTR("AppLibraryGlassEnabled"), NO);
+    GFNativeLiveGlassEnabled = GFReadBool(CFSTR("AppLibraryNativeLiveGlassEnabled"), NO);
     GFAppLibraryBlurDiagnosticsEnabled =
         GFReadBool(CFSTR("AppLibraryBlurDiagnosticsEnabled"), NO);
     GFAppleLiquidMaterialEnabled = licensed &&
@@ -2184,6 +2186,17 @@ static void GFV4RecordAppLibraryBlur(UIViewController *controller) {
 - (void)viewDidAppear:(BOOL)animated {
     %orig(animated);
     GFRefreshAppLibraryController(self);
+    // Native live glass: one App Library card, backed by an attached
+    // render-server filter. No screenshot, no stock-material hiding.
+    __weak UIViewController *gfNativeWeakController = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.40*NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        UIViewController *controller = gfNativeWeakController;
+        if (controller && controller.isViewLoaded && controller.view.window) {
+            GFNativeLiveInstall(controller.view,
+                GFNativeLiveGlassEnabled && GFAppLibraryGlassEnabled);
+        }
+    });
 
     // Capture once per appearance, never on every layout pass.
     if (GFAppLibraryBlurDiagnosticsEnabled) {
