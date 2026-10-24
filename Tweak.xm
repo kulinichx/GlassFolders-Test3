@@ -162,9 +162,9 @@ static void GFLoadPreferences(void) {
 
     GFAppLibraryGlassEnabled =
         licensed && GFReadBool(CFSTR("AppLibraryGlassEnabled"), NO);
-    GFNativeLiveGlassEnabled = GFReadBool(CFSTR("AppLibraryNativeLiveGlassEnabled"), NO);
+    GFNativeLiveGlassEnabled = NO /* v7.3: hidden unsupported experiment */;
     GFAppLibraryBlurDiagnosticsEnabled =
-        GFReadBool(CFSTR("AppLibraryBlurDiagnosticsEnabled"), NO);
+        NO /* v7.3: hidden unsupported experiment */;
     GFAppleLiquidMaterialEnabled = licensed &&
         GFReadBool(CFSTR("AppleLiquidMaterialEnabled"), NO);
     GFAppLibraryLensMaterialEnabled = licensed &&

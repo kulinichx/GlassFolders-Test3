@@ -74,37 +74,9 @@
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>
-			<string>Native Live Refraction (Requires Engine)</string>
-			<key>key</key>
-			<string>AppLibraryNativeLiveGlassEnabled</string>
-			<key>default</key>
-			<false/>
-			<key>defaults</key>
-			<string>com.kulinich.glassfolders</string>
-			<key>gfSection</key>
-			<string>home</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>label</key>
 			<string>App Library Clear Lens (Beta)</string>
 			<key>key</key>
 			<string>AppLibraryLensMaterialEnabled</string>
-			<key>default</key>
-			<false/>
-			<key>defaults</key>
-			<string>com.kulinich.glassfolders</string>
-			<key>gfSection</key>
-			<string>home</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>label</key>
-			<string>App Library Blur Diagnostics (V4)</string>
-			<key>key</key>
-			<string>AppLibraryBlurDiagnosticsEnabled</string>
 			<key>default</key>
 			<false/>
 			<key>defaults</key>
