@@ -42,6 +42,8 @@ static CGFloat GFGlassStrength = 0.0;        // active style strength for existi
 
 // App Library remains intentionally independent from normal folders.
 static BOOL GFAppLibraryGlassEnabled = NO;
+// V4: opt-in diagnostic, never changes glass rendering.
+static BOOL GFAppLibraryBlurDiagnosticsEnabled = NO;
 // Experimental volume-first material. Off by default; no extra rim glints.
 static BOOL GFAppleLiquidMaterialEnabled = NO;
 // Isolated clear-lens experiment for App Library search and category pods.
@@ -158,6 +160,8 @@ static void GFLoadPreferences(void) {
 
     GFAppLibraryGlassEnabled =
         licensed && GFReadBool(CFSTR("AppLibraryGlassEnabled"), NO);
+    GFAppLibraryBlurDiagnosticsEnabled =
+        GFReadBool(CFSTR("AppLibraryBlurDiagnosticsEnabled"), NO);
     GFAppleLiquidMaterialEnabled = licensed &&
         GFReadBool(CFSTR("AppleLiquidMaterialEnabled"), NO);
     GFAppLibraryLensMaterialEnabled = licensed &&
@@ -2048,6 +2052,119 @@ static void GFRefreshAppLibraryController(
 }
 
 
+/*
+ * V4: read-only App Library visual tree probe. No wallpaper mutation.
+ * Never collect screenshots, label text or app names. Sampling is bounded
+ * and happens only after page appearance while explicitly enabled.
+ */
+static NSString *GFV4FilterSummary(NSArray *filters) {
+    if (!filters.count) return @"-";
+    NSMutableArray *labels = [NSMutableArray array];
+    for (id filter in filters) {
+        NSString *type = NSStringFromClass([filter class]);
+        @try {
+            id key = [filter valueForKey:@"type"];
+            if ([key isKindOfClass:NSString.class]) type = key;
+        } @catch (__unused NSException *exception) {}
+        id radius = nil;
+        @try { radius = [filter valueForKey:@"inputRadius"]; }
+        @catch (__unused NSException *exception) {}
+        if ([radius isKindOfClass:NSNumber.class])
+            type = [type stringByAppendingFormat:@"(%.1f)", [radius doubleValue]];
+        [labels addObject:type];
+        if (labels.count == 4) break;
+    }
+    return [labels componentsJoinedByString:@","];
+}
+
+static void GFV4ScanView(UIView *view, NSInteger depth, CGFloat area,
+                         NSUInteger *visited, NSMutableArray *lines) {
+    if (!view || depth > 20 || *visited >= 1800 || lines.count >= 160) return;
+    ++(*visited);
+    NSString *name = NSStringFromClass(view.class);
+    CALayer *layer = view.layer;
+    NSString *layerName = NSStringFromClass(layer.class);
+    NSString *lower = name.lowercaseString;
+    NSArray *filters = layer.filters;
+    NSArray *backgroundFilters = layer.backgroundFilters;
+    BOOL nativeEffect = [view isKindOfClass:UIVisualEffectView.class];
+    BOOL own = [view isKindOfClass:GFAppLibraryGlassView.class];
+    BOOL material = own || nativeEffect || filters.count || backgroundFilters.count ||
+        [lower containsString:@"wallpaper"] || [lower containsString:@"blur"] ||
+        [lower containsString:@"library"] || [lower containsString:@"backdrop"] ||
+        [lower containsString:@"material"] ||
+        [layerName.lowercaseString containsString:@"backdrop"];
+    CGFloat viewArea = MAX(0.0, view.bounds.size.width) * MAX(0.0, view.bounds.size.height);
+    if (material || (depth < 10 && viewArea > area * 0.65)) {
+        NSString *effectName = @"-";
+        if (nativeEffect) {
+            UIVisualEffect *effect = ((UIVisualEffectView *)view).effect;
+            if (effect) effectName = NSStringFromClass(effect.class);
+        }
+        [lines addObject:[NSString stringWithFormat:
+            @"d=%ld view=%@ layer=%@ w=%.0f h=%.0f alpha=%.2f hidden=%d own=%d fx=%@ bgfx=%@ effect=%@",
+            (long)depth, name, layerName, view.bounds.size.width,
+            view.bounds.size.height, view.alpha, view.hidden, own,
+            GFV4FilterSummary(filters), GFV4FilterSummary(backgroundFilters), effectName]];
+    }
+    for (UIView *child in [view.subviews copy]) {
+        GFV4ScanView(child, depth + 1, area, visited, lines);
+        if (*visited >= 1800 || lines.count >= 160) break;
+    }
+}
+
+static void GFV4RecordAppLibraryBlur(UIViewController *controller) {
+    if (!GFAppLibraryBlurDiagnosticsEnabled || !controller.isViewLoaded) return;
+    UIView *root = controller.view;
+    UIWindow *window = root.window;
+    if (!window) return;
+    NSMutableArray *lines = [NSMutableArray array];
+    [lines addObject:[NSString stringWithFormat:
+        @"\n== AppLibrary V4 %@ controller=%@ enabled=%d clearLens=%d size=%.0fx%.0f ==",
+        [NSDate date], NSStringFromClass(controller.class),
+        GFAppLibraryGlassEnabled, GFAppLibraryLensMaterialEnabled,
+        window.bounds.size.width, window.bounds.size.height]];
+    NSUInteger visited = 0;
+    CGFloat area = MAX(1.0, window.bounds.size.width * window.bounds.size.height);
+    GFV4ScanView(root, 0, area, &visited, lines);
+    // Controller ancestors and near-fullscreen siblings can own wallpaper blur.
+    UIView *node = root;
+    for (NSInteger i=0; i < 7 && node.superview && lines.count < 160; ++i) {
+        UIView *parent = node.superview;
+        [lines addObject:[NSString stringWithFormat:@"ancestor=%ld %@",
+            (long)i, NSStringFromClass(parent.class)]];
+        for (UIView *sibling in [parent.subviews copy]) {
+            if (sibling == node || sibling.hidden || sibling.alpha < 0.01) continue;
+            CGFloat size = sibling.bounds.size.width * sibling.bounds.size.height;
+            if (size >= area * 0.50)
+                GFV4ScanView(sibling, 0, area, &visited, lines);
+            if (visited >= 1800 || lines.count >= 160) break;
+        }
+        node = parent;
+    }
+    [lines addObject:[NSString stringWithFormat:@"visited=%lu", (unsigned long)visited]];
+    NSString *dir = @"/var/mobile/Library/Caches/GlassFolders";
+    NSError *err = nil;
+    if (![[NSFileManager defaultManager] createDirectoryAtPath:dir
+        withIntermediateDirectories:YES attributes:nil error:&err]) {
+        NSLog(@"[GlassFolders V4] cannot create log dir: %@", err);
+        return;
+    }
+    NSString *path = [dir stringByAppendingPathComponent:@"LibraryBlur-v4.txt"];
+    NSData *data = [[[lines componentsJoinedByString:@"\n"] stringByAppendingString:@"\n"]
+        dataUsingEncoding:NSUTF8StringEncoding];
+    NSDictionary *info = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:nil];
+    if ([info[NSFileSize] unsignedLongLongValue] > 100000 || !info) {
+        [data writeToFile:path atomically:YES];
+    } else {
+        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:path];
+        @try { [handle seekToEndOfFile]; [handle writeData:data]; }
+        @catch (__unused NSException *exception) { NSLog(@"[GlassFolders V4] append failed"); }
+        @finally { [handle closeFile]; }
+    }
+    NSLog(@"[GlassFolders V4] report: %@", path);
+}
+
 @interface SBHLibraryCategoryPodBackgroundView : UIView
 @end
 
@@ -2066,6 +2183,18 @@ static void GFRefreshAppLibraryController(
 - (void)viewDidAppear:(BOOL)animated {
     %orig(animated);
     GFRefreshAppLibraryController(self);
+
+    // Capture once per appearance, never on every layout pass.
+    if (GFAppLibraryBlurDiagnosticsEnabled) {
+        __weak UIViewController *weakController = self;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.65 * NSEC_PER_SEC)),
+            dispatch_get_main_queue(), ^{
+                UIViewController *target = weakController;
+                if (target && target.isViewLoaded && target.view.window) {
+                    GFV4RecordAppLibraryBlur(target);
+                }
+            });
+    }
 
     /*
      * Some category pods are recycled/attached immediately after the first
@@ -2210,6 +2339,18 @@ static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
     if (!self.isViewLoaded) return;
 
     GFRefreshIPadLibraryHostSearch(self);
+
+    // This host often owns the iPad background, outside pod controller.view.
+    if (GFAppLibraryBlurDiagnosticsEnabled) {
+        __weak UIViewController *weakHost = self;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.90 * NSEC_PER_SEC)),
+            dispatch_get_main_queue(), ^{
+                UIViewController *host = weakHost;
+                if (host && host.isViewLoaded && host.view.window) {
+                    GFV4RecordAppLibraryBlur(host);
+                }
+            });
+    }
 
     // SpringBoard may restore the native background after the transition.
     __weak UIViewController *weakSelf = self;
