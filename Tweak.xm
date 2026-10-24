@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#import "GFV5RefractionProbe.h"
 #import <CoreFoundation/CoreFoundation.h>
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
@@ -2192,6 +2193,9 @@ static void GFV4RecordAppLibraryBlur(UIViewController *controller) {
                 UIViewController *target = weakController;
                 if (target && target.isViewLoaded && target.view.window) {
                     GFV4RecordAppLibraryBlur(target);
+                    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+                        GFV5RunSyntheticRefractionProbeOnce();
+                    });
                 }
             });
     }
