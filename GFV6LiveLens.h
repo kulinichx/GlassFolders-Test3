@@ -188,7 +188,7 @@ static UIImage *GFV6MakeRefractedRing(UIImage *source, CGRect cardInSample,
         }
     }
     // Explicit bitmap lifetime: copy pixel bytes into the CGImage provider.
-    CFDataRef bytes = CFDataCreate(kCFAllocatorDefault,rgba.bytes,rgba.length);
+    CFDataRef bytes = CFDataCreate(kCFAllocatorDefault, (const UInt8 *)rgba.bytes, (CFIndex)rgba.length);
     if (!bytes) return nil;
     CGDataProviderRef provider = CGDataProviderCreateWithCFData(bytes);
     CFRelease(bytes);
