@@ -17,6 +17,8 @@
 @property (nonatomic, strong) GFAppLibraryBackdropView *gfBackdropSampleView;
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
 @property (nonatomic, strong) CAGradientLayer *gfBodyVeil;
+// Broad, low-contrast perimeter density -- not a bright outline.
+@property (nonatomic, strong) CAGradientLayer *gfVolumeFalloff;
 @property (nonatomic, strong) GFHorizontalGlassRimView *gfCardRim;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
@@ -27,6 +29,7 @@
 @property (nonatomic, assign) NSInteger gfMaterialStyle;
 @property (nonatomic, assign) BOOL gfMaterialSearchVariant;
 @property (nonatomic, assign) BOOL gfMaterialDockVariant;
+@property (nonatomic, assign) BOOL gfMaterialAppleLiquid;
 - (instancetype)initWithStrength:(CGFloat)strength;
 - (void)setPreferredRadius:(CGFloat)radius;
 - (void)gfRefreshMaterial;
@@ -58,6 +61,15 @@
         _gfBodyVeil.zPosition = 19.0;
         [self.layer addSublayer:_gfBodyVeil];
 
+        _gfVolumeFalloff = [CAGradientLayer layer];
+        _gfVolumeFalloff.type = kCAGradientLayerRadial;
+        _gfVolumeFalloff.startPoint = CGPointMake(0.5, 0.5);
+        _gfVolumeFalloff.endPoint = CGPointMake(1.0, 1.0);
+        _gfVolumeFalloff.locations = @[@0.0, @0.58, @0.86, @1.0];
+        _gfVolumeFalloff.zPosition = 20.0;
+        _gfVolumeFalloff.hidden = YES;
+        [self.layer addSublayer:_gfVolumeFalloff];
+
         // App Library gets a restrained horizontal bevel; the lock-screen rim
         // continues using its accepted lighting and widths unchanged.
         _gfCardRim = [[GFHorizontalGlassRimView alloc] initWithFrame:CGRectZero];
@@ -78,18 +90,31 @@
 - (void)gfRefreshMaterial {
     BOOL dark = GFUsesDarkAppearance(self);
     NSInteger style = self.gfDockVariant ? 1 : GFResolvedAppLibraryStyle();
+    BOOL appleLiquid = GFAppleLiquidMaterialEnabled;
     // Pod hooks run on layout. Reuse filters and layers until their material
     // changes, including updates while App Library is already on screen.
     if (self.gfHasMaterial && self.gfMaterialDark == dark && self.gfMaterialStyle == style &&
         self.gfMaterialSearchVariant == self.gfSearchVariant &&
-        self.gfMaterialDockVariant == self.gfDockVariant) return;
+        self.gfMaterialDockVariant == self.gfDockVariant &&
+        self.gfMaterialAppleLiquid == appleLiquid) return;
     self.gfHasMaterial = YES;
     self.gfMaterialDark = dark;
     self.gfMaterialStyle = style;
     self.gfMaterialSearchVariant = self.gfSearchVariant;
     self.gfMaterialDockVariant = self.gfDockVariant;
+    self.gfMaterialAppleLiquid = appleLiquid;
     GFAppLibraryMaterialRecipe recipe = self.gfDockVariant ?
         (GFAppLibraryMaterialRecipe){10.0, 1.04, 1.0} : GFAppLibraryRecipe(self.gfSearchVariant, dark);
+    if (appleLiquid) {
+        // iOS-27-inspired transmission: preserve wallpaper chroma and
+        // visible content instead of adding an opaque tint or fine glint.
+        // These are visual approximations, NOT Apple's refraction shader.
+        recipe = self.gfSearchVariant ?
+            (GFAppLibraryMaterialRecipe){8.5, 1.32, 1.0} :
+            self.gfDockVariant ?
+            (GFAppLibraryMaterialRecipe){12.0, 1.28, 1.0} :
+            (GFAppLibraryMaterialRecipe){11.0, 1.30, 1.0};
+    }
     CALayer *backdrop = self.gfBackdropSampleView.layer;
     BOOL hasBlur = NO;
     if ([NSStringFromClass(backdrop.class) containsString:@"Backdrop"]) {
@@ -134,14 +159,38 @@
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     CGFloat density = recipe.veilStrength * (self.gfSearchVariant ? 0.8 : 1.0);
-    self.gfBodyVeil.colors = @[
-        (id)[UIColor colorWithWhite:1.0 alpha:0.012 * density].CGColor,
-        (id)[UIColor colorWithWhite:1.0 alpha:0.004 * density].CGColor,
-        (id)[UIColor colorWithWhite:0.0 alpha:0.004 * density].CGColor,
-        (id)[UIColor colorWithWhite:0.0 alpha:0.008 * density].CGColor,
-        (id)[UIColor colorWithWhite:1.0 alpha:0.003 * density].CGColor,
-        (id)[UIColor colorWithWhite:1.0 alpha:0.006 * density].CGColor
-    ];
+    if (appleLiquid) {
+        // The WHOLE capsule/pod is a lens-like volume. A diffuse top-to-bottom
+        // luminosity shift and soft peripheral density replace extra borders.
+        // Body colors remain grayscale so wallpaper color passes through.
+        CGFloat weight = self.gfSearchVariant ? 0.75 : 1.0;
+        self.gfBodyVeil.colors = @[
+            (id)[UIColor colorWithWhite:1.0 alpha:(dark ? 0.15 : 0.105) * weight].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:(dark ? 0.085 : 0.055) * weight].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.018 * weight].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.012 * weight].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:(dark ? 0.055 : 0.08) * weight].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.018 * weight].CGColor
+        ];
+        self.gfVolumeFalloff.colors = @[
+            (id)[UIColor colorWithWhite:1.0 alpha:0.015].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.0].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:(dark ? 0.028 : 0.038)].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:(dark ? 0.075 : 0.10)].CGColor
+        ];
+    } else {
+        self.gfBodyVeil.colors = @[
+            (id)[UIColor colorWithWhite:1.0 alpha:0.012 * density].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.004 * density].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.004 * density].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.008 * density].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.003 * density].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.006 * density].CGColor
+        ];
+    }
+    self.gfVolumeFalloff.hidden = !appleLiquid;
+    // Keep the old rim quiet in the experimental look: no added bright rail.
+    self.gfCardRim.alpha = appleLiquid ? 0.40 : 1.0;
     [CATransaction commit];
     [self setNeedsLayout];
 }
@@ -160,6 +209,7 @@
     radius = MIN(radius, limit);
     self.layer.cornerRadius = radius;
     self.gfBodyVeil.frame = self.bounds;
+    self.gfVolumeFalloff.frame = self.bounds;
     CGFloat height = MAX(1.0, CGRectGetHeight(self.bounds));
     CGFloat lip = MIN(0.16, (self.gfSearchVariant ? 8.0 : (self.gfDockVariant ? 12.0 : 18.0)) / height);
     self.gfBodyVeil.locations = @[@0.0, @(lip), @0.40, @0.65, @(1.0 - lip), @1.0];

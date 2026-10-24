@@ -42,6 +42,8 @@ static CGFloat GFGlassStrength = 0.0;        // active style strength for existi
 
 // App Library remains intentionally independent from normal folders.
 static BOOL GFAppLibraryGlassEnabled = NO;
+// Experimental volume-first material. Off by default; no extra rim glints.
+static BOOL GFAppleLiquidMaterialEnabled = NO;
 
 // Dock is independent of folder/App Library preferences, and opt-in on upgrade.
 static BOOL GFDockEnabled = NO;
@@ -150,6 +152,8 @@ static void GFLoadPreferences(void) {
 
     GFAppLibraryGlassEnabled =
         licensed && GFReadBool(CFSTR("AppLibraryGlassEnabled"), NO);
+    GFAppleLiquidMaterialEnabled = licensed &&
+        GFReadBool(CFSTR("AppleLiquidMaterialEnabled"), NO);
 
     GFDockEnabled = licensed && GFReadBool(CFSTR("DockEnabled"), NO);
     GFDockMode = GFReadInteger(CFSTR("DockMode"), 0) == 1 ? 1 : 0;
