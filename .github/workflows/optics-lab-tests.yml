@@ -1,0 +1,45 @@
+name: iOS 16 Optics Lab static checks
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'GFPrismRim.h'
+      - 'Tweak.xm'
+      - 'prefs/Resources/**'
+      - 'tests/test_prism_rim.c'
+      - '.github/workflows/optics-lab-tests.yml'
+  push:
+    branches:
+      - 'feat/ios16-optics-lab*'
+
+jobs:
+  optics-math:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and run rim regression suite
+        run: |
+          set -euo pipefail
+          cc -std=c11 -O2 -Wall -Wextra -Werror \
+            tests/test_prism_rim.c -lm -o /tmp/gf-prism-rim-tests
+          /tmp/gf-prism-rim-tests
+      - name: Check settings plist, keys and Liquid Glass-only visibility
+        run: |
+          python3 - <<'PYTEST'
+          import plistlib
+          from pathlib import Path
+          p = plistlib.loads(Path('prefs/Resources/Root.plist').read_bytes())
+          values = [x for x in p['items'] if x.get('key', '').startswith('FolderChromaticRim')]
+          assert len(values) == 2, values
+          assert {x['key'] for x in values} == {
+              'FolderChromaticRimEnabled', 'FolderChromaticRimIntensity'}
+          assert all(x['gfStyle'] == 1 for x in values)
+          assert all(x['gfSection'] == 'home' for x in values)
+          assert values[0]['default'] is False
+          assert values[1]['default'] == 100
+          assert values[1]['min'] == 0 and values[1]['max'] == 100
+          tweak = Path('Tweak.xm').read_text()
+          assert 'GFChromaticRimIntensity' in tweak
+          assert tweak.count('ci%ld') == 2
+          print('Optics settings and texture-cache keys: PASS')
+          PYTEST

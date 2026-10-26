@@ -12,6 +12,8 @@ on:
     branches:
       - main
       - master
+      # Experimental optical rendering branch: compile deb before main merge.
+      - 'feat/ios16-optics-lab*'
 
 jobs:
   build-roothide:

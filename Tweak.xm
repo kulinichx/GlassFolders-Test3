@@ -8,6 +8,7 @@
 #import <math.h>
 #import <string.h>
 #import "GFLicense.h"
+#import "GFPrismRim.h"
 
 /*
  * GlassFolders 1.3.0 — release
@@ -37,6 +38,11 @@
 static CFStringRef const GFPreferencesDomain = CFSTR("com.kulinich.glassfolders");
 
 static BOOL GFEnabled = NO;  // Folder glass only; requires a verified offline license.
+// iOS 16 optics lab: visual rim dispersion only, NOT live backdrop refraction.
+// Never changes Clear, Dock, App Library, or lock-screen materials.
+static BOOL GFExperimentalChromaticRimEnabled = NO;
+// Independent of Liquid Glass blur/strength; 100% preserves Lab01 output.
+static CGFloat GFChromaticRimIntensity = 1.0;
 static NSInteger GFStyle = 0;          // 0 Clear, 1 Liquid Glass
 static CGFloat GFClearStrength = 0.0;        // 0.0 ... 1.0, Clear blur authority
 static CGFloat GFLiquidGlassStrength = 0.0;  // 0.0 ... 1.0, Liquid composite authority
@@ -143,6 +149,10 @@ static void GFLoadPreferences(void) {
     BOOL licensed = GFLicenseCurrentInfo() != nil;
     GFEnabled = licensed && GFReadBool(CFSTR("Enabled"), YES);
     GFStyle = GFReadInteger(CFSTR("Style"), 0);
+    GFExperimentalChromaticRimEnabled = licensed &&
+        GFReadBool(CFSTR("FolderChromaticRimEnabled"), NO);
+    GFChromaticRimIntensity = GFReadPercent(
+        CFSTR("FolderChromaticRimIntensity"), 100.0);
 
     /*
      * The split-control migration contract keeps Clear and Liquid Glass independent strength
@@ -433,8 +443,10 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
     size_t pixelHeight = (size_t)MAX(2.0, floor(size.height * renderScale + 0.5));
     NSInteger strengthStep = MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
 
-    NSString *cacheKey = [NSString stringWithFormat:@"C-%zux%zu-r%.2f-s%ld",
-        pixelWidth, pixelHeight, cornerRadius, (long)strengthStep];
+    NSInteger prismStep = (NSInteger)lround(GFChromaticRimIntensity * 100.0);
+    NSString *cacheKey = [NSString stringWithFormat:@"C-%zux%zu-r%.2f-s%ld-pr%d-ci%ld",
+        pixelWidth, pixelHeight, cornerRadius, (long)strengthStep,
+        GFExperimentalChromaticRimEnabled ? 1 : 0, (long)prismStep];
 
     NSCache *cache = GFOpticalLightingCache();
     UIImage *cached = [cache objectForKey:cacheKey];
@@ -511,6 +523,8 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
             if (edgeCoverage <= 0.001) continue;
 
             CGFloat insideDepth = MAX(0.0, -sdf);
+            CGFloat prismNX = 0.0;
+            CGFloat prismNY = 0.0;
 
             CGFloat u = x / MAX(1.0, width);
             CGFloat v = y / MAX(1.0, height);
@@ -538,6 +552,10 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                 if (normalLength > 0.0001) {
                     CGFloat nx = dx / normalLength;
                     CGFloat ny = dy / normalLength;
+                    if (GFExperimentalChromaticRimEnabled) {
+                        prismNX = nx;
+                        prismNY = ny;
+                    }
 
                     CGFloat ndotl = nx * lightX + ny * lightY;
                     CGFloat facing = MAX(0.0, ndotl);
@@ -885,10 +903,19 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                 (unsigned char)lround(GFClamp01(alpha) * 255.0);
 
             if (signedLight >= 0.0) {
-                pixels[index + 0] = a;
-                pixels[index + 1] = a;
-                pixels[index + 2] = a;
-                pixels[index + 3] = a;
+                // Optical-only chromatic fringe, painted over the existing
+                // backdrop. No wallpaper pixels are displaced or captured.
+                if (GFExperimentalChromaticRimEnabled &&
+                    (prismNX != 0.0 || prismNY != 0.0)) {
+                    GFPrismRimRGBA(&pixels[index], GFClamp01(alpha),
+                        insideDepth, renderScale, prismNX, prismNY,
+                        GFClamp01(strength) * GFChromaticRimIntensity);
+                } else {
+                    pixels[index + 0] = a;
+                    pixels[index + 1] = a;
+                    pixels[index + 2] = a;
+                    pixels[index + 3] = a;
+                }
             } else {
                 pixels[index + 0] = 0;
                 pixels[index + 1] = 0;
@@ -2456,6 +2483,7 @@ static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
 @property (nonatomic, strong) CALayer *gfOpticalLightingLayer;
 @property (nonatomic, assign) CGSize gfLightingSize;
 @property (nonatomic, assign) CGFloat gfLightingRadius;
+@property (nonatomic, assign) BOOL gfLastChromaticRimEnabled;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) NSInteger gfStyle;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
@@ -2689,7 +2717,12 @@ static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
         BOOL radiusChanged =
             fabs(self.gfLightingRadius - effectiveRadius) > 0.25;
 
-        if (sizeChanged ||
+        // Preferences can change without a size/radius change. Ensure the
+        // closed-folder visual is regenerated on the next layout pass.
+        BOOL opticsChanged = self.gfLastChromaticRimEnabled !=
+            GFExperimentalChromaticRimEnabled;
+
+        if (sizeChanged || opticsChanged ||
             radiusChanged ||
             self.gfOpticalLightingLayer.contents == nil) {
 
@@ -2710,9 +2743,17 @@ static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
 
             self.gfLightingSize = currentSize;
             self.gfLightingRadius = effectiveRadius;
+            self.gfLastChromaticRimEnabled = GFExperimentalChromaticRimEnabled;
         }
     }
 
+}
+
+- (void)gfRefreshMaterial {
+    // The live-settings bridge already calls this selector if it exists.
+    // Leave the existing blur/tint alone; invalidate only the cached rim.
+    self.gfOpticalLightingLayer.contents = nil;
+    [self setNeedsLayout];
 }
 
 @end
@@ -2776,14 +2817,17 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     NSInteger strengthStep =
         MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
 
+    NSInteger prismStep = (NSInteger)lround(GFChromaticRimIntensity * 100.0);
     NSString *cacheKey = [NSString stringWithFormat:
-        @"P24-%@-%@-%zux%zu-r%.2f-s%ld",
+        @"P24-%@-%@-%zux%zu-r%.2f-s%ld-pr%d-ci%ld",
         (style == 1) ? @"LG" : @"CL",
         darkAppearance ? @"D" : @"L",
         pixelWidth,
         pixelHeight,
         cornerRadius,
-        (long)strengthStep
+        (long)strengthStep,
+        GFExperimentalChromaticRimEnabled ? 1 : 0,
+        (long)prismStep
     ];
 
     NSCache *cache = GFOpticalLightingCache();
@@ -3483,10 +3527,16 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 );
 
             if (signedLight >= 0.0) {
-                pixels[index + 0] = a;
-                pixels[index + 1] = a;
-                pixels[index + 2] = a;
-                pixels[index + 3] = a;
+                if (GFExperimentalChromaticRimEnabled && !clearStyle) {
+                    GFPrismRimRGBA(&pixels[index], GFClamp01(alpha),
+                        insideDepth, renderScale, nx, ny,
+                        GFClamp01(strength) * GFChromaticRimIntensity);
+                } else {
+                    pixels[index + 0] = a;
+                    pixels[index + 1] = a;
+                    pixels[index + 2] = a;
+                    pixels[index + 3] = a;
+                }
             } else {
                 pixels[index + 0] = 0;
                 pixels[index + 1] = 0;
