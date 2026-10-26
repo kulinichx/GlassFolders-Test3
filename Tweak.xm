@@ -183,7 +183,10 @@ static void GFLoadPreferences(void) {
 
     GFDockEnabled = licensed && GFReadBool(CFSTR("DockEnabled"), NO);
     GFDockMode = GFReadInteger(CFSTR("DockMode"), 0) == 1 ? 1 : 0;
-    GFDockLensMaterialEnabled = NO; // Retired Dock lens experiment.
+    // Restore the clearer, previously accepted Dock glass preset when the
+    // user has enabled Dock glass. The separate Beta switch stays retired.
+    // Do not reuse this setting for App Library or folder rendering.
+    GFDockLensMaterialEnabled = licensed && GFDockEnabled && GFDockMode == 1;
 
     GFLockNotificationsEnabled = licensed && GFReadBool(CFSTR("LockNotificationsEnabled"), NO);
     GFLockQuickActionsEnabled = licensed && GFReadBool(CFSTR("LockQuickActionsEnabled"), NO);

@@ -33,11 +33,13 @@ for assignment in (
     'GFAppLibraryBlurDiagnosticsEnabled = NO;',
     'GFAppleLiquidMaterialEnabled = NO;',
     'GFAppLibraryLensMaterialEnabled = NO;',
-    'GFDockLensMaterialEnabled = NO;',
     'GFExperimentalChromaticRimEnabled = NO;',
     'GFFolderNativeRefractionEnabled = NO;',
 ):
     assert assignment in tweak, assignment
+# Dock's older 4pt clear-glass recipe was visually accepted; retiring the
+# settings row must not silently force Dock back to the 10pt blur recipe.
+assert 'GFDockLensMaterialEnabled = licensed && GFDockEnabled && GFDockMode == 1;' in tweak
 for key in retired:
     assert f'CFSTR("{key}")' not in tweak, key
 for loc in ('en.lproj', 'zh-Hans.lproj'):
