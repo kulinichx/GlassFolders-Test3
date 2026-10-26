@@ -17,6 +17,9 @@ static BOOL GFNativeLiveGlassEnabled = NO;
 @interface GFNativeLiveGlassOverlay : UIView
 @property (nonatomic, strong) UIView *provider;
 @property (nonatomic, assign) BOOL verified;
+@property (nonatomic, assign) CGFloat gfPreferredRadius;
+@property (nonatomic, assign) CGRect gfLastMaskedBounds;
+@property (nonatomic, assign) CGFloat gfLastMaskedRadius;
 @end
 @implementation GFNativeLiveGlassOverlay
 - (void)layoutSubviews {
@@ -25,15 +28,24 @@ static BOOL GFNativeLiveGlassEnabled = NO;
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     self.provider.frame = self.bounds;
-    CGFloat radius = MIN(24.0, MIN(self.bounds.size.width, self.bounds.size.height) * 0.14);
+    CGFloat shortest = MIN(self.bounds.size.width, self.bounds.size.height);
+    CGFloat radius = (self.gfPreferredRadius > 0.0)
+        ? MIN(self.gfPreferredRadius, shortest * 0.50)
+        : MIN(24.0, shortest * 0.14); // unchanged App Library default
     self.layer.cornerRadius = radius;
     self.provider.layer.cornerRadius = radius;
     self.provider.layer.masksToBounds = YES;
-    // Use only the refractive rim. This prevents a single provider view
-    // from replacing the whole card with an opaque rectangle on failure.
+    if (CGRectEqualToRect(self.gfLastMaskedBounds, self.bounds) &&
+        fabs(self.gfLastMaskedRadius - radius) < 0.25 && self.layer.mask) {
+        [CATransaction commit];
+        return;
+    }
+    // Keep the optical test confined to the rim, not the card interior.
+    CGFloat inset = self.gfPreferredRadius > 0.0
+        ? MIN(12.0, shortest * 0.11) : 15.0;
     CGRect outerRect = self.bounds;
-    CGRect innerRect = CGRectInset(outerRect, 15.0, 15.0);
-    CGFloat innerRadius = MAX(0.0, radius - 15.0);
+    CGRect innerRect = CGRectInset(outerRect, inset, inset);
+    CGFloat innerRadius = MAX(0.0, radius - inset);
     UIBezierPath *shape = [UIBezierPath bezierPathWithRoundedRect:outerRect
                                                      cornerRadius:radius];
     [shape appendPath:[UIBezierPath bezierPathWithRoundedRect:innerRect
@@ -43,13 +55,110 @@ static BOOL GFNativeLiveGlassEnabled = NO;
     mask.path = shape.CGPath;
     mask.fillRule = kCAFillRuleEvenOdd;
     self.layer.mask = mask;
+    self.gfLastMaskedBounds = outerRect;
+    self.gfLastMaskedRadius = radius;
     [CATransaction commit];
+}
+@end
+
+// GlassFolders-owned backdrop host. Unlike v7, this does not need the
+// LGLiveBackdropView Objective-C class. It still requires a renderer-registered
+// *custom refractive CAFilter*; QuartzCore does not register one for us.
+// This does not snapshot, alter, hide, or recolor the stock material.
+@interface GFNativeDirectBackdropView : UIView
+@property (nonatomic, copy) NSString *gfRefractiveType;
+@property (nonatomic, assign) BOOL gfFilterAttached;
+- (void)gfApplyFilterIfPossible;
+@end
+
+static id GFNativeRegisteredFilter(NSString *type) {
+    Class cls = NSClassFromString(@"CAFilter");
+    SEL factory = NSSelectorFromString(@"filterWithType:");
+    if (!cls || ![cls respondsToSelector:factory]) return nil;
+    @try {
+        id filter = ((id (*)(Class, SEL, id))objc_msgSend)(cls, factory, type);
+        if (!filter) return nil;
+        // Do not accept a generic blur substituted for a custom refraction.
+        NSString *reported = [filter valueForKey:@"type"];
+        if (![reported isKindOfClass:[NSString class]] ||
+            ![reported isEqualToString:type]) return nil;
+        return filter;
+    } @catch (__unused NSException *e) {
+        return nil;
+    }
+}
+
+static NSString *GFNativeAvailableFilterType(void) {
+    // Do not cache a failure: renderer registration can finish after launch.
+    for (NSString *type in @[@"dylv.liquidglass.refraction",
+                            @"dylv.liquidglass.dock"]) {
+        if (GFNativeRegisteredFilter(type)) return type;
+    }
+    return nil;
+}
+
+@implementation GFNativeDirectBackdropView
++ (Class)layerClass {
+    Class layerType = NSClassFromString(@"CABackdropLayer");
+    return layerType ?: [CALayer class];
+}
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.opaque = NO;
+        self.backgroundColor = UIColor.clearColor;
+        self.userInteractionEnabled = NO;
+        self.layer.masksToBounds = YES;
+    }
+    return self;
+}
+- (void)didMoveToWindow {
+    [super didMoveToWindow];
+    if (self.window) [self gfApplyFilterIfPossible];
+}
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (self.window && !self.gfFilterAttached)
+        [self gfApplyFilterIfPossible];
+}
+- (void)gfApplyFilterIfPossible {
+    if (!self.window || !self.gfRefractiveType.length) return;
+    Class cls = NSClassFromString(@"CABackdropLayer");
+    if (!cls || ![self.layer isKindOfClass:cls]) return;
+    if (self.gfFilterAttached) return;
+    id filter = GFNativeRegisteredFilter(self.gfRefractiveType);
+    if (!filter) return;
+    // iOS private KVC keys vary by firmware: best effort, never block the
+    // actual registered CAFilter merely because an optional flag is missing.
+    @try { [self.layer setValue:@NO forKey:@"layerUsesCoreImageFilters"]; }
+    @catch (__unused NSException *e) {}
+    @try { [self.layer setValue:@YES forKey:@"windowServerAware"]; }
+    @catch (__unused NSException *e) {}
+    @try {
+        self.layer.filters = @[filter];
+        id installed = self.layer.filters.firstObject;
+        NSString *actualType = [installed valueForKey:@"type"];
+        self.gfFilterAttached = [actualType isEqualToString:self.gfRefractiveType];
+        if (!self.gfFilterAttached) self.layer.filters = nil;
+    } @catch (__unused NSException *e) {
+        self.gfFilterAttached = NO;
+        self.layer.filters = nil;
+    }
 }
 @end
 
 // Preferred: use a separately installed, already-loaded live compositor
 // provider if one is available. We do not bundle or copy its implementation.
 static UIView *GFNativeLiveVendorView(CGRect frame) {
+    // Prefer our own system backdrop host when a registered refractive filter
+    // is visible. Fall back to the v7 compatibility adapter otherwise.
+    NSString *filterType = GFNativeAvailableFilterType();
+    if (filterType && NSClassFromString(@"CABackdropLayer")) {
+        GFNativeDirectBackdropView *native =
+            [[GFNativeDirectBackdropView alloc] initWithFrame:frame];
+        native.gfRefractiveType = filterType;
+        return native;
+    }
     Class cls = NSClassFromString(@"LGLiveBackdropView");
     SEL initializer = NSSelectorFromString(@"initWithFrame:groupName:filterType:");
     SEL verified = NSSelectorFromString(@"lgFilterAttached");
@@ -69,6 +178,11 @@ static UIView *GFNativeLiveVendorView(CGRect frame) {
 }
 
 static BOOL GFNativeLiveVendorAttached(UIView *view) {
+    if ([view isKindOfClass:[GFNativeDirectBackdropView class]]) {
+        GFNativeDirectBackdropView *native = (GFNativeDirectBackdropView *)view;
+        [native gfApplyFilterIfPossible];
+        return native.gfFilterAttached;
+    }
     SEL query = NSSelectorFromString(@"lgFilterAttached");
     if (!view || ![view respondsToSelector:query]) return NO;
     @try {
@@ -160,6 +274,112 @@ static void GFNativeLiveInstall(UIView *root, BOOL enabled) {
                 lens.hidden = NO;
             } else if (finalAttempt) {
                 [lens removeFromSuperview];
+            }
+        });
+    }
+}
+
+
+// Optics Lab 03: a narrow, opt-in bridge for the user's OWN folder glass.
+// It does not register or ship a CA render-server shader. It only uses a
+// separately registered refraction type, and must remain invisible otherwise.
+// Never mutate/remove the stock folder material, and never capture the screen.
+static CFTimeInterval GFFolderLensRetryAfter = 0;
+static char kGFFolderLensOverlayKey;
+
+static void GFFolderNativeLensInstall(UIView *host, BOOL enabled) {
+    if (!host || ![NSThread isMainThread]) return;
+    GFNativeLiveGlassOverlay *overlay =
+        objc_getAssociatedObject(host, &kGFFolderLensOverlayKey);
+
+    if (!enabled || !host.window ||
+        CGRectGetWidth(host.bounds) < 32.0 ||
+        CGRectGetHeight(host.bounds) < 32.0) {
+        if (overlay) {
+            [overlay removeFromSuperview];
+            objc_setAssociatedObject(host, &kGFFolderLensOverlayKey, nil,
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        return;
+    }
+
+    if (overlay) {
+        if (overlay.superview != host) {
+            [overlay removeFromSuperview];
+            objc_setAssociatedObject(host, &kGFFolderLensOverlayKey, nil,
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        } else {
+            overlay.frame = host.bounds;
+            overlay.gfPreferredRadius = host.layer.cornerRadius;
+            [overlay setNeedsLayout];
+            return;
+        }
+    }
+
+    CFTimeInterval now = CACurrentMediaTime();
+    if (now < GFFolderLensRetryAfter) return;
+    NSString *type = GFNativeAvailableFilterType();
+    if (!type || !NSClassFromString(@"CABackdropLayer")) {
+        // Avoid probing private CAFilter factories on every icon layout frame.
+        GFFolderLensRetryAfter = now + 8.0;
+        static dispatch_once_t logOnce;
+        dispatch_once(&logOnce, ^{
+            NSLog(@"[GFOptics03] Folder refraction unavailable: no registered compatible CAFilter; preserving original material");
+        });
+        return;
+    }
+
+    GFNativeDirectBackdropView *provider =
+        [[GFNativeDirectBackdropView alloc] initWithFrame:host.bounds];
+    provider.gfRefractiveType = type;
+    GFNativeLiveGlassOverlay *lens =
+        [[GFNativeLiveGlassOverlay alloc] initWithFrame:host.bounds];
+    lens.userInteractionEnabled = NO;
+    lens.opaque = NO;
+    lens.backgroundColor = UIColor.clearColor;
+    lens.autoresizingMask = UIViewAutoresizingFlexibleWidth |
+                                 UIViewAutoresizingFlexibleHeight;
+    lens.gfPreferredRadius = host.layer.cornerRadius;
+    lens.hidden = YES; // never show an unverified bridge
+    lens.provider = provider;
+    provider.autoresizingMask = UIViewAutoresizingFlexibleWidth |
+                                 UIViewAutoresizingFlexibleHeight;
+    [lens addSubview:provider];
+    // The existing light/reflection layer remains above this experiment.
+    [host insertSubview:lens atIndex:0];
+    objc_setAssociatedObject(host, &kGFFolderLensOverlayKey, lens,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [lens setNeedsLayout];
+    [lens layoutIfNeeded];
+
+    // 'Attached' means the filter was accepted by CA, NOT proof that the
+    // compositor executed a physical refraction shader on the wallpaper.
+    if (GFNativeLiveVendorAttached(provider)) {
+        lens.verified = YES;
+        lens.hidden = NO;
+        static dispatch_once_t acceptedOnce;
+        dispatch_once(&acceptedOnce, ^{
+            NSLog(@"[GFOptics03] Folder refraction filter attached: %@ (visual pixel displacement not yet verified)", type);
+        });
+    } else {
+        __weak UIView *weakHost = host;
+        __weak GFNativeLiveGlassOverlay *weakLens = lens;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.7 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            UIView *strongHost = weakHost;
+            GFNativeLiveGlassOverlay *strongLens = weakLens;
+            if (!strongHost || !strongLens ||
+                objc_getAssociatedObject(strongHost, &kGFFolderLensOverlayKey) != strongLens)
+                return;
+            if (GFNativeLiveVendorAttached(strongLens.provider)) {
+                strongLens.verified = YES;
+                strongLens.hidden = NO;
+            } else {
+                [strongLens removeFromSuperview];
+                objc_setAssociatedObject(strongHost, &kGFFolderLensOverlayKey, nil,
+                                         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                GFFolderLensRetryAfter = CACurrentMediaTime() + 8.0;
+                NSLog(@"[GFOptics03] Folder filter attachment failed; original material unchanged");
             }
         });
     }

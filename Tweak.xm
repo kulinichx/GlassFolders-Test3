@@ -43,6 +43,8 @@ static BOOL GFEnabled = NO;  // Folder glass only; requires a verified offline l
 static BOOL GFExperimentalChromaticRimEnabled = NO;
 // Independent of Liquid Glass blur/strength; 100% preserves Lab01 output.
 static CGFloat GFChromaticRimIntensity = 1.0;
+// Requires an external compositor-registered shader; opt-in for folders only.
+static BOOL GFFolderNativeRefractionEnabled = NO;
 static NSInteger GFStyle = 0;          // 0 Clear, 1 Liquid Glass
 static CGFloat GFClearStrength = 0.0;        // 0.0 ... 1.0, Clear blur authority
 static CGFloat GFLiquidGlassStrength = 0.0;  // 0.0 ... 1.0, Liquid composite authority
@@ -153,6 +155,8 @@ static void GFLoadPreferences(void) {
         GFReadBool(CFSTR("FolderChromaticRimEnabled"), NO);
     GFChromaticRimIntensity = GFReadPercent(
         CFSTR("FolderChromaticRimIntensity"), 100.0);
+    GFFolderNativeRefractionEnabled = licensed &&
+        GFReadBool(CFSTR("FolderNativeRefractionEnabled"), NO);
 
     /*
      * The split-control migration contract keeps Clear and Liquid Glass independent strength
@@ -2747,6 +2751,13 @@ static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
         }
     }
 
+    GFFolderNativeLensInstall(self, GFFolderNativeRefractionEnabled &&
+                                    GFEnabled && GFStyle == 1);
+}
+
+- (void)didMoveToWindow {
+    [super didMoveToWindow];
+    [self setNeedsLayout];
 }
 
 - (void)gfRefreshMaterial {
@@ -4135,6 +4146,9 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
         self.gfLightingRadius =
             radius;
     }
+
+    GFFolderNativeLensInstall(self, GFFolderNativeRefractionEnabled &&
+                                    GFEnabled && GFStyle == 1);
 }
 
 @end

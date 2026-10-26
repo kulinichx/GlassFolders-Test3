@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'GFPrismRim.h'
+      - 'GFNativeLiveGlass.h'
+      - 'tests/test_folder_native_bridge.py'
       - 'Tweak.xm'
       - 'prefs/Resources/**'
       - 'tests/test_prism_rim.c'
@@ -23,6 +25,8 @@ jobs:
           cc -std=c11 -O2 -Wall -Wextra -Werror \
             tests/test_prism_rim.c -lm -o /tmp/gf-prism-rim-tests
           /tmp/gf-prism-rim-tests
+      - name: Validate folder native filter bridge guards
+        run: python3 tests/test_folder_native_bridge.py
       - name: Check settings plist, keys and Liquid Glass-only visibility
         run: |
           python3 - <<'PYTEST'

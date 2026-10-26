@@ -318,6 +318,22 @@
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>
+			<string>Folder Live Refraction Bridge (Requires Engine)</string>
+			<key>key</key>
+			<string>FolderNativeRefractionEnabled</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.kulinich.glassfolders</string>
+			<key>gfSection</key>
+			<string>home</string>
+			<key>gfStyle</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
 			<string>Folder Chromatic Rim (Experimental)</string>
 			<key>key</key>
 			<string>FolderChromaticRimEnabled</string>
