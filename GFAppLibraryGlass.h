@@ -33,6 +33,7 @@
 @property (nonatomic, assign) BOOL gfDockVariant;
 @property (nonatomic, assign) BOOL gfHasMaterial;
 @property (nonatomic, assign) BOOL gfMaterialDark;
+@property (nonatomic, assign) CGFloat gfMaterialStrength;
 @property (nonatomic, assign) NSInteger gfMaterialStyle;
 @property (nonatomic, assign) BOOL gfMaterialSearchVariant;
 @property (nonatomic, assign) BOOL gfMaterialDockVariant;
@@ -112,9 +113,13 @@
     // over the old volume experiment ONLY for pods and the search capsule.
     BOOL libraryLens = !self.gfDockVariant && GFAppLibraryLensMaterialEnabled;
     BOOL appleLiquid = GFAppleLiquidMaterialEnabled && !dockLens && !libraryLens;
+    BOOL stableLibrary = !self.gfDockVariant && !libraryLens && !appleLiquid;
+    CGFloat materialStrength = stableLibrary ?
+        GFClamp01(GFAppLibraryFollowedStrength()) : self.gfStrength;
     // Pod hooks run on layout. Reuse filters and layers until their material
     // changes, including updates while App Library is already on screen.
     if (self.gfHasMaterial && self.gfMaterialDark == dark && self.gfMaterialStyle == style &&
+        fabs(self.gfMaterialStrength - materialStrength) < 0.0005 &&
         self.gfMaterialSearchVariant == self.gfSearchVariant &&
         self.gfMaterialDockVariant == self.gfDockVariant &&
         self.gfMaterialAppleLiquid == appleLiquid &&
@@ -123,6 +128,7 @@
     self.gfHasMaterial = YES;
     self.gfMaterialDark = dark;
     self.gfMaterialStyle = style;
+    self.gfMaterialStrength = materialStrength;
     self.gfMaterialSearchVariant = self.gfSearchVariant;
     self.gfMaterialDockVariant = self.gfDockVariant;
     self.gfMaterialAppleLiquid = appleLiquid;
@@ -172,6 +178,24 @@
             [saturation setValue:@(recipe.saturation) forKey:@"inputAmount"];
             [filters addObject:saturation];
         }
+        // The stable Library path mirrors the closed-folder neutral light
+        // compensation. Keep the Dock material unchanged.
+        if (stableLibrary) {
+            CGFloat brightness = 0.0;
+            if (style == 1) {
+                CGFloat response = GFMaterialResponse(materialStrength);
+                brightness = dark ? (0.010 + 0.018 * response)
+                                  : (0.001 + 0.006 * response);
+            } else {
+                CGFloat structure = GFClearStructureResponse(materialStrength);
+                brightness = 0.014 + 0.008 * structure;
+            }
+            id brighten = GFCreateCAFilter(@"colorBrightness");
+            if (brighten) {
+                [brighten setValue:@(brightness) forKey:@"inputAmount"];
+                [filters addObject:brighten];
+            }
+        }
         id blur = GFCreateCAFilter(@"gaussianBlur");
         if (blur) {
             [blur setValue:@(recipe.blur) forKey:@"inputRadius"];
@@ -179,8 +203,11 @@
             [filters addObject:blur];
             hasBlur = YES;
         }
-        // No additive brightness or hard-edge blur clamp.
+        // No opaque color veil and no hard-edge blur clamp.
         [backdrop setValue:filters forKey:@"filters"];
+        // A zero-blur Clear preset may still have a useful color filter.
+        // Preserve the Dock's original blur/fallback decision exactly.
+        if (stableLibrary && filters.count > 0) hasBlur = YES;
     }
     self.gfBackdropSampleView.hidden = !hasBlur;
     // A second CABackdrop sample only for the Dock perimeter. Separate groups
@@ -303,6 +330,31 @@
             (id)[UIColor colorWithWhite:1.0 alpha:0.0].CGColor,
             (id)[UIColor colorWithWhite:1.0 alpha:0.0].CGColor
         ];
+    } else if (stableLibrary) {
+        // A quiet highlight and soft edge shadow match the desktop folder
+        // without a second backdrop sample or a grey/tinted body.
+        CGFloat boost = style == 1 ? 1.0 : 0.70;
+        self.gfBodyVeil.colors = @[
+            (id)[UIColor colorWithWhite:1 alpha:0.032 * boost].CGColor,
+            (id)[UIColor colorWithWhite:1 alpha:0.016 * boost].CGColor,
+            (id)[UIColor colorWithWhite:1 alpha:0.004].CGColor,
+            (id)[UIColor colorWithWhite:0 alpha:0.002].CGColor,
+            (id)[UIColor colorWithWhite:0 alpha:0.019].CGColor,
+            (id)[UIColor colorWithWhite:1 alpha:0.007].CGColor
+        ];
+        self.gfVolumeFalloff.colors = @[
+            (id)[UIColor colorWithWhite:1 alpha:0.004].CGColor,
+            (id)[UIColor colorWithWhite:1 alpha:0.0].CGColor,
+            (id)[UIColor colorWithWhite:0 alpha:0.008].CGColor,
+            (id)[UIColor colorWithWhite:0 alpha:0.025].CGColor
+        ];
+        self.gfDockLensSheen.colors = @[
+            (id)[UIColor colorWithWhite:1 alpha:0.055 * boost].CGColor,
+            (id)[UIColor colorWithWhite:1 alpha:0.021 * boost].CGColor,
+            (id)[UIColor colorWithWhite:1 alpha:0.003].CGColor,
+            (id)[UIColor colorWithWhite:1 alpha:0.0].CGColor,
+            (id)[UIColor colorWithWhite:1 alpha:0.0].CGColor
+        ];
     } else if (appleLiquid) {
         // The WHOLE capsule/pod is a lens-like volume. A diffuse top-to-bottom
         // luminosity shift and soft peripheral density replace extra borders.
@@ -332,11 +384,11 @@
             (id)[UIColor colorWithWhite:1.0 alpha:0.006 * density].CGColor
         ];
     }
-    self.gfVolumeFalloff.hidden = !(appleLiquid || dockLens || libraryLens);
-    self.gfDockLensSheen.hidden = !(dockLens || libraryLens);
-    // Quiet down the old bevel for pods/search without affecting the Dock.
-    self.gfCardRim.alpha = libraryLens ? 0.28 :
-        (dockLens ? 0.62 : (appleLiquid ? 0.40 : 1.0));
+    self.gfVolumeFalloff.hidden = !(stableLibrary || appleLiquid || dockLens || libraryLens);
+    self.gfDockLensSheen.hidden = !(stableLibrary || dockLens || libraryLens);
+    // Keep category/search borders understated, leaving Dock unchanged.
+    self.gfCardRim.alpha = stableLibrary ? (style == 1 ? 0.64 : 0.52) :
+        (libraryLens ? 0.28 : (dockLens ? 0.62 : (appleLiquid ? 0.40 : 1.0)));
     [CATransaction commit];
     [self setNeedsLayout];
 }

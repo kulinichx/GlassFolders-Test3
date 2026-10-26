@@ -13,7 +13,7 @@
 
 "Keeps the material clear while adding blur and depth." = "Keeps the material clear while adding blur and depth.";
 "Increases glass structure, highlights, and blur." = "Increases glass structure, highlights, and blur.";
-"Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material." = "Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material.";
+"Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material." = "Folders and App Library can be enabled independently. Follow Folder now uses the same Clear / Liquid Glass family and strength, with lower extra blur on App Library cards.";
 
 /* Offline license */
 "Activate GlassFolders" = "Activate GlassFolders";
@@ -89,17 +89,3 @@
 "Expanded" = "Expanded";
 "Collapsed" = "Collapsed";
 "Tap to expand or collapse." = "Tap to expand or collapse.";
-
-"iOS 27 Inspired Glass (Beta)" = "iOS 27 Inspired Glass (Beta)";
-
-"Dock Clear Lens (Beta)" = "Dock Clear Lens (Beta)";
-
-"App Library Clear Lens (Beta)" = "App Library Clear Lens (Beta)";
-
-"App Library Blur Diagnostics (V4)" = "App Library Blur Diagnostics (V4)";
-"Native Live Refraction (Requires Engine)" = "Native Live Refraction (Requires Engine)";
-
-"Folder Chromatic Rim (Experimental)" = "Folder Chromatic Rim (Experimental)";
-"Chromatic Rim Intensity" = "Chromatic Rim Intensity";
-
-"Folder Live Refraction Bridge (Requires Engine)" = "Folder Live Refraction Bridge (Requires Engine)";

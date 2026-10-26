@@ -7,18 +7,14 @@ from pathlib import Path
 import plistlib
 
 p = plistlib.loads(Path('prefs/Resources/Root.plist').read_bytes())
+# The experimental bridge is preserved in source but must not appear in Settings.
 items = [item for item in p['items'] if item.get('key') == 'FolderNativeRefractionEnabled']
-assert len(items) == 1
-entry = items[0]
-assert entry['cell'] == 'PSSwitchCell'
-assert entry['default'] is False
-assert entry['gfStyle'] == 1 and entry['gfSection'] == 'home'
-assert entry['defaults'] == 'com.kulinich.glassfolders'
+assert items == []
 
 src = Path('Tweak.xm').read_text()
 bridge = Path('GFNativeLiveGlass.h').read_text()
 assert src.count('GFFolderNativeLensInstall(self,') == 2
-assert 'licensed &&\n        GFReadBool(CFSTR("FolderNativeRefractionEnabled"), NO)' in src
+assert 'GFFolderNativeRefractionEnabled = NO;' in src
 assert src.count('GFStyle == 1);') >= 2
 assert 'if (!enabled || !host.window' in bridge
 assert 'lens.hidden = YES;' in bridge
@@ -31,6 +27,6 @@ assert 'MangoOSRendering' not in bridge
 
 for lang in ('en.lproj', 'zh-Hans.lproj'):
     strings = Path(f'prefs/Resources/{lang}/Root.strings').read_text()
-    assert '"Folder Live Refraction Bridge (Requires Engine)"' in strings
+    assert '"Folder Live Refraction Bridge (Requires Engine)"' not in strings
 
-print('Optics Lab 03 folder bridge static safety checks: PASS')
+print('Retired folder bridge safety checks: PASS')

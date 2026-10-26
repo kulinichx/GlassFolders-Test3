@@ -151,12 +151,11 @@ static void GFLoadPreferences(void) {
     BOOL licensed = GFLicenseCurrentInfo() != nil;
     GFEnabled = licensed && GFReadBool(CFSTR("Enabled"), YES);
     GFStyle = GFReadInteger(CFSTR("Style"), 0);
-    GFExperimentalChromaticRimEnabled = licensed &&
-        GFReadBool(CFSTR("FolderChromaticRimEnabled"), NO);
-    GFChromaticRimIntensity = GFReadPercent(
-        CFSTR("FolderChromaticRimIntensity"), 100.0);
-    GFFolderNativeRefractionEnabled = licensed &&
-        GFReadBool(CFSTR("FolderNativeRefractionEnabled"), NO);
+    // iOS 16 stable settings: retired optics experiments stay OFF even if
+    // an older installation saved these preference keys as enabled.
+    GFExperimentalChromaticRimEnabled = NO;
+    GFChromaticRimIntensity = 1.0;
+    GFFolderNativeRefractionEnabled = NO;
 
     /*
      * The split-control migration contract keeps Clear and Liquid Glass independent strength
@@ -176,18 +175,15 @@ static void GFLoadPreferences(void) {
 
     GFAppLibraryGlassEnabled =
         licensed && GFReadBool(CFSTR("AppLibraryGlassEnabled"), NO);
-    GFNativeLiveGlassEnabled = GFReadBool(CFSTR("AppLibraryNativeLiveGlassEnabled"), NO);
-    GFAppLibraryBlurDiagnosticsEnabled =
-        GFReadBool(CFSTR("AppLibraryBlurDiagnosticsEnabled"), NO);
-    GFAppleLiquidMaterialEnabled = licensed &&
-        GFReadBool(CFSTR("AppleLiquidMaterialEnabled"), NO);
-    GFAppLibraryLensMaterialEnabled = licensed &&
-        GFReadBool(CFSTR("AppLibraryLensMaterialEnabled"), NO);
+    // Retired App Library and material experiments: no hidden active state.
+    GFNativeLiveGlassEnabled = NO;
+    GFAppLibraryBlurDiagnosticsEnabled = NO;
+    GFAppleLiquidMaterialEnabled = NO;
+    GFAppLibraryLensMaterialEnabled = NO;
 
     GFDockEnabled = licensed && GFReadBool(CFSTR("DockEnabled"), NO);
     GFDockMode = GFReadInteger(CFSTR("DockMode"), 0) == 1 ? 1 : 0;
-    GFDockLensMaterialEnabled = licensed &&
-        GFReadBool(CFSTR("DockLensMaterialEnabled"), NO);
+    GFDockLensMaterialEnabled = NO; // Retired Dock lens experiment.
 
     GFLockNotificationsEnabled = licensed && GFReadBool(CFSTR("LockNotificationsEnabled"), NO);
     GFLockQuickActionsEnabled = licensed && GFReadBool(CFSTR("LockQuickActionsEnabled"), NO);
@@ -1091,17 +1087,36 @@ static NSInteger GFResolvedAppLibraryStyle(void) {
 }
 
 
+/*
+ * App Library reuses the accepted CLOSED-FOLDER material curve instead of
+ * its old fixed 8-10pt frosted material. SpringBoard blurs the Library page
+ * before these cards, so reduce the *second* local blur to preserve texture.
+ * This is a conservative material tune, not pixel refraction or a new hook.
+ */
+static CGFloat GFAppLibraryFollowedStrength(void) {
+    return GFResolvedAppLibraryStyle() == 1
+        ? GFLiquidGlassStrength : GFClearStrength;
+}
+
 static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
     __unused BOOL searchVariant,
     BOOL dark
 ) {
-    // Category cards and the search pill share a fixed recipe. Follow Folder
-    // selects a family only; the folder strength never enters this material.
-    BOOL liquid = GFResolvedAppLibraryStyle() == 1;
-    return (GFAppLibraryMaterialRecipe){
-        liquid ? 8.0 : 10.0, 1.04,
-        liquid ? 1.0 : (dark ? 1.35 : 1.5)
-    };
+    const BOOL liquid = GFResolvedAppLibraryStyle() == 1;
+    const CGFloat strength = GFClamp01(GFAppLibraryFollowedStrength());
+    CGFloat blur, saturation;
+    if (liquid) {
+        const CGFloat response = GFMaterialResponse(strength);
+        blur = dark ? (4.2 + 5.8 * response) : (3.6 + 4.4 * response);
+        saturation = dark ? (1.10 + 0.18 * response) : (1.06 + 0.10 * response);
+    } else {
+        const CGFloat response = GFClearStructureResponse(strength);
+        blur = 8.40 * GFClearBlurResponse(strength);
+        saturation = 1.105 + 0.070 * response;
+    }
+    // This is applied *after* the native App Library page blur.
+    blur *= 0.65;
+    return (GFAppLibraryMaterialRecipe){blur, saturation, 1.0};
 }
 
 #import "GFAppLibraryGlass.h"
