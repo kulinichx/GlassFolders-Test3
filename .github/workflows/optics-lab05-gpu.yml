@@ -44,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           cd Experiments/OpticsLab05Probe
-          ./build.sh
+          bash ./build.sh
       - name: Upload GPU probe installer (NOT GlassFolders tweak)
         uses: actions/upload-artifact@v4
         with:
