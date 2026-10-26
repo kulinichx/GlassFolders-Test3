@@ -389,6 +389,26 @@
     // Keep category/search borders understated, leaving Dock unchanged.
     self.gfCardRim.alpha = stableLibrary ? (style == 1 ? 0.64 : 0.52) :
         (libraryLens ? 0.28 : (dockLens ? 0.62 : (appleLiquid ? 0.40 : 1.0)));
+    // GF_DOCK_IOS27_SUBTLE_SPECULAR_V2
+    // Dock glass: restrained top reflection and bottom bevel.
+    // Keep the existing 4pt clear backdrop and all blur filters unchanged.
+    if (self.gfDockVariant && dockLens) {
+        self.gfVolumeFalloff.colors = @[
+            (id)[UIColor colorWithWhite:1.0 alpha:0.022].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.007].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.010].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.026].CGColor
+        ];
+        self.gfDockLensSheen.colors = @[
+            (id)[UIColor colorWithWhite:1.0 alpha:0.108].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.055].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.013].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.002].CGColor,
+            (id)[UIColor colorWithWhite:1.0 alpha:0.000].CGColor
+        ];
+        self.gfCardRim.alpha = 0.66;
+    }
+
     [CATransaction commit];
     [self setNeedsLayout];
 }
