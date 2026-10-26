@@ -1,0 +1,4 @@
+.build/
+Resources/*.metallib
+.theos/
+packages/

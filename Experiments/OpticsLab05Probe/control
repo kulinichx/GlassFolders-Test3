@@ -1,0 +1,9 @@
+Package: com.kulinich.glassfolders.opticsprobe
+Name: GlassFolders Optics Lab 05 Probe
+Version: 0.5.0
+Architecture: iphoneos-arm64e
+Description: Standalone synthetic GPU refraction preview. No SpringBoard injection.
+Maintainer: kulinich
+Author: kulinich
+Section: Utilities
+Depends: firmware (>= 16.0), firmware (<< 17.3.2)

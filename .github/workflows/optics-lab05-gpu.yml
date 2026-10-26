@@ -1,0 +1,53 @@
+name: iOS 16 Optics Lab 05 GPU Probe
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feat/ios16-optics-lab05'
+    paths:
+      - 'Experiments/**'
+      - 'tests/test_optics05_isolation.py'
+      - '.github/workflows/optics-lab05-gpu.yml'
+
+jobs:
+  separate-gpu-probe:
+    runs-on: macos-latest
+    env:
+      THEOS: ${{ github.workspace }}/theos-roothide
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify independent target before build
+        run: python3 tests/test_optics05_isolation.py
+      - name: Install RootHide Theos and SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install ldid xz
+          git clone --recursive https://github.com/roothide/theos.git "$THEOS"
+          mkdir -p "$THEOS/sdks"
+          curl -fL --retry 3 --retry-delay 2 \
+            https://github.com/theos/sdks/releases/latest/download/iPhoneOS16.5.sdk.tar.xz \
+            -o /tmp/GFOptics-iPhoneOS16.5.tar.xz
+          tar -xJf /tmp/GFOptics-iPhoneOS16.5.tar.xz -C "$THEOS/sdks"
+          test -d "$THEOS/sdks/iPhoneOS16.5.sdk"
+      - name: Ensure Apple Metal compiler available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! xcrun -sdk iphoneos --find metal >/dev/null 2>&1; then
+            xcodebuild -downloadComponent MetalToolchain
+          fi
+          xcrun -sdk iphoneos --find metal
+          xcrun -sdk iphoneos --find metallib
+      - name: Compile Metal shaders and separate iOS 16 demo app
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd Experiments/OpticsLab05Probe
+          ./build.sh
+      - name: Upload GPU probe installer (NOT GlassFolders tweak)
+        uses: actions/upload-artifact@v4
+        with:
+          name: GF-Optics-Lab05-GPU-Probe-roothide
+          path: Experiments/OpticsLab05Probe/packages/*.deb
+          if-no-files-found: error

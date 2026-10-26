@@ -38,6 +38,8 @@ jobs:
           /tmp/gf-refraction-math-tests
       - name: Confirm shader/host remain outside SpringBoard build
         run: python3 tests/test_refraction_isolation.py
+      - name: Guard Lab05 device test app isolation
+        run: python3 tests/test_optics05_isolation.py
       - name: Validate folder native filter bridge guards
         run: python3 tests/test_folder_native_bridge.py
       - name: Check settings plist, keys and Liquid Glass-only visibility
