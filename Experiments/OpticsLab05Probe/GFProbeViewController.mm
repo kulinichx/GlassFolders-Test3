@@ -108,7 +108,7 @@ static_assert(sizeof(GFProbePanelParams) == 32, "panel shader ABI mismatch");
     ]];
     NSError *error = nil;
     NSString *shaderPath = [NSBundle.mainBundle pathForResource:@"GFOpticsLab05" ofType:@"metallib"];
-    id<MTLLibrary> library = shaderPath ? [_device newLibraryWithFile:shaderPath error:&error] : nil;
+    id<MTLLibrary> library = shaderPath ? [_device newLibraryWithURL:[NSURL fileURLWithPath:shaderPath] error:&error] : nil;
     _queue = [_device newCommandQueue];
     _refraction = [[GFStandaloneRefractionRenderer alloc] initWithDevice:_device library:library error:&error];
     if (library && _queue && _refraction) {
