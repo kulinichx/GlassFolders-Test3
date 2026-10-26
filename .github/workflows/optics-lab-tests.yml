@@ -5,6 +5,10 @@ on:
     paths:
       - 'GFPrismRim.h'
       - 'GFNativeLiveGlass.h'
+      - 'Experiments/GFRefraction*'
+      - 'Experiments/GFStandaloneRefractionRenderer.*'
+      - 'tests/test_refraction_*'
+      - 'tools/render_refraction_demo.py'
       - 'tests/test_folder_native_bridge.py'
       - 'Tweak.xm'
       - 'prefs/Resources/**'
@@ -25,6 +29,15 @@ jobs:
           cc -std=c11 -O2 -Wall -Wextra -Werror \
             tests/test_prism_rim.c -lm -o /tmp/gf-prism-rim-tests
           /tmp/gf-prism-rim-tests
+      - name: Verify genuine texture-coordinate refraction in portable C
+        run: |
+          set -euo pipefail
+          cc -std=c11 -O2 -Wall -Wextra -Werror \
+            tests/test_refraction_math.c Experiments/GFRefractionMath.c \
+            -lm -o /tmp/gf-refraction-math-tests
+          /tmp/gf-refraction-math-tests
+      - name: Confirm shader/host remain outside SpringBoard build
+        run: python3 tests/test_refraction_isolation.py
       - name: Validate folder native filter bridge guards
         run: python3 tests/test_folder_native_bridge.py
       - name: Check settings plist, keys and Liquid Glass-only visibility
