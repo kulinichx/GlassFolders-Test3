@@ -375,11 +375,18 @@
     CGFloat height = MAX(1.0, CGRectGetHeight(self.bounds));
     CGFloat lip = MIN(0.16, (self.gfSearchVariant ? 8.0 : (self.gfDockVariant ? 12.0 : 18.0)) / height);
     self.gfBodyVeil.locations = @[@0.0, @(lip), @0.40, @0.65, @(1.0 - lip), @1.0];
-    self.gfCardRim.frame = self.bounds;
-    self.gfCardRim.gfRadius = radius;
-    self.gfCardRim.gfSearchVariant = self.gfSearchVariant;
-    self.gfCardRim.gfDockVariant = self.gfDockVariant;
-    [self.gfCardRim setNeedsLayout];
+    BOOL rimGeometryChanged =
+        !CGRectEqualToRect(self.gfCardRim.frame, self.bounds) ||
+        fabs(self.gfCardRim.gfRadius - radius) > 0.01 ||
+        self.gfCardRim.gfSearchVariant != self.gfSearchVariant ||
+        self.gfCardRim.gfDockVariant != self.gfDockVariant;
+    if (rimGeometryChanged) {
+        self.gfCardRim.frame = self.bounds;
+        self.gfCardRim.gfRadius = radius;
+        self.gfCardRim.gfSearchVariant = self.gfSearchVariant;
+        self.gfCardRim.gfDockVariant = self.gfDockVariant;
+        [self.gfCardRim setNeedsLayout];
+    }
     [CATransaction commit];
 }
 

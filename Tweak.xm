@@ -1206,14 +1206,40 @@ static void GFUpdateRealAppLibraryPod(UIView *pod) {
         [host insertSubview:overlay
                belowSubview:pod];
     } else {
-        [host insertSubview:overlay
-               belowSubview:pod];
+        NSUInteger overlayIndex =
+            [host.subviews indexOfObjectIdenticalTo:overlay];
+        NSUInteger podIndex =
+            [host.subviews indexOfObjectIdenticalTo:pod];
+
+        if (overlayIndex == NSNotFound ||
+            podIndex == NSNotFound ||
+            overlayIndex + 1 != podIndex) {
+            [host insertSubview:overlay
+                   belowSubview:pod];
+        }
     }
 
-    overlay.bounds = pod.bounds;
-    overlay.center = pod.center;
-    overlay.transform = pod.transform;
-    overlay.hidden = pod.hidden;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+
+    CGRect targetBounds = pod.bounds;
+    if (!CGRectEqualToRect(overlay.bounds, targetBounds)) {
+        overlay.bounds = targetBounds;
+    }
+
+    if (!CGPointEqualToPoint(overlay.center, pod.center)) {
+        overlay.center = pod.center;
+    }
+
+    if (!CGAffineTransformEqualToTransform(overlay.transform, pod.transform)) {
+        overlay.transform = pod.transform;
+    }
+
+    if (overlay.hidden != pod.hidden) {
+        overlay.hidden = pod.hidden;
+    }
+
+    [CATransaction commit];
 
     CGFloat radius = pod.layer.cornerRadius;
     if (radius <= 0.0) {
@@ -1227,7 +1253,9 @@ static void GFUpdateRealAppLibraryPod(UIView *pod) {
     // This is a background-only view. Its saved alpha is restored when the
     // feature is disabled; leaving native material over the new glass would
     // reintroduce haze and a second contour. Icons are outside this view.
-    pod.alpha = 0.0;
+    if (pod.alpha != 0.0) {
+        pod.alpha = 0.0;
+    }
     [overlay gfRefreshMaterial];
 }
 
@@ -4278,18 +4306,41 @@ static void GFUpdateDockBackground(UIView *host) {
             [container.subviews indexOfObjectIdenticalTo:glass] != index + 1) {
             [container insertSubview:glass aboveSubview:background];
         }
-        glass.bounds = (CGRect){CGPointZero, background.bounds.size};
-        glass.center = background.center;
-        glass.transform = background.transform;
-        glass.alpha = background.alpha;
-        glass.hidden = state.originalHidden;
-        glass.layer.zPosition = background.layer.zPosition;
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+
+        CGRect targetBounds =
+            (CGRect){CGPointZero, background.bounds.size};
+        if (!CGRectEqualToRect(glass.bounds, targetBounds)) {
+            glass.bounds = targetBounds;
+        }
+        if (!CGPointEqualToPoint(glass.center, background.center)) {
+            glass.center = background.center;
+        }
+        if (!CGAffineTransformEqualToTransform(
+                glass.transform, background.transform)) {
+            glass.transform = background.transform;
+        }
+        if (fabs(glass.alpha - background.alpha) > 0.001) {
+            glass.alpha = background.alpha;
+        }
+        if (glass.hidden != state.originalHidden) {
+            glass.hidden = state.originalHidden;
+        }
+        if (fabs(glass.layer.zPosition -
+                 background.layer.zPosition) > 0.001) {
+            glass.layer.zPosition = background.layer.zPosition;
+        }
+
+        [CATransaction commit];
+
         CGFloat radius = background.layer.cornerRadius;
         if (radius <= 0.0) radius = MIN(30.0, background.bounds.size.height * 0.5);
         [glass setPreferredRadius:radius];
-        // Apply Dock-only optical preset on live preference changes too.
+        // The material method already caches its inputs. Do not request a new
+        // layout here: this function is called from layoutSubviews, and doing
+        // so creates a self-sustaining SpringBoard/CoreAnimation layout loop.
         [glass gfRefreshMaterial];
-        [glass setNeedsLayout];
     } else {
         [state.glass removeFromSuperview];
         state.glass = nil;
@@ -4627,7 +4678,9 @@ static void GFSetStockPanelSubviewSuppressed(
             );
         }
 
-        subview.hidden = YES;
+        if (!subview.hidden) {
+            subview.hidden = YES;
+        }
     } else if (wasHiddenMarker) {
         NSNumber *originalHidden =
             objc_getAssociatedObject(
@@ -4694,8 +4747,10 @@ static void GFUpdateOpenedFolderBackground(
      * The host itself can carry a stock dark fill even when all material
      * subviews are hidden.
      */
-    backgroundView.backgroundColor =
-        UIColor.clearColor;
+    if (backgroundView.backgroundColor != UIColor.clearColor) {
+        backgroundView.backgroundColor =
+            UIColor.clearColor;
+    }
 
     for (UIView *subview
          in backgroundView.subviews) {
@@ -4730,12 +4785,17 @@ static void GFUpdateOpenedFolderBackground(
         [backgroundView addSubview:glass];
     }
 
-    glass.frame =
-        backgroundView.bounds;
+    if (!CGRectEqualToRect(glass.frame, backgroundView.bounds)) {
+        glass.frame =
+            backgroundView.bounds;
+    }
 
-    glass.autoresizingMask =
+    UIViewAutoresizing targetAutoresizingMask =
         UIViewAutoresizingFlexibleWidth |
         UIViewAutoresizingFlexibleHeight;
+    if (glass.autoresizingMask != targetAutoresizingMask) {
+        glass.autoresizingMask = targetAutoresizingMask;
+    }
 
     CGFloat radius =
         backgroundView.layer.cornerRadius;
@@ -4753,8 +4813,10 @@ static void GFUpdateOpenedFolderBackground(
      * above its hidden material children. The folder icon grid is not a child
      * of this visual background class.
      */
-    [backgroundView
-        bringSubviewToFront:glass];
+    if (backgroundView.subviews.lastObject != glass) {
+        [backgroundView
+            bringSubviewToFront:glass];
+    }
 }
 
 
