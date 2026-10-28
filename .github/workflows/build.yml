@@ -12,6 +12,7 @@ on:
     branches:
       - main
       - master
+      - 'fix/low-wakeup-*'
       # Experimental optical rendering branch: compile deb before main merge.
       - 'feat/ios16-optics-lab*'
 
