@@ -1,6 +1,4 @@
 #import <UIKit/UIKit.h>
-#import "GFNativeLiveGlass.h"
-#import "GFV5RefractionProbe.h"
 #import <CoreFoundation/CoreFoundation.h>
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
@@ -8,7 +6,6 @@
 #import <math.h>
 #import <string.h>
 #import "GFLicense.h"
-#import "GFPrismRim.h"
 
 /*
  * GlassFolders 1.3.0 — release
@@ -38,13 +35,6 @@
 static CFStringRef const GFPreferencesDomain = CFSTR("com.kulinich.glassfolders");
 
 static BOOL GFEnabled = NO;  // Folder glass only; requires a verified offline license.
-// iOS 16 optics lab: visual rim dispersion only, NOT live backdrop refraction.
-// Never changes Clear, Dock, App Library, or lock-screen materials.
-static BOOL GFExperimentalChromaticRimEnabled = NO;
-// Independent of Liquid Glass blur/strength; 100% preserves Lab01 output.
-static CGFloat GFChromaticRimIntensity = 1.0;
-// Requires an external compositor-registered shader; opt-in for folders only.
-static BOOL GFFolderNativeRefractionEnabled = NO;
 static NSInteger GFStyle = 0;          // 0 Clear, 1 Liquid Glass
 static CGFloat GFClearStrength = 0.0;        // 0.0 ... 1.0, Clear blur authority
 static CGFloat GFLiquidGlassStrength = 0.0;  // 0.0 ... 1.0, Liquid composite authority
@@ -52,20 +42,10 @@ static CGFloat GFGlassStrength = 0.0;        // active style strength for existi
 
 // App Library remains intentionally independent from normal folders.
 static BOOL GFAppLibraryGlassEnabled = NO;
-// V4: opt-in diagnostic, never changes glass rendering.
-static BOOL GFAppLibraryBlurDiagnosticsEnabled = NO;
-// Experimental volume-first material. Off by default; no extra rim glints.
-static BOOL GFAppleLiquidMaterialEnabled = NO;
-// Isolated clear-lens experiment for App Library search and category pods.
-// Does not change Dock or the page-wide SpringBoard wallpaper blur.
-static BOOL GFAppLibraryLensMaterialEnabled = NO;
 
 // Dock is independent of folder/App Library preferences, and opt-in on upgrade.
 static BOOL GFDockEnabled = NO;
 static NSInteger GFDockMode = 0; // 0 hide background, 1 glass
-// Independent, opt-in Dock-only material experiment. Overrides the older
-// volume prototype for Dock only, leaving App Library and folders unchanged.
-static BOOL GFDockLensMaterialEnabled = NO;
 
 // Lock-screen surfaces are independent, opt-in, and share the same entitlement.
 static BOOL GFLockNotificationsEnabled = NO;
@@ -151,12 +131,6 @@ static void GFLoadPreferences(void) {
     BOOL licensed = GFLicenseCurrentInfo() != nil;
     GFEnabled = licensed && GFReadBool(CFSTR("Enabled"), YES);
     GFStyle = GFReadInteger(CFSTR("Style"), 0);
-    GFExperimentalChromaticRimEnabled = licensed &&
-        GFReadBool(CFSTR("FolderChromaticRimEnabled"), NO);
-    GFChromaticRimIntensity = GFReadPercent(
-        CFSTR("FolderChromaticRimIntensity"), 100.0);
-    GFFolderNativeRefractionEnabled = licensed &&
-        GFReadBool(CFSTR("FolderNativeRefractionEnabled"), NO);
 
     /*
      * The split-control migration contract keeps Clear and Liquid Glass independent strength
@@ -176,18 +150,9 @@ static void GFLoadPreferences(void) {
 
     GFAppLibraryGlassEnabled =
         licensed && GFReadBool(CFSTR("AppLibraryGlassEnabled"), NO);
-    GFNativeLiveGlassEnabled = GFReadBool(CFSTR("AppLibraryNativeLiveGlassEnabled"), NO);
-    GFAppLibraryBlurDiagnosticsEnabled =
-        GFReadBool(CFSTR("AppLibraryBlurDiagnosticsEnabled"), NO);
-    GFAppleLiquidMaterialEnabled = licensed &&
-        GFReadBool(CFSTR("AppleLiquidMaterialEnabled"), NO);
-    GFAppLibraryLensMaterialEnabled = licensed &&
-        GFReadBool(CFSTR("AppLibraryLensMaterialEnabled"), NO);
 
     GFDockEnabled = licensed && GFReadBool(CFSTR("DockEnabled"), NO);
     GFDockMode = GFReadInteger(CFSTR("DockMode"), 0) == 1 ? 1 : 0;
-    GFDockLensMaterialEnabled = licensed &&
-        GFReadBool(CFSTR("DockLensMaterialEnabled"), NO);
 
     GFLockNotificationsEnabled = licensed && GFReadBool(CFSTR("LockNotificationsEnabled"), NO);
     GFLockQuickActionsEnabled = licensed && GFReadBool(CFSTR("LockQuickActionsEnabled"), NO);
@@ -447,10 +412,8 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
     size_t pixelHeight = (size_t)MAX(2.0, floor(size.height * renderScale + 0.5));
     NSInteger strengthStep = MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
 
-    NSInteger prismStep = (NSInteger)lround(GFChromaticRimIntensity * 100.0);
-    NSString *cacheKey = [NSString stringWithFormat:@"C-%zux%zu-r%.2f-s%ld-pr%d-ci%ld",
-        pixelWidth, pixelHeight, cornerRadius, (long)strengthStep,
-        GFExperimentalChromaticRimEnabled ? 1 : 0, (long)prismStep];
+    NSString *cacheKey = [NSString stringWithFormat:@"C-%zux%zu-r%.2f-s%ld",
+        pixelWidth, pixelHeight, cornerRadius, (long)strengthStep];
 
     NSCache *cache = GFOpticalLightingCache();
     UIImage *cached = [cache objectForKey:cacheKey];
@@ -527,9 +490,6 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
             if (edgeCoverage <= 0.001) continue;
 
             CGFloat insideDepth = MAX(0.0, -sdf);
-            CGFloat prismNX = 0.0;
-            CGFloat prismNY = 0.0;
-
             CGFloat u = x / MAX(1.0, width);
             CGFloat v = y / MAX(1.0, height);
             CGFloat diagonal = GFClamp01(1.0 - (u + v) * 0.5);
@@ -556,11 +516,6 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                 if (normalLength > 0.0001) {
                     CGFloat nx = dx / normalLength;
                     CGFloat ny = dy / normalLength;
-                    if (GFExperimentalChromaticRimEnabled) {
-                        prismNX = nx;
-                        prismNY = ny;
-                    }
-
                     CGFloat ndotl = nx * lightX + ny * lightY;
                     CGFloat facing = MAX(0.0, ndotl);
                     CGFloat opposite = MAX(0.0, -ndotl);
@@ -907,19 +862,10 @@ static UIImage *GFCreateOpticalLightingImage(CGSize size,
                 (unsigned char)lround(GFClamp01(alpha) * 255.0);
 
             if (signedLight >= 0.0) {
-                // Optical-only chromatic fringe, painted over the existing
-                // backdrop. No wallpaper pixels are displaced or captured.
-                if (GFExperimentalChromaticRimEnabled &&
-                    (prismNX != 0.0 || prismNY != 0.0)) {
-                    GFPrismRimRGBA(&pixels[index], GFClamp01(alpha),
-                        insideDepth, renderScale, prismNX, prismNY,
-                        GFClamp01(strength) * GFChromaticRimIntensity);
-                } else {
-                    pixels[index + 0] = a;
-                    pixels[index + 1] = a;
-                    pixels[index + 2] = a;
-                    pixels[index + 3] = a;
-                }
+                pixels[index + 0] = a;
+                pixels[index + 1] = a;
+                pixels[index + 2] = a;
+                pixels[index + 3] = a;
             } else {
                 pixels[index + 0] = 0;
                 pixels[index + 1] = 0;
@@ -2114,119 +2060,6 @@ static void GFRefreshAppLibraryController(
 }
 
 
-/*
- * V4: read-only App Library visual tree probe. No wallpaper mutation.
- * Never collect screenshots, label text or app names. Sampling is bounded
- * and happens only after page appearance while explicitly enabled.
- */
-static NSString *GFV4FilterSummary(NSArray *filters) {
-    if (!filters.count) return @"-";
-    NSMutableArray *labels = [NSMutableArray array];
-    for (id filter in filters) {
-        NSString *type = NSStringFromClass([filter class]);
-        @try {
-            id key = [filter valueForKey:@"type"];
-            if ([key isKindOfClass:NSString.class]) type = key;
-        } @catch (__unused NSException *exception) {}
-        id radius = nil;
-        @try { radius = [filter valueForKey:@"inputRadius"]; }
-        @catch (__unused NSException *exception) {}
-        if ([radius isKindOfClass:NSNumber.class])
-            type = [type stringByAppendingFormat:@"(%.1f)", [radius doubleValue]];
-        [labels addObject:type];
-        if (labels.count == 4) break;
-    }
-    return [labels componentsJoinedByString:@","];
-}
-
-static void GFV4ScanView(UIView *view, NSInteger depth, CGFloat area,
-                         NSUInteger *visited, NSMutableArray *lines) {
-    if (!view || depth > 20 || *visited >= 1800 || lines.count >= 160) return;
-    ++(*visited);
-    NSString *name = NSStringFromClass(view.class);
-    CALayer *layer = view.layer;
-    NSString *layerName = NSStringFromClass(layer.class);
-    NSString *lower = name.lowercaseString;
-    NSArray *filters = layer.filters;
-    NSArray *backgroundFilters = layer.backgroundFilters;
-    BOOL nativeEffect = [view isKindOfClass:UIVisualEffectView.class];
-    BOOL own = [view isKindOfClass:GFAppLibraryGlassView.class];
-    BOOL material = own || nativeEffect || filters.count || backgroundFilters.count ||
-        [lower containsString:@"wallpaper"] || [lower containsString:@"blur"] ||
-        [lower containsString:@"library"] || [lower containsString:@"backdrop"] ||
-        [lower containsString:@"material"] ||
-        [layerName.lowercaseString containsString:@"backdrop"];
-    CGFloat viewArea = MAX(0.0, view.bounds.size.width) * MAX(0.0, view.bounds.size.height);
-    if (material || (depth < 10 && viewArea > area * 0.65)) {
-        NSString *effectName = @"-";
-        if (nativeEffect) {
-            UIVisualEffect *effect = ((UIVisualEffectView *)view).effect;
-            if (effect) effectName = NSStringFromClass(effect.class);
-        }
-        [lines addObject:[NSString stringWithFormat:
-            @"d=%ld view=%@ layer=%@ w=%.0f h=%.0f alpha=%.2f hidden=%d own=%d fx=%@ bgfx=%@ effect=%@",
-            (long)depth, name, layerName, view.bounds.size.width,
-            view.bounds.size.height, view.alpha, view.hidden, own,
-            GFV4FilterSummary(filters), GFV4FilterSummary(backgroundFilters), effectName]];
-    }
-    for (UIView *child in [view.subviews copy]) {
-        GFV4ScanView(child, depth + 1, area, visited, lines);
-        if (*visited >= 1800 || lines.count >= 160) break;
-    }
-}
-
-static void GFV4RecordAppLibraryBlur(UIViewController *controller) {
-    if (!GFAppLibraryBlurDiagnosticsEnabled || !controller.isViewLoaded) return;
-    UIView *root = controller.view;
-    UIWindow *window = root.window;
-    if (!window) return;
-    NSMutableArray *lines = [NSMutableArray array];
-    [lines addObject:[NSString stringWithFormat:
-        @"\n== AppLibrary V4 %@ controller=%@ enabled=%d clearLens=%d size=%.0fx%.0f ==",
-        [NSDate date], NSStringFromClass(controller.class),
-        GFAppLibraryGlassEnabled, GFAppLibraryLensMaterialEnabled,
-        window.bounds.size.width, window.bounds.size.height]];
-    NSUInteger visited = 0;
-    CGFloat area = MAX(1.0, window.bounds.size.width * window.bounds.size.height);
-    GFV4ScanView(root, 0, area, &visited, lines);
-    // Controller ancestors and near-fullscreen siblings can own wallpaper blur.
-    UIView *node = root;
-    for (NSInteger i=0; i < 7 && node.superview && lines.count < 160; ++i) {
-        UIView *parent = node.superview;
-        [lines addObject:[NSString stringWithFormat:@"ancestor=%ld %@",
-            (long)i, NSStringFromClass(parent.class)]];
-        for (UIView *sibling in [parent.subviews copy]) {
-            if (sibling == node || sibling.hidden || sibling.alpha < 0.01) continue;
-            CGFloat size = sibling.bounds.size.width * sibling.bounds.size.height;
-            if (size >= area * 0.50)
-                GFV4ScanView(sibling, 0, area, &visited, lines);
-            if (visited >= 1800 || lines.count >= 160) break;
-        }
-        node = parent;
-    }
-    [lines addObject:[NSString stringWithFormat:@"visited=%lu", (unsigned long)visited]];
-    NSString *dir = @"/var/mobile/Library/Caches/GlassFolders";
-    NSError *err = nil;
-    if (![[NSFileManager defaultManager] createDirectoryAtPath:dir
-        withIntermediateDirectories:YES attributes:nil error:&err]) {
-        NSLog(@"[GlassFolders V4] cannot create log dir: %@", err);
-        return;
-    }
-    NSString *path = [dir stringByAppendingPathComponent:@"LibraryBlur-v4.txt"];
-    NSData *data = [[[lines componentsJoinedByString:@"\n"] stringByAppendingString:@"\n"]
-        dataUsingEncoding:NSUTF8StringEncoding];
-    NSDictionary *info = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:nil];
-    if ([info[NSFileSize] unsignedLongLongValue] > 100000 || !info) {
-        [data writeToFile:path atomically:YES];
-    } else {
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:path];
-        @try { [handle seekToEndOfFile]; [handle writeData:data]; }
-        @catch (__unused NSException *exception) { NSLog(@"[GlassFolders V4] append failed"); }
-        @finally { [handle closeFile]; }
-    }
-    NSLog(@"[GlassFolders V4] report: %@", path);
-}
-
 @interface SBHLibraryCategoryPodBackgroundView : UIView
 @end
 
@@ -2245,32 +2078,6 @@ static void GFV4RecordAppLibraryBlur(UIViewController *controller) {
 - (void)viewDidAppear:(BOOL)animated {
     %orig(animated);
     GFRefreshAppLibraryController(self);
-    // Native live glass: one App Library card, backed by an attached
-    // render-server filter. No screenshot, no stock-material hiding.
-    __weak UIViewController *gfNativeWeakController = self;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.40*NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        UIViewController *controller = gfNativeWeakController;
-        if (controller && controller.isViewLoaded && controller.view.window) {
-            GFNativeLiveInstall(controller.view,
-                GFNativeLiveGlassEnabled && GFAppLibraryGlassEnabled);
-        }
-    });
-
-    // Capture once per appearance, never on every layout pass.
-    if (GFAppLibraryBlurDiagnosticsEnabled) {
-        __weak UIViewController *weakController = self;
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.65 * NSEC_PER_SEC)),
-            dispatch_get_main_queue(), ^{
-                UIViewController *target = weakController;
-                if (target && target.isViewLoaded && target.view.window) {
-                    GFV4RecordAppLibraryBlur(target);
-                    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-                        GFV5RunSyntheticRefractionProbeOnce();
-                    });
-                }
-            });
-    }
 
     /*
      * Some category pods are recycled/attached immediately after the first
@@ -2416,18 +2223,6 @@ static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
 
     GFRefreshIPadLibraryHostSearch(self);
 
-    // This host often owns the iPad background, outside pod controller.view.
-    if (GFAppLibraryBlurDiagnosticsEnabled) {
-        __weak UIViewController *weakHost = self;
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.90 * NSEC_PER_SEC)),
-            dispatch_get_main_queue(), ^{
-                UIViewController *host = weakHost;
-                if (host && host.isViewLoaded && host.view.window) {
-                    GFV4RecordAppLibraryBlur(host);
-                }
-            });
-    }
-
     // SpringBoard may restore the native background after the transition.
     __weak UIViewController *weakSelf = self;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
@@ -2515,7 +2310,6 @@ static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
 @property (nonatomic, strong) CALayer *gfOpticalLightingLayer;
 @property (nonatomic, assign) CGSize gfLightingSize;
 @property (nonatomic, assign) CGFloat gfLightingRadius;
-@property (nonatomic, assign) BOOL gfLastChromaticRimEnabled;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) NSInteger gfStyle;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
@@ -2749,13 +2543,7 @@ static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
         BOOL radiusChanged =
             fabs(self.gfLightingRadius - effectiveRadius) > 0.25;
 
-        // Preferences can change without a size/radius change. Ensure the
-        // closed-folder visual is regenerated on the next layout pass.
-        BOOL opticsChanged = self.gfLastChromaticRimEnabled !=
-            GFExperimentalChromaticRimEnabled;
-
-        if (sizeChanged || opticsChanged ||
-            radiusChanged ||
+        if (sizeChanged || radiusChanged ||
             self.gfOpticalLightingLayer.contents == nil) {
 
             UIImage *lighting =
@@ -2775,12 +2563,8 @@ static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
 
             self.gfLightingSize = currentSize;
             self.gfLightingRadius = effectiveRadius;
-            self.gfLastChromaticRimEnabled = GFExperimentalChromaticRimEnabled;
         }
     }
-
-    GFFolderNativeLensInstall(self, GFFolderNativeRefractionEnabled &&
-                                    GFEnabled && GFStyle == 1);
 }
 
 - (void)didMoveToWindow {
@@ -2856,17 +2640,14 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     NSInteger strengthStep =
         MAX(0, MIN(20, (NSInteger)lround(strength * 20.0)));
 
-    NSInteger prismStep = (NSInteger)lround(GFChromaticRimIntensity * 100.0);
     NSString *cacheKey = [NSString stringWithFormat:
-        @"P24-%@-%@-%zux%zu-r%.2f-s%ld-pr%d-ci%ld",
+        @"P24-%@-%@-%zux%zu-r%.2f-s%ld",
         (style == 1) ? @"LG" : @"CL",
         darkAppearance ? @"D" : @"L",
         pixelWidth,
         pixelHeight,
         cornerRadius,
-        (long)strengthStep,
-        GFExperimentalChromaticRimEnabled ? 1 : 0,
-        (long)prismStep
+        (long)strengthStep
     ];
 
     NSCache *cache = GFOpticalLightingCache();
@@ -3566,16 +3347,10 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 );
 
             if (signedLight >= 0.0) {
-                if (GFExperimentalChromaticRimEnabled && !clearStyle) {
-                    GFPrismRimRGBA(&pixels[index], GFClamp01(alpha),
-                        insideDepth, renderScale, nx, ny,
-                        GFClamp01(strength) * GFChromaticRimIntensity);
-                } else {
-                    pixels[index + 0] = a;
-                    pixels[index + 1] = a;
-                    pixels[index + 2] = a;
-                    pixels[index + 3] = a;
-                }
+                pixels[index + 0] = a;
+                pixels[index + 1] = a;
+                pixels[index + 2] = a;
+                pixels[index + 3] = a;
             } else {
                 pixels[index + 0] = 0;
                 pixels[index + 1] = 0;
@@ -4175,8 +3950,6 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
             radius;
     }
 
-    GFFolderNativeLensInstall(self, GFFolderNativeRefractionEnabled &&
-                                    GFEnabled && GFStyle == 1);
 }
 
 @end

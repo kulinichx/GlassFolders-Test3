@@ -74,62 +74,6 @@
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>
-			<string>Native Live Refraction (Requires Engine)</string>
-			<key>key</key>
-			<string>AppLibraryNativeLiveGlassEnabled</string>
-			<key>default</key>
-			<false/>
-			<key>defaults</key>
-			<string>com.kulinich.glassfolders</string>
-			<key>gfSection</key>
-			<string>home</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>label</key>
-			<string>App Library Clear Lens (Beta)</string>
-			<key>key</key>
-			<string>AppLibraryLensMaterialEnabled</string>
-			<key>default</key>
-			<false/>
-			<key>defaults</key>
-			<string>com.kulinich.glassfolders</string>
-			<key>gfSection</key>
-			<string>home</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>label</key>
-			<string>App Library Blur Diagnostics (V4)</string>
-			<key>key</key>
-			<string>AppLibraryBlurDiagnosticsEnabled</string>
-			<key>default</key>
-			<false/>
-			<key>defaults</key>
-			<string>com.kulinich.glassfolders</string>
-			<key>gfSection</key>
-			<string>home</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>label</key>
-			<string>iOS 27 Inspired Glass (Beta)</string>
-			<key>key</key>
-			<string>AppleLiquidMaterialEnabled</string>
-			<key>default</key>
-			<false/>
-			<key>defaults</key>
-			<string>com.kulinich.glassfolders</string>
-			<key>gfSection</key>
-			<string>home</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>label</key>
 			<string>Dock</string>
 			<key>key</key>
 			<string>DockEnabled</string>
@@ -316,62 +260,6 @@
 		</dict>
 		<dict>
 			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>label</key>
-			<string>Folder Live Refraction Bridge (Requires Engine)</string>
-			<key>key</key>
-			<string>FolderNativeRefractionEnabled</string>
-			<key>default</key>
-			<false/>
-			<key>defaults</key>
-			<string>com.kulinich.glassfolders</string>
-			<key>gfSection</key>
-			<string>home</string>
-			<key>gfStyle</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>label</key>
-			<string>Folder Chromatic Rim (Experimental)</string>
-			<key>key</key>
-			<string>FolderChromaticRimEnabled</string>
-			<key>default</key>
-			<false/>
-			<key>defaults</key>
-			<string>com.kulinich.glassfolders</string>
-			<key>gfSection</key>
-			<string>home</string>
-			<key>gfStyle</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSliderCell</string>
-			<key>cellClass</key>
-			<string>GFPercentSliderCell</string>
-			<key>label</key>
-			<string>Chromatic Rim Intensity</string>
-			<key>key</key>
-			<string>FolderChromaticRimIntensity</string>
-			<key>default</key>
-			<integer>100</integer>
-			<key>defaults</key>
-			<string>com.kulinich.glassfolders</string>
-			<key>min</key>
-			<integer>0</integer>
-			<key>max</key>
-			<integer>100</integer>
-			<key>showValue</key>
-			<false/>
-			<key>gfSection</key>
-			<string>home</string>
-			<key>gfStyle</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
 			<string>App Library Style</string>
@@ -430,23 +318,11 @@
 		</dict>
 		<dict>
 			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>label</key>
-			<string>Dock Clear Lens (Beta)</string>
-			<key>key</key>
-			<string>DockLensMaterialEnabled</string>
-			<key>default</key>
-			<false/>
-			<key>defaults</key>
-			<string>com.kulinich.glassfolders</string>
-		</dict>
-		<dict>
-			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
 			<string>About</string>
 			<key>footerText</key>
-			<string>GlassFolders 1.3.1 (low wakeup 1) · kulinich</string>
+			<string>GlassFolders 1.3.1 (low wakeup 2) · kulinich</string>
 		</dict>
 		<dict>
 			<key>cell</key>
