@@ -31,8 +31,11 @@ static void GFRefreshAppLibraryController(UIViewController *controller);
 static void GFUpdateDockBackground(UIView *host);
 static void GFUpdateLockScreenSurface(UIView *host);
 static void GFUpdateNotificationContainer(UIView *container);
+static void GFRefreshClosedFolderIcon(UIView *icon);
 
-static NSUInteger GFLiveRefreshGeneration = 0;
+static dispatch_source_t GFLiveRefreshTimer;
+static dispatch_time_t GFLiveRefreshDeadline;
+static BOOL GFLivePreferenceReloadPending = NO;
 
 
 static NSInteger GFLiveReadInteger(
@@ -249,16 +252,12 @@ static void GFLiveRefreshViewTree(UIView *view) {
     }
 
     /*
-     * Closed folder icons only receive a new native/GlassFolders background
-     * when SpringBoard asks SBFolderIconImageView to set one. We deliberately
-     * do not fabricate a private stock background here.
-     *
-     * Style/strength changes are already applied to the current
-     * GFBackdropGlassView above. Enable/disable settles through SpringBoard's
-     * normal icon relayout/reconfiguration after returning from Settings.
+     * Reuse the native background captured by the icon hook. A relayout alone
+     * does not ask SpringBoard to replace an already-installed glass view.
      */
     if ([className isEqualToString:
             @"SBFolderIconImageView"]) {
+        GFRefreshClosedFolderIcon(view);
         [view setNeedsDisplay];
         [view setNeedsLayout];
     }
@@ -338,49 +337,43 @@ static void GFLiveApplyPreferencesNow(void) {
     GFLoadPreferences();
 
     GFLiveRefreshAllSurfaces();
+}
 
-    /*
-     * SpringBoard/App Library may relayout one phase after returning from
-     * Settings, so do one cheap settling pass.
-     */
-    dispatch_after(
-        dispatch_time(
-            DISPATCH_TIME_NOW,
-            (int64_t)(0.18 * NSEC_PER_SEC)
-        ),
-        dispatch_get_main_queue(),
-        ^{
-            GFLiveRefreshAllSurfaces();
-        }
-    );
+static void GFLiveArmRefreshTimer(int64_t delay) {
+    GFLiveRefreshDeadline = dispatch_time(DISPATCH_TIME_NOW, delay);
+    dispatch_source_set_timer(GFLiveRefreshTimer, GFLiveRefreshDeadline,
+                              DISPATCH_TIME_FOREVER, 10 * NSEC_PER_MSEC);
 }
 
 static void GFLiveSchedulePreferenceReload(void) {
     dispatch_async(
         dispatch_get_main_queue(),
         ^{
-            NSUInteger generation =
-                ++GFLiveRefreshGeneration;
-
-            /*
-             * Coalesce rapid slider writes so backdrop/SDF work is not rebuilt
-             * for every raw UISlider event.
-             */
-            dispatch_after(
-                dispatch_time(
-                    DISPATCH_TIME_NOW,
-                    (int64_t)(0.10 * NSEC_PER_SEC)
-                ),
-                dispatch_get_main_queue(),
-                ^{
-                    if (generation !=
-                        GFLiveRefreshGeneration) {
-                        return;
+            GFLivePreferenceReloadPending = YES;
+            BOOL created = !GFLiveRefreshTimer;
+            if (created) {
+                GFLiveRefreshTimer = dispatch_source_create(
+                    DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+                if (!GFLiveRefreshTimer) return;
+                dispatch_source_set_event_handler(GFLiveRefreshTimer, ^{
+                    // A previous expiration may already be enqueued when a
+                    // newer slider value moves the deadline forward.
+                    if (dispatch_time(DISPATCH_TIME_NOW, 0) < GFLiveRefreshDeadline) return;
+                    dispatch_source_set_timer(GFLiveRefreshTimer, DISPATCH_TIME_FOREVER,
+                                              DISPATCH_TIME_FOREVER, 0);
+                    if (GFLivePreferenceReloadPending) {
+                        GFLivePreferenceReloadPending = NO;
+                        GFLiveApplyPreferencesNow();
+                        // Reuse the same one-shot source for the settling pass.
+                        // A new preference write replaces this deadline too.
+                        GFLiveArmRefreshTimer(180 * NSEC_PER_MSEC);
+                    } else {
+                        GFLiveRefreshAllSurfaces();
                     }
-
-                    GFLiveApplyPreferencesNow();
-                }
-            );
+                });
+            }
+            GFLiveArmRefreshTimer(100 * NSEC_PER_MSEC);
+            if (created) dispatch_resume(GFLiveRefreshTimer);
         }
     );
 }
@@ -416,6 +409,9 @@ static void GFLivePreferencesDarwinCallback(
 __attribute__((constructor))
 static void GFLivePreferencesInstall(void) {
     @autoreleasepool {
+        if (![[NSBundle mainBundle].bundleIdentifier
+                isEqualToString:@"com.apple.springboard"]) return;
+
         CFNotificationCenterAddObserver(
             CFNotificationCenterGetDarwinNotifyCenter(),
             NULL,

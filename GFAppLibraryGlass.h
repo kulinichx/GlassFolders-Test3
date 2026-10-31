@@ -201,8 +201,8 @@
     CGFloat lip = MIN(0.16,
         (self.gfSearchVariant ? 8.0
             : (self.gfDockVariant ? 12.0 : 18.0)) / height);
-    self.gfBodyVeil.locations =
-        @[@0.0, @(lip), @0.40, @0.65, @(1.0 - lip), @1.0];
+    NSArray *locations = @[@0.0, @(lip), @0.40, @0.65, @(1.0 - lip), @1.0];
+    if (![self.gfBodyVeil.locations isEqualToArray:locations]) self.gfBodyVeil.locations = locations;
 
     BOOL rimGeometryChanged =
         !CGRectEqualToRect(self.gfCardRim.frame, self.bounds) ||

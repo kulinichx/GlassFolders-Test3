@@ -398,9 +398,10 @@ extern char **environ;
 - (NSArray *)specifiers {
     if (!_specifiers) {
         BOOL activated = GFLicenseCurrentInfo() != nil;
-        NSNumber *style = CFBridgingRelease(CFPreferencesCopyAppValue(CFSTR("Style"),
+        id style = CFBridgingRelease(CFPreferencesCopyAppValue(CFSTR("Style"),
             CFSTR("com.kulinich.glassfolders")));
-        NSInteger selectedStyle = style.integerValue == 1 ? 1 : 0;
+        NSInteger selectedStyle = [style isKindOfClass:NSNumber.class] &&
+            [style integerValue] == 1 ? 1 : 0;
         NSMutableArray *items = [NSMutableArray array];
         for (PSSpecifier *specifier in [self loadSpecifiersFromPlistName:@"Root" target:self]) {
             if (activated && [[specifier propertyForKey:@"gfVisibility"] isEqualToString:@"unactivated"]) continue;

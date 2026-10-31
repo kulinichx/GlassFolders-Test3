@@ -322,7 +322,7 @@
 			<key>label</key>
 			<string>About</string>
 			<key>footerText</key>
-			<string>GlassFolders 1.3.1 (low wakeup 2) · kulinich</string>
+			<string>GlassFolders 1.3.2 · kulinich</string>
 		</dict>
 		<dict>
 			<key>cell</key>

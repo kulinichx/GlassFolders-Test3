@@ -112,19 +112,20 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 }
 - (void)layoutSubviews {
     [super layoutSubviews];
-    if (self.gfCircular) {
-        self.layer.cornerCurve = kCACornerCurveCircular;
-        self.layer.cornerRadius = MIN(self.bounds.size.width, self.bounds.size.height) * 0.5;
-    }
-    self.gfLockRim.frame = self.bounds;
-    self.gfLockRim.gfRadius = self.layer.cornerRadius;
-    self.gfLockRim.gfCircular = self.gfCircular;
+    BOOL rimGeometryChanged = !CGRectEqualToRect(self.gfLockRim.frame, self.bounds) ||
+        self.gfLockRim.gfRadius != self.layer.cornerRadius ||
+        self.gfLockRim.gfCircular != self.gfCircular;
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
-    self.gfBodyVeil.frame = self.bounds;
-    self.gfBodyVeil.hidden = self.gfCircular;
+    if (rimGeometryChanged) {
+        self.gfLockRim.frame = self.bounds;
+        self.gfLockRim.gfRadius = self.layer.cornerRadius;
+        self.gfLockRim.gfCircular = self.gfCircular;
+        [self.gfLockRim setNeedsLayout];
+    }
+    if (!CGRectEqualToRect(self.gfBodyVeil.frame, self.bounds)) self.gfBodyVeil.frame = self.bounds;
+    if (self.gfBodyVeil.hidden != self.gfCircular) self.gfBodyVeil.hidden = self.gfCircular;
     [CATransaction commit];
-    [self.gfLockRim setNeedsLayout];
 }
 @end
 
@@ -180,11 +181,6 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
         self.gfFallbackBlurView.alpha = 0.18;
     }
     self.gfTintView.alpha = GFUsesDarkAppearance(self) ? 0.045 : 0.028;
-}
-- (void)layoutSubviews {
-    [super layoutSubviews];
-    self.gfBackdropSampleView.frame = CGRectInset(self.bounds, -12.0, -12.0);
-    self.gfFallbackBlurView.frame = self.gfBackdropSampleView.frame;
 }
 @end
 
@@ -520,12 +516,16 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     if (glass.superview != container ||
         [container.subviews indexOfObjectIdenticalTo:glass] != index + 1)
         [container insertSubview:glass aboveSubview:background];
-    glass.bounds = (CGRect){CGPointZero, background.bounds.size};
-    glass.center = background.center;
-    glass.transform = background.transform;
-    glass.alpha = background.alpha;
-    glass.hidden = state.originalHidden;
-    glass.layer.zPosition = background.layer.zPosition;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    CGRect targetBounds = (CGRect){CGPointZero, background.bounds.size};
+    if (!CGRectEqualToRect(glass.bounds, targetBounds)) glass.bounds = targetBounds;
+    if (!CGPointEqualToPoint(glass.center, background.center)) glass.center = background.center;
+    if (!CGAffineTransformEqualToTransform(glass.transform, background.transform)) glass.transform = background.transform;
+    if (glass.alpha != background.alpha) glass.alpha = background.alpha;
+    if (glass.hidden != state.originalHidden) glass.hidden = state.originalHidden;
+    if (glass.layer.zPosition != background.layer.zPosition) glass.layer.zPosition = background.layer.zPosition;
+    [CATransaction commit];
     CGFloat radius = circle ? MIN(background.bounds.size.width, background.bounds.size.height) * 0.5 :
                              GFLockRadius(radiusOwner);
     if (radius <= 0.0) radius = background.layer.cornerRadius;

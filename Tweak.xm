@@ -8,7 +8,7 @@
 #import "GFLicense.h"
 
 /*
- * GlassFolders 1.3.0 — release
+ * GlassFolders 1.3.2 — release candidate
  *
  * Scope:
  * - stable closed SpringBoard folder icon path
@@ -29,7 +29,7 @@
  * - deliberately quiet straight left/right side middles
  * - subtle upper-right / lower-left transition structure
  *
- * No daemon / DisplayLink / Timer / gyroscope / Metal render loop.
+ * No daemon / DisplayLink / periodic timer / gyroscope / Metal render loop.
  */
 
 static CFStringRef const GFPreferencesDomain = CFSTR("com.kulinich.glassfolders");
@@ -1734,7 +1734,7 @@ static void GFSetNativeSearchBackgroundsDimmed(
 
                 // Suppress only identified native background views. Keep
                 // their saved alpha for restoration; text/icons stay intact.
-                child.alpha = 0.0;
+                if (child.alpha != 0.0) child.alpha = 0.0;
             } else if (original) {
                 child.alpha = original.doubleValue;
 
@@ -1855,8 +1855,9 @@ static void GFUpdateAppLibrarySearchView(
         );
     }
 
-    candidate.backgroundColor =
-        UIColor.clearColor;
+    if (![candidate.backgroundColor isEqual:UIColor.clearColor]) {
+        candidate.backgroundColor = UIColor.clearColor;
+    }
 
     GFSetNativeSearchBackgroundsDimmed(
         candidate,
@@ -1893,15 +1894,16 @@ static void GFUpdateAppLibrarySearchView(
             [overlay removeFromSuperview];
             [candidate insertSubview:overlay
                              atIndex:0];
-        } else {
+        } else if (candidate.subviews.firstObject != overlay) {
             [candidate sendSubviewToBack:overlay];
         }
     }
 
-    overlay.frame = candidate.bounds;
-    overlay.autoresizingMask =
-        UIViewAutoresizingFlexibleWidth |
-        UIViewAutoresizingFlexibleHeight;
+    if (!CGRectEqualToRect(overlay.frame, candidate.bounds)) {
+        overlay.frame = candidate.bounds;
+    }
+    UIViewAutoresizing autoresizing = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    if (overlay.autoresizingMask != autoresizing) overlay.autoresizingMask = autoresizing;
 
     CGFloat radius =
         candidate.layer.cornerRadius;
@@ -2313,9 +2315,14 @@ static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) NSInteger gfStyle;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
+@property (nonatomic, assign) BOOL gfHasMaterial;
+@property (nonatomic, assign) BOOL gfMaterialDark;
+@property (nonatomic, assign) NSInteger gfMaterialStyle;
+@property (nonatomic, assign) CGFloat gfMaterialStrength;
 - (instancetype)initWithStyle:(NSInteger)style
                      strength:(CGFloat)strength
               preferredRadius:(CGFloat)radius;
+- (void)gfRefreshMaterial;
 @end
 
 @implementation GFBackdropGlassView
@@ -2340,15 +2347,40 @@ static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
         self.clipsToBounds = YES;
         self.layer.masksToBounds = YES;
 
+        [self gfRefreshMaterial];
+    }
+    return self;
+}
+
+- (void)gfRefreshMaterial {
+        BOOL darkAppearance = GFUsesDarkAppearance(self);
+        if (_gfHasMaterial && _gfMaterialDark == darkAppearance &&
+            _gfMaterialStyle == _gfStyle && _gfMaterialStrength == _gfStrength) return;
+        _gfHasMaterial = YES;
+        _gfMaterialDark = darkAppearance;
+        _gfMaterialStyle = _gfStyle;
+        _gfMaterialStrength = _gfStrength;
+
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        [self.gfFallbackBlurView removeFromSuperview];
+        self.gfFallbackBlurView = nil;
+        [self.gfTintView removeFromSuperview];
+        self.gfTintView = nil;
+        [self.gfAppLibraryPodVisual removeFromSuperview];
+        self.gfAppLibraryPodVisual = nil;
+        [self.gfOpticalLightingLayer removeFromSuperlayer];
+        self.gfOpticalLightingLayer = nil;
+
         BOOL isBackdropLayer =
             [NSStringFromClass(self.layer.class) containsString:@"Backdrop"];
+        if (isBackdropLayer) [self.layer setValue:@[] forKey:@"filters"];
 
         CGFloat materialResponse = GFMaterialResponse(_gfStrength);
         CGFloat tintResponse = GFTintResponse(_gfStrength);
         CGFloat clearBlurResponse = GFClearBlurResponse(_gfStrength);
         CGFloat clearStructure = GFClearStructureResponse(_gfStrength);
         BOOL clearStyle = (_gfStyle == 0);
-        BOOL darkAppearance = GFUsesDarkAppearance(self);
         BOOL materialRequested = clearStyle || (_gfStrength > 0.001);
 
         if (materialRequested && isBackdropLayer) {
@@ -2491,9 +2523,8 @@ static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
 
             [self.layer addSublayer:_gfOpticalLightingLayer];
         }
-    }
-
-    return self;
+        [CATransaction commit];
+        [self setNeedsLayout];
 }
 
 - (void)layoutSubviews {
@@ -2569,14 +2600,13 @@ static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
 
 - (void)didMoveToWindow {
     [super didMoveToWindow];
+    [self gfRefreshMaterial];
     [self setNeedsLayout];
 }
 
-- (void)gfRefreshMaterial {
-    // The live-settings bridge already calls this selector if it exists.
-    // Leave the existing blur/tint alone; invalidate only the cached rim.
-    self.gfOpticalLightingLayer.contents = nil;
-    [self setNeedsLayout];
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    [self gfRefreshMaterial];
 }
 
 @end
@@ -3732,6 +3762,12 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
                 ? MIN(0.48, 0.20 + 0.30 * materialResponse)
                 : MIN(0.28, 0.10 + 0.18 * materialResponse);
         }
+    } else {
+        // Liquid Glass at 0% must remove the previous nonzero recipe too.
+        if (isBackdropLayer) [materialLayer setValue:@[] forKey:@"filters"];
+        self.gfBackdropSampleView.hidden = YES;
+        [self.gfFallbackBlurView removeFromSuperview];
+        self.gfFallbackBlurView = nil;
     }
 
     /*
@@ -3849,18 +3885,19 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
 
     CGFloat overscan =
         MAX(24.0, self.gfBackdropOverscan);
+    // Quick-action subclasses use a smaller fixed capture. Resolve it here
+    // once; changing 30 -> 12 pt every superclass/subclass layout never settles.
+    BOOL circular = [self isKindOfClass:NSClassFromString(@"GFQuickActionGlassView")];
+    if (circular) overscan = 12.0;
 
     CGRect sampleFrame =
         CGRectInset(self.bounds, -overscan, -overscan);
 
-    self.gfBackdropSampleView.frame =
-        sampleFrame;
-
-    self.gfFallbackBlurView.frame =
-        sampleFrame;
-
-    self.gfTintView.frame =
-        self.bounds;
+    if (!CGRectEqualToRect(self.gfBackdropSampleView.frame, sampleFrame))
+        self.gfBackdropSampleView.frame = sampleFrame;
+    if (self.gfFallbackBlurView && !CGRectEqualToRect(self.gfFallbackBlurView.frame, sampleFrame))
+        self.gfFallbackBlurView.frame = sampleFrame;
+    if (!CGRectEqualToRect(self.gfTintView.frame, self.bounds)) self.gfTintView.frame = self.bounds;
 
     CGFloat radius =
         self.gfPreferredRadius;
@@ -3882,12 +3919,12 @@ static UIImage *GFCreateOpenedPanelLightingImage(CGSize size,
     radius =
         MIN(radius, maxRadius);
 
-    self.layer.cornerRadius = radius;
-    self.layer.cornerCurve =
-        kCACornerCurveContinuous;
+    if (circular) radius = maxRadius;
+    if (self.layer.cornerRadius != radius) self.layer.cornerRadius = radius;
+    NSString *cornerCurve = circular ? kCACornerCurveCircular : kCACornerCurveContinuous;
+    if (![self.layer.cornerCurve isEqualToString:cornerCurve]) self.layer.cornerCurve = cornerCurve;
 
-    self.gfOpticalLayer.frame =
-        self.bounds;
+    if (!CGRectEqualToRect(self.gfOpticalLayer.frame, self.bounds)) self.gfOpticalLayer.frame = self.bounds;
 
     BOOL darkAppearance =
         GFUsesDarkAppearance(self);
@@ -4376,6 +4413,8 @@ static void GFUpdateDockBackground(UIView *host) {
 static char kGFPanelGlassAssociationKey;
 static char kGFStockSubviewWasHiddenKey;
 static char kGFStockSubviewOriginalHiddenKey;
+static char kGFPanelOriginalBackgroundColorKey;
+static char kGFPanelSettingTransparentColorKey;
 
 
 static inline BOOL GFShouldUseOpenedPanel(void) {
@@ -4513,6 +4552,15 @@ static void GFUpdateOpenedFolderBackground(
             );
         }
 
+        id originalColor = objc_getAssociatedObject(
+            backgroundView, &kGFPanelOriginalBackgroundColorKey);
+        if (originalColor) {
+            backgroundView.backgroundColor =
+                originalColor == NSNull.null ? nil : originalColor;
+            objc_setAssociatedObject(backgroundView, &kGFPanelOriginalBackgroundColorKey,
+                                     nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+
         return;
     }
 
@@ -4520,9 +4568,18 @@ static void GFUpdateOpenedFolderBackground(
      * The host itself can carry a stock dark fill even when all material
      * subviews are hidden.
      */
-    if (backgroundView.backgroundColor != UIColor.clearColor) {
+    if (!objc_getAssociatedObject(backgroundView, &kGFPanelOriginalBackgroundColorKey)) {
+        objc_setAssociatedObject(backgroundView, &kGFPanelOriginalBackgroundColorKey,
+                                 backgroundView.backgroundColor ?: NSNull.null,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (![backgroundView.backgroundColor isEqual:UIColor.clearColor]) {
+        objc_setAssociatedObject(backgroundView, &kGFPanelSettingTransparentColorKey,
+                                 @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         backgroundView.backgroundColor =
             UIColor.clearColor;
+        objc_setAssociatedObject(backgroundView, &kGFPanelSettingTransparentColorKey,
+                                 nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 
     for (UIView *subview
@@ -4640,8 +4697,16 @@ static void GFUpdateOpenedFolderBackground(
 
 - (void)setBackgroundColor:(UIColor *)color {
     if (GFShouldUseOpenedPanel()) {
+        // Keep native writes made while glass is enabled, including nil.
+        // Our own transparency write must not overwrite that saved value.
+        if (![objc_getAssociatedObject(self, &kGFPanelSettingTransparentColorKey) boolValue]) {
+            objc_setAssociatedObject(self, &kGFPanelOriginalBackgroundColorKey,
+                                     color ?: NSNull.null, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
         %orig(UIColor.clearColor);
     } else {
+        objc_setAssociatedObject(self, &kGFPanelOriginalBackgroundColorKey, nil,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         %orig(color);
     }
 }
@@ -4672,23 +4737,39 @@ static void GFUpdateOpenedFolderBackground(
 - (void)setBackgroundView:(UIView *)backgroundView;
 @end
 
+static char kGFIconNativeBackgroundKey;
+static char kGFIconGlassBackgroundKey;
 
+static void GFRefreshClosedFolderIcon(UIView *icon) {
+    id native = objc_getAssociatedObject(icon, &kGFIconNativeBackgroundKey);
+    if (!native) return;
+    GFBackdropGlassView *glass = objc_getAssociatedObject(icon, &kGFIconGlassBackgroundKey);
+    BOOL useGlass = GFEnabled && native != NSNull.null && !GFViewIsInsideAppLibrary(icon);
+    if (useGlass == (glass != nil)) return;
+    ((void (*)(id, SEL, id))objc_msgSend)(icon, @selector(setBackgroundView:),
+                                       native == NSNull.null ? nil : native);
+}
 
 %group GFIconHooks
 
 %hook SBFolderIconImageView
 
 - (void)setBackgroundView:(UIView *)backgroundView {
-    if (!GFEnabled) {
+    if ([backgroundView isKindOfClass:GFBackdropGlassView.class]) {
         %orig(backgroundView);
         return;
     }
+
+    objc_setAssociatedObject(self, &kGFIconNativeBackgroundKey,
+                             backgroundView ?: NSNull.null, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
     /*
      * App Library mini-folders/clusters must keep Apple's native transparent
      * presentation. Do not install Clear/Liquid Glass inside a category pod.
      */
-    if (GFViewIsInsideAppLibrary(self)) {
+    if (!GFEnabled || !backgroundView || GFViewIsInsideAppLibrary(self)) {
+        objc_setAssociatedObject(self, &kGFIconGlassBackgroundKey, nil,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         %orig(backgroundView);
         return;
     }
@@ -4701,6 +4782,8 @@ static void GFUpdateOpenedFolderBackground(
                                           strength:GFGlassStrength
                                    preferredRadius:originalRadius];
 
+    objc_setAssociatedObject(self, &kGFIconGlassBackgroundKey, plate,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     %orig(plate);
 }
 

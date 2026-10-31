@@ -1,4 +1,11 @@
-# GlassFolders 1.3.0 — App Library and Dock glass candidate
+# GlassFolders 1.3.2
+
+Audit fixes based on `fix/low-wakeup-1.3.1` at `32b1022`. See
+[audit findings and device checklist](docs/AUDIT-1.3.2.md). The RootHide artifact
+uses the short filename `kulinich.glassfolders_1.3.2.deb`. This is a validation
+candidate, not a claim of measured power savings or full device compatibility.
+
+## Previous Release Notes
 
 This branch adds an independent offline GlassFolders issuer and device-bound activation. Candidate package: `1.3.0~lock14`. Target systems: iOS / iPadOS **16.0–17.3.1**, with a compatible jailbreak and SpringBoard injection environment. Device validation is still required; the source target is not a claim of tested compatibility.
 
