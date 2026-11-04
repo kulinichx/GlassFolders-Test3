@@ -4211,6 +4211,10 @@ static void GFUpdateDockBackground(UIView *host) {
     %orig;
     GFUpdateLockScreenSurface((UIView *)self);
 }
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
 %end
 %end
 
@@ -4822,6 +4826,13 @@ static void GFRefreshClosedFolderIcon(UIView *icon) {
         }
         if ([notificationClass isSubclassOfClass:UIView.class]) {
             %init(GFLockNotificationHooks);
+            for (NSString *name in @[UIAccessibilityReduceTransparencyStatusDidChangeNotification,
+                                     UIAccessibilityDarkerSystemColorsStatusDidChangeNotification]) {
+                [NSNotificationCenter.defaultCenter addObserverForName:name object:nil
+                    queue:NSOperationQueue.mainQueue usingBlock:^(__unused NSNotification *note) {
+                        GFLockScheduleRefresh();
+                    }];
+            }
             if (GFLockHasBoolArgumentMethod(notificationClass, NSSelectorFromString(@"_setBanner:"))) {
                 %init(GFNotificationPresentationHooks);
             }

@@ -253,7 +253,7 @@ assert.equal(creates, 1);
         text = source("control")
         version = re.search(r"^Version: (.+)$", text, re.MULTILINE).group(1)
         info = plistlib.loads((BASE or ROOT).joinpath("prefs/Resources/Info.plist").read_bytes())
-        self.assertEqual(info["CFBundleShortVersionString"], version.split("~")[0])
+        self.assertEqual(info["CFBundleShortVersionString"], version.split("~")[0].split("+")[0])
         self.assertIn("^Version: " + version + "$", source(".github/workflows/build.yml"))
 
 
