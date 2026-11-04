@@ -73,6 +73,20 @@ static CGFloat GFLockRimCumulativeOpacity(GFLockRimProfile profile, NSUInteger i
     return MAX(0.0, MIN(1.0, (target - underneath) / MAX(0.0001, 1.0 - underneath)));
 }
 
+static NSArray *GFLockRimShadeColors(BOOL lightSurface) {
+    CGFloat gain = lightSurface ? 2.5 : 1.0;
+    return @[
+        (id)[UIColor colorWithWhite:0.0 alpha:0.025 * gain].CGColor,
+        (id)[UIColor colorWithWhite:0.0 alpha:0.022 * gain].CGColor,
+        (id)[UIColor colorWithWhite:0.0 alpha:0.014 * gain].CGColor,
+        (id)[UIColor colorWithWhite:0.0 alpha:0.012 * gain].CGColor,
+        (id)[UIColor colorWithWhite:0.0 alpha:0.032 * gain].CGColor,
+        (id)[UIColor colorWithWhite:0.0 alpha:0.075 * gain].CGColor,
+        (id)[UIColor colorWithWhite:0.0 alpha:0.112 * gain].CGColor,
+        (id)[UIColor colorWithWhite:0.0 alpha:0.12 * gain].CGColor
+    ];
+}
+
 @interface GFLockRimView : UIView
 @property (nonatomic, strong) CAGradientLayer *gfReflection;
 @property (nonatomic, strong) CAGradientLayer *gfShoulder;
@@ -80,6 +94,7 @@ static CGFloat GFLockRimCumulativeOpacity(GFLockRimProfile profile, NSUInteger i
 @property (nonatomic, assign) CGFloat gfRadius;
 @property (nonatomic, assign) BOOL gfCircular;
 @property (nonatomic, assign) BOOL gfSubdued;
+@property (nonatomic, assign) BOOL gfLightSurface;
 @end
 @implementation GFLockRimView
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -98,16 +113,7 @@ static CGFloat GFLockRimCumulativeOpacity(GFLockRimProfile profile, NSUInteger i
             (id)[UIColor colorWithWhite:1.0 alpha:0.092].CGColor,
             (id)[UIColor colorWithWhite:1.0 alpha:0.10].CGColor
         ]);
-        self.gfInnerShade = GFLockRimBand(@[
-            (id)[UIColor colorWithWhite:0.0 alpha:0.025].CGColor,
-            (id)[UIColor colorWithWhite:0.0 alpha:0.022].CGColor,
-            (id)[UIColor colorWithWhite:0.0 alpha:0.014].CGColor,
-            (id)[UIColor colorWithWhite:0.0 alpha:0.012].CGColor,
-            (id)[UIColor colorWithWhite:0.0 alpha:0.032].CGColor,
-            (id)[UIColor colorWithWhite:0.0 alpha:0.075].CGColor,
-            (id)[UIColor colorWithWhite:0.0 alpha:0.112].CGColor,
-            (id)[UIColor colorWithWhite:0.0 alpha:0.12].CGColor
-        ]);
+        self.gfInnerShade = GFLockRimBand(GFLockRimShadeColors(NO));
         self.gfReflection = GFLockRimBand(@[
             (id)[UIColor colorWithWhite:1.0 alpha:0.42].CGColor,
             (id)[UIColor colorWithWhite:1.0 alpha:0.39].CGColor,
@@ -124,6 +130,12 @@ static CGFloat GFLockRimCumulativeOpacity(GFLockRimProfile profile, NSUInteger i
     }
     return self;
 }
+- (void)setGfLightSurface:(BOOL)lightSurface {
+    if (_gfLightSurface == lightSurface) return;
+    _gfLightSurface = lightSurface;
+    self.gfInnerShade.colors = GFLockRimShadeColors(lightSurface);
+    [self setNeedsLayout];
+}
 - (void)layoutSubviews {
     [super layoutSubviews];
     [CATransaction begin];
@@ -131,8 +143,8 @@ static CGFloat GFLockRimCumulativeOpacity(GFLockRimProfile profile, NSUInteger i
     // Keep a substantial, compact reflection like the existing folder rim.
     // Thickness belongs at the edge, not in a broad inward gray/white halo.
     // Rear strips need an identifiable rim even after native stack fading.
-    self.gfShoulder.opacity = self.gfSubdued ? 0.30 : 1.0;
-    self.gfReflection.opacity = self.gfSubdued ? 0.78 : 1.0;
+    self.gfShoulder.opacity = (self.gfSubdued ? 0.30 : 1.0) * (self.gfLightSurface ? 0.55 : 1.0);
+    self.gfReflection.opacity = (self.gfSubdued ? 0.78 : 1.0) * (self.gfLightSurface ? 0.65 : 1.0);
     self.gfInnerShade.opacity = self.gfSubdued ? 0.90 : 1.0;
     for (CAGradientLayer *band in @[self.gfInnerShade, self.gfShoulder, self.gfReflection]) {
         // A collapsed stack reveals mostly bottom strips. A diagonal light

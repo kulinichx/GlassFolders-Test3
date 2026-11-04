@@ -1,4 +1,4 @@
-name: GlassFolders 1.3.0 Lock16
+name: GlassFolders WhiteBG Test 1
 
 on:
   workflow_dispatch:
@@ -16,8 +16,27 @@ on:
       - 'feat/ios16-optics-lab*'
 
 jobs:
+  notification-contrast:
+    name: Notification contrast safety checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check notification integration
+        run: python3 -X utf8 tests/test_notification_legibility.py
+      - name: Check candidate package identity
+        run: python3 -X utf8 tests/test_notification_package.py
+      - name: Compile and test contrast model
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -std=c99 -Wall -Wextra -Werror tests/test_notification_contrast.c \
+            -lm -o "$RUNNER_TEMP/gf-notification-contrast"
+          "$RUNNER_TEMP/gf-notification-contrast"
+
   build-roothide:
     name: RootHide arm64e
+    needs: notification-contrast
     runs-on: macos-latest
 
     env:
@@ -29,7 +48,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 1.3.0 / ROOTHIDE ARM64E ==="
+          echo "=== GLASSFOLDERS WHITEBG TEST 1 / ROOTHIDE ARM64E ==="
 
       - name: Install dependencies
         shell: bash
@@ -135,7 +154,8 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -q '^Version: 1.3.0~lock16$' ctrl/control
+          grep -Fqx 'Version: 1.3.0~lock16+whitebg1' ctrl/control
+          grep -Fqx 'Name: GlassFolders (WhiteBG Test 1)' ctrl/control
           grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64e$' ctrl/control
 
@@ -186,7 +206,8 @@ jobs:
           assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
           assert p["CFBundleName"] == "GlassFoldersPrefs"
           assert p["CFBundleShortVersionString"] == "1.3.0"
-          assert p["CFBundleVersion"] == "1.3.0.16"
+          assert p["CFBundleVersion"] == "1.3.0.16.1"
+          assert p["CFBundleDisplayName"] == "GlassFolders WhiteBG Test 1"
           assert p["NSPrincipalClass"] == "GFRootListController"
           print("Preference bundle Info.plist verified.")
           PY
@@ -264,12 +285,13 @@ jobs:
       - name: Upload RootHide deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.3.0-lock16-RootHide-arm64e
+          name: GlassFolders-1.3.0-lock16-whitebg1-RootHide-arm64e
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
 
   build-rootless:
+    needs: notification-contrast
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_rootless }}
     name: Standard rootless arm64
     runs-on: macos-latest
@@ -283,7 +305,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 1.3.0 / STANDARD ROOTLESS ARM64 ==="
+          echo "=== GLASSFOLDERS WHITEBG TEST 1 / STANDARD ROOTLESS ARM64 ==="
 
       - name: Install dependencies
         shell: bash
@@ -395,7 +417,8 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -q '^Version: 1.3.0~lock16$' ctrl/control
+          grep -Fqx 'Version: 1.3.0~lock16+whitebg1' ctrl/control
+          grep -Fqx 'Name: GlassFolders (WhiteBG Test 1)' ctrl/control
           grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64$' ctrl/control
 
@@ -462,7 +485,8 @@ jobs:
           assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
           assert p["CFBundleName"] == "GlassFoldersPrefs"
           assert p["CFBundleShortVersionString"] == "1.3.0"
-          assert p["CFBundleVersion"] == "1.3.0.16"
+          assert p["CFBundleVersion"] == "1.3.0.16.1"
+          assert p["CFBundleDisplayName"] == "GlassFolders WhiteBG Test 1"
           assert p["NSPrincipalClass"] == "GFRootListController"
           print("Preference bundle Info.plist verified.")
           PY
@@ -541,7 +565,7 @@ jobs:
       - name: Upload rootless deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.3.0-lock16-Rootless-arm64
+          name: GlassFolders-1.3.0-lock16-whitebg1-Rootless-arm64
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14

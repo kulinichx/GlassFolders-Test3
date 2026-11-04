@@ -4,6 +4,7 @@
 #define GF_LOCK_SCREEN_GLASS_H
 
 #import "GFGlassRim.h"
+#import "GFNotificationContrast.h"
 
 // Lock-screen optics have a fixed recipe, independent of folder preferences.
 // Keep wallpaper detail behind cards, and use still less blur for small buttons.
@@ -44,9 +45,15 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 
 @interface GFLockScreenGlassView : GFPanelGlassView
 @property (nonatomic, assign) BOOL gfCircular;
+@property (nonatomic, assign) BOOL gfNotificationSurface;
+@property (nonatomic, assign) BOOL gfNotificationContentHidden;
+@property (nonatomic, assign) BOOL gfNotificationLightSurface;
+@property (nonatomic, assign) CGFloat gfNotificationVeilOpacity;
 @property (nonatomic, strong) GFLockRimView *gfLockRim;
 @property (nonatomic, strong) CAGradientLayer *gfBodyVeil;
 - (void)gfRefreshBodyVeil;
+- (void)gfConfigureNotificationContrast:(GFNotificationContrastResult)contrast
+                         contentHidden:(BOOL)contentHidden;
 @end
 @implementation GFLockScreenGlassView
 - (instancetype)initWithStyle:(NSInteger)style strength:(CGFloat)strength {
@@ -82,10 +89,31 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
     [self gfRefreshBodyVeil];
     [self.gfLockRim setNeedsLayout];
 }
+- (void)gfConfigureNotificationContrast:(GFNotificationContrastResult)contrast
+                         contentHidden:(BOOL)contentHidden {
+    if (_gfNotificationSurface && _gfNotificationContentHidden == contentHidden &&
+        _gfNotificationLightSurface == contrast.lightSurface &&
+        fabs(_gfNotificationVeilOpacity - contrast.opacity) < 0.0001) return;
+    _gfNotificationSurface = YES;
+    _gfNotificationContentHidden = contentHidden;
+    _gfNotificationLightSurface = contrast.lightSurface;
+    _gfNotificationVeilOpacity = contrast.opacity;
+    self.gfLockRim.gfLightSurface = !contentHidden && contrast.lightSurface;
+    [self gfRefreshBodyVeil];
+}
 - (void)gfRefreshBodyVeil {
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
-    if (self.gfLockRim.gfSubdued) {
+    if (self.gfNotificationSurface && !self.gfNotificationContentHidden) {
+        // Protect the actual native foreground without recoloring labels.
+        // This is a conservative contrast guard, not wallpaper adaptivity.
+        UIColor *veil = [UIColor colorWithWhite:self.gfNotificationLightSurface ? 1.0 : 0.0
+                                         alpha:self.gfNotificationVeilOpacity];
+        self.gfBodyVeil.colors = @[(id)veil.CGColor, (id)veil.CGColor,
+                                  (id)veil.CGColor, (id)veil.CGColor];
+        self.gfBodyVeil.startPoint = CGPointMake(0.5, 0.0);
+        self.gfBodyVeil.endPoint = CGPointMake(0.5, 1.0);
+    } else if (self.gfLockRim.gfSubdued || self.gfNotificationContentHidden) {
         // A little neutral absorption separates exposed rear strips from the
         // wallpaper. No white fill or additive lift that can wash out a stack.
         self.gfBodyVeil.colors = @[
@@ -432,6 +460,76 @@ static void GFLockSyncStackOverlay(UIView *host, GFLockBackgroundState *state) {
     if (overlay) overlay.hidden = YES;
 }
 
+static BOOL GFLockAddForegroundColor(UIColor *color, UITraitCollection *traits,
+                                    CGFloat opacity,
+                                    GFNotificationContrastAccumulator *contrast) {
+    if (![color isKindOfClass:UIColor.class]) return NO;
+    UIColor *resolved = [color resolvedColorWithTraitCollection:traits];
+    CGFloat red = 0.0, green = 0.0, blue = 0.0, alpha = 0.0;
+    if (![resolved getRed:&red green:&green blue:&blue alpha:&alpha]) {
+        CGFloat white = 0.0;
+        if (![resolved getWhite:&white alpha:&alpha]) return NO;
+        red = green = blue = white;
+    }
+    GFNotificationContrastAdd(contrast, red, green, blue, alpha * opacity);
+    return contrast->valid;
+}
+
+static BOOL GFLockCollectNotificationContrast(UIView *view, UIView *host,
+                                             UIView *background, NSUInteger depth,
+                                             CGFloat opacity, NSUInteger *remaining,
+                                             GFNotificationContrastAccumulator *contrast) {
+    if (view == background || view.hidden ||
+        [view isKindOfClass:GFLockScreenGlassView.class]) return YES;
+    if (view != host) opacity *= view.alpha;
+    if (opacity <= 0.01) return YES;
+    if (!*remaining || depth > 10) return NO;
+    (*remaining)--;
+    // The numerical bound assumes source-over text. Do not guess the output
+    // of vibrancy, custom filters, or an independent foreground material.
+    if (view.layer.compositingFilter || view.layer.filters.count ||
+        [view isKindOfClass:UIVisualEffectView.class]) return NO;
+    if ([view isKindOfClass:UILabel.class]) {
+        UILabel *label = (UILabel *)view;
+        if (label.text.length || label.attributedText.length) {
+            if (label.highlighted) return NO;
+            NSAttributedString *attributed = label.attributedText;
+            if (attributed.length) {
+                __block BOOL valid = YES;
+                [attributed enumerateAttribute:NSForegroundColorAttributeName
+                                       inRange:NSMakeRange(0, attributed.length)
+                                       options:0
+                                    usingBlock:^(id color, NSRange range, BOOL *stop) {
+                    if (contrast->samples >= 256 ||
+                        !GFLockAddForegroundColor(color ?: label.textColor,
+                            label.traitCollection, opacity, contrast)) {
+                        valid = NO;
+                        *stop = YES;
+                    }
+                }];
+                if (!valid) return NO;
+            } else if (!GFLockAddForegroundColor(label.textColor,
+                         label.traitCollection, opacity, contrast)) {
+                return NO;
+            }
+        }
+    }
+    for (UIView *child in view.subviews) {
+        if (!GFLockCollectNotificationContrast(child, host, background, depth + 1,
+                                               opacity, remaining, contrast)) return NO;
+    }
+    return YES;
+}
+
+static GFNotificationContrastResult GFNotificationContrastForHost(UIView *host,
+                                                                  UIView *background) {
+    GFNotificationContrastAccumulator contrast = GFNotificationContrastBegin();
+    NSUInteger remaining = 128;
+    if (!GFLockCollectNotificationContrast(host, host, background, 0, 1.0,
+                                           &remaining, &contrast)) contrast.valid = false;
+    return GFNotificationContrastResolve(contrast);
+}
+
 static void GFUpdateLockScreenSurface(UIView *host) {
     if (!host) return;
     GFLockBackgroundState *state = objc_getAssociatedObject(host, &kGFLockBackgroundKey);
@@ -490,6 +588,20 @@ static void GFUpdateLockScreenSurface(UIView *host) {
         if (state) GFRestoreLockScreenSurface(host);
         return;
     }
+    GFNotificationContrastResult contrast = {0.0, false, false};
+    BOOL notificationContentHidden = notification && !banner &&
+        GFLockBool(host, @"isNotificationContentViewHidden", NO);
+    if (notification) {
+        if (!notificationContentHidden) contrast = GFNotificationContrastForHost(host, background);
+        // Preserve the system's complete material/foreground pairing when a
+        // safe translucent guard is unavailable, or accessibility requests it.
+        if (UIAccessibilityIsReduceTransparencyEnabled() ||
+            UIAccessibilityDarkerSystemColorsEnabled() ||
+            (!notificationContentHidden && !contrast.valid)) {
+            if (state) GFRestoreLockScreenSurface(host);
+            return;
+        }
+    }
     Class glassClass = circle ? GFQuickActionGlassView.class :
         (banner ? GFBannerGlassView.class :
          (notification ? GFNotificationGlassView.class : GFLockScreenGlassView.class));
@@ -531,6 +643,8 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     if (radius <= 0.0) radius = background.layer.cornerRadius;
     if (radius <= 0.0) radius = MIN(24.0, background.bounds.size.height * 0.5);
     glass.gfCircular = circle;
+    if (notification)
+        [glass gfConfigureNotificationContrast:contrast contentHidden:notificationContentHidden];
     [glass setPreferredRadius:radius];
     if (!background.hidden) background.hidden = YES;
 }
