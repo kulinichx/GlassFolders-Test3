@@ -28,4 +28,5 @@ assert workflow.count(
 for scheme, architecture in (("RootHide", "arm64e"), ("Rootless", "arm64")):
     assert f"GlassFolders-1.3.0-lock16-whitebg1-{scheme}-{architecture}" in workflow
 assert workflow.count("needs: notification-contrast") == 2
+assert workflow.count("runs-on: macos-15-intel") == 2
 print("WhiteBG Test 1 package identity and build prerequisites: PASS")

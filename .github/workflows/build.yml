@@ -37,7 +37,8 @@ jobs:
   build-roothide:
     name: RootHide arm64e
     needs: notification-contrast
-    runs-on: macos-latest
+    # Pin the host architecture; macos-latest ARM runners exhausted capacity.
+    runs-on: macos-15-intel
 
     env:
       THEOS: ${{ github.workspace }}/theos-roothide
@@ -294,7 +295,7 @@ jobs:
     needs: notification-contrast
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_rootless }}
     name: Standard rootless arm64
-    runs-on: macos-latest
+    runs-on: macos-15-intel
 
     env:
       THEOS: ${{ github.workspace }}/theos
