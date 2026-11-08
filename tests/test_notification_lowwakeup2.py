@@ -6,7 +6,7 @@ import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "1.3.3"
+VERSION = "1.3.4"
 BASELINE = {
     "GFLivePreferencesPrelude.h": "a264e6bc2d97c05b70395cceb2855e79a099ac242a131d0300854e5dc215b988",
     "prefs/GFRootListController.m": "442ce9593397c785140ff90bb15b7f3830029b5006d4d6343f9e1e39ee0491c3",
@@ -27,6 +27,12 @@ class NotificationIntegration(unittest.TestCase):
             "", tweak, flags=re.S | re.M,
         )
         self.assertEqual(count, 3)
+        stripped, count = re.subn(
+            r"^[ \t]*// GF_LIBRARY_LEGIBILITY_BEGIN\n.*?"
+            r"^[ \t]*// GF_LIBRARY_LEGIBILITY_END\n",
+            "", stripped, flags=re.S | re.M,
+        )
+        self.assertEqual(count, 7)
         self.assertEqual(hashlib.sha256(stripped.encode()).hexdigest(),
                          "9e9f944efd9e06577f3830dd9b2858ccfd6618a67468adf5b5ed835db2fcf9c2")
 
@@ -35,8 +41,8 @@ class NotificationIntegration(unittest.TestCase):
         self.assertIn("Version: " + VERSION + "\n", control)
         self.assertIn("Architecture: iphoneos-arm64e", control)
         info = plistlib.loads((ROOT / "prefs/Resources/Info.plist").read_bytes())
-        self.assertEqual(info["CFBundleVersion"], "1.3.3.1")
-        self.assertEqual(info["CFBundleShortVersionString"], "1.3.3")
+        self.assertEqual(info["CFBundleVersion"], "1.3.4.1")
+        self.assertEqual(info["CFBundleShortVersionString"], VERSION)
         self.assertEqual(info["CFBundleIdentifier"], "com.kulinich.glassfolders.preferences")
         self.assertEqual(info["CFBundleDisplayName"], "Luma Glass")
         entry = plistlib.loads((ROOT / "layout/Library/PreferenceLoader/Preferences/GlassFolders/GlassFolders.plist").read_bytes())
@@ -82,6 +88,26 @@ class NotificationIntegration(unittest.TestCase):
         self.assertIn("UIAccessibilityDarkerSystemColorsEnabled()", lock)
         self.assertNotIn("GFNotificationContrast", lock)
         self.assertNotIn("gfNotificationVeilOpacity", lock)
+
+    def test_library_native_legibility(self):
+        library = (ROOT / "GFLibraryLegibility.h").read_text(encoding="utf-8")
+        tweak = (ROOT / "Tweak.xm").read_text(encoding="utf-8")
+        self.assertIn("return GFLibraryHomeLegibility(traits) ?: native", library)
+        self.assertIn('@"_currentHomeScreenLegibilitySettings"', library)
+        self.assertIn('@"legibilitySettingsForVariant:"', library)
+        self.assertIn('objc_getClass("_UILegibilitySettings")', library)
+        self.assertIn("GFLibraryRefreshSearchTree(searchView, NO)", tweak)
+        self.assertIn("GFLibraryRefreshSearchTree(candidate, YES)", tweak)
+        self.assertIn("GFLibraryRefreshControllerLegibility(controller)", tweak)
+        self.assertIn("%init(GFLibraryNativeLegibilityHooks)", tweak)
+        self.assertIn("%init(GFLibrarySearchAppearanceHooks)", tweak)
+        self.assertIn("GFLibraryEffectiveLegibility(native, self.traitCollection)", tweak)
+        for forbidden in ("setTextColor", "attributedText =", "setFilters",
+                          "setTintColor", "CADisplayLink", "NSTimer", "takeScreenshot",
+                          "averageColorForVariant:", "colorWithWhite:"):
+            self.assertNotIn(forbidden, library)
+        self.assertIn("state.generation == GFHomeWallpaperGeneration", library)
+        self.assertIn("current == state.appliedStyle", library)
 
     def test_build_resources(self):
         makefile = (ROOT / "prefs/Makefile").read_text(encoding="utf-8")

@@ -1051,6 +1051,9 @@ static GFAppLibraryMaterialRecipe GFAppLibraryRecipe(
 }
 
 #import "GFAppLibraryGlass.h"
+// GF_LIBRARY_LEGIBILITY_BEGIN
+#import "GFLibraryLegibility.h"
+// GF_LIBRARY_LEGIBILITY_END
 
 
 static GFAppLibraryGlassView *GFAppLibraryOverlayForPod(UIView *pod) {
@@ -1770,6 +1773,9 @@ static void GFRestoreAppLibrarySearchView(
     UIView *searchView
 ) {
     if (!searchView) return;
+// GF_LIBRARY_LEGIBILITY_BEGIN
+    GFLibraryRefreshSearchTree(searchView, NO);
+// GF_LIBRARY_LEGIBILITY_END
 
     GFAppLibraryGlassView *overlay =
         GFAppLibrarySearchOverlay(searchView);
@@ -1912,6 +1918,9 @@ static void GFUpdateAppLibrarySearchView(
     }
 
     [overlay setPreferredRadius:radius];
+// GF_LIBRARY_LEGIBILITY_BEGIN
+    GFLibraryRefreshSearchTree(candidate, YES);
+// GF_LIBRARY_LEGIBILITY_END
 }
 
 
@@ -2051,6 +2060,9 @@ static void GFRefreshAppLibraryController(
     );
 
     GFRefreshAppLibraryDescendants(root);
+// GF_LIBRARY_LEGIBILITY_BEGIN
+    GFLibraryRefreshControllerLegibility(controller);
+// GF_LIBRARY_LEGIBILITY_END
 
     /*
      * Beta 3.4: the top App Library search pill shares the same independent
@@ -2193,6 +2205,9 @@ static void GFRefreshAppLibraryController(
  */
 static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
     if (!host.isViewLoaded) return;
+// GF_LIBRARY_LEGIBILITY_BEGIN
+    GFLibraryRefreshControllerLegibility(host);
+// GF_LIBRARY_LEGIBILITY_END
     UIViewController *target = host;
     SEL getter = NSSelectorFromString(@"containerViewController");
     if ([host respondsToSelector:getter]) {
@@ -2207,6 +2222,40 @@ static void GFRefreshIPadLibraryHostSearch(UIViewController *host) {
 
 @interface SBHLibraryViewController : UIViewController
 @end
+// GF_LIBRARY_LEGIBILITY_BEGIN
+%group GFLibraryNativeLegibilityHooks
+%hook SBHLibraryViewController
+- (id)effectiveLegibilitySettings {
+    id native = %orig;
+    return GFLibraryEffectiveLegibility(native, self.traitCollection);
+}
+%end
+%end
+
+@interface SBHSearchTextField : UISearchTextField
+@end
+
+%group GFLibrarySearchAppearanceHooks
+%hook SBHSearchTextField
+- (void)updateVisualStyling {
+    %orig;
+    GFLibraryRefreshSearchField(self, GFViewIsInsideAppLibrary(self));
+}
+- (void)layoutSubviews {
+    %orig;
+    GFLibraryRefreshSearchField(self, GFViewIsInsideAppLibrary(self));
+}
+- (void)didMoveToSuperview {
+    %orig;
+    GFLibraryRefreshSearchField(self, GFViewIsInsideAppLibrary(self));
+}
+- (void)didMoveToWindow {
+    %orig;
+    GFLibraryRefreshSearchField(self, GFViewIsInsideAppLibrary(self));
+}
+%end
+%end
+// GF_LIBRARY_LEGIBILITY_END
 
 %group GFIPadLibraryHostSearchHooks
 
@@ -5006,6 +5055,19 @@ static void GFUpdateOpenedFolderBackground(
         // On iPad the library host can appear without activating search.
         // This is the path used when swiping out and back to App Library.
         Class libraryHostClass = objc_getClass("SBHLibraryViewController");
+        // GF_LIBRARY_LEGIBILITY_BEGIN
+        if ([libraryHostClass isSubclassOfClass:UIViewController.class] &&
+            GFLibraryHasMethod(libraryHostClass, @"effectiveLegibilitySettings", '@') &&
+            GFLibraryHasMethod(libraryHostClass, @"_updateViewControllerLegibility", 'v')) {
+            %init(GFLibraryNativeLegibilityHooks);
+            GFLibraryLegibilityHookAvailable = YES;
+        }
+        Class libraryFieldClass = objc_getClass("SBHSearchTextField");
+        if ([libraryFieldClass isSubclassOfClass:UISearchTextField.class] &&
+            GFLibraryHasMethod(libraryFieldClass, @"updateVisualStyling", 'v')) {
+            %init(GFLibrarySearchAppearanceHooks);
+        }
+        // GF_LIBRARY_LEGIBILITY_END
         if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad &&
             [libraryHostClass isSubclassOfClass:UIViewController.class]) {
             %init(GFIPadLibraryHostSearchHooks);

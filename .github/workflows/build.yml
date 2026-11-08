@@ -1,4 +1,4 @@
-name: Luma Glass 1.3.3
+name: Luma Glass 1.3.4
 
 on:
   workflow_dispatch:
@@ -44,13 +44,19 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== LUMA GLASS 1.3.3 / ROOTHIDE ARM64E ==="
+          echo "=== LUMA GLASS 1.3.4 / ROOTHIDE ARM64E ==="
 
       - name: Exercise production foreground state
         run: |
           clang -fobjc-arc -Wall -Wextra -Wno-unused-parameter -Wno-unused-function \
             -framework Foundation tests/notification_foreground_harness.m -o /tmp/gf-foreground
           /tmp/gf-foreground
+
+      - name: Exercise native library legibility routing
+        run: |
+          clang -fobjc-arc -Wall -Wextra -Wno-unused-parameter -Wno-unused-function \
+            -framework Foundation tests/library_legibility_harness.m -o /tmp/gf-library-legibility
+          /tmp/gf-library-legibility
 
       - name: Exercise stack material stability
         run: |
@@ -164,7 +170,7 @@ jobs:
           set -euo pipefail
           ORIGINAL="$(find packages -maxdepth 1 -type f -name '*.deb' | sort | tail -n 1)"
           test -n "$ORIGINAL"
-          DEB="packages/LumaGlass_1.3.3_roothide-arm64e.deb"
+          DEB="packages/LumaGlass_1.3.4_roothide-arm64e.deb"
           cp "$ORIGINAL" "$DEB"
           test -n "$DEB"
           echo "deb=$DEB" >> "$GITHUB_OUTPUT"
@@ -189,7 +195,7 @@ jobs:
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
           grep -Fqx 'Name: Luma Glass' ctrl/control
-          grep -Fqx 'Version: 1.3.3' ctrl/control
+          grep -Fqx 'Version: 1.3.4' ctrl/control
           grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64e$' ctrl/control
 
@@ -225,6 +231,11 @@ jobs:
           grep -aq 'averageColorForVariant:' "$DYLIB"
           grep -aq 'isShowingHomescreen' "$DYLIB"
           grep -aq 'gfAdaptiveRim' "$DYLIB"
+          grep -aq 'GFLibrarySystemLegibility' "$DYLIB"
+          grep -aq 'effectiveLegibilitySettings' "$DYLIB"
+          grep -aq '_updateViewControllerLegibility' "$DYLIB"
+          grep -aq 'GFLibrarySearchAppearance' "$DYLIB"
+          grep -aq 'updateVisualStyling' "$DYLIB"
           grep -aq 'GFAppLibraryBackdropView' "$DYLIB"
           grep -aq 'gfCardRim' "$DYLIB"
           grep -aq 'GFHorizontalGlassRimView' "$DYLIB"
@@ -254,8 +265,8 @@ jobs:
               p = plistlib.load(f)
           assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
           assert p["CFBundleName"] == "GlassFoldersPrefs"
-          assert p["CFBundleShortVersionString"] == "1.3.3"
-          assert p["CFBundleVersion"] == "1.3.3.1"
+          assert p["CFBundleShortVersionString"] == "1.3.4"
+          assert p["CFBundleVersion"] == "1.3.4.1"
           assert p["CFBundleDisplayName"] == "Luma Glass"
           assert p["NSPrincipalClass"] == "GFRootListController"
           print("Preference bundle Info.plist verified.")
@@ -334,7 +345,7 @@ jobs:
       - name: Upload RootHide deb
         uses: actions/upload-artifact@v4
         with:
-          name: LumaGlass-1.3.3-RootHide-arm64e
+          name: LumaGlass-1.3.4-RootHide-arm64e
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
@@ -354,7 +365,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== LUMA GLASS 1.3.3 / STANDARD ROOTLESS ARM64 ==="
+          echo "=== LUMA GLASS 1.3.4 / STANDARD ROOTLESS ARM64 ==="
 
       - name: Install dependencies
         shell: bash
@@ -469,7 +480,7 @@ jobs:
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
           grep -Fqx 'Name: Luma Glass' ctrl/control
-          grep -Fqx 'Version: 1.3.3' ctrl/control
+          grep -Fqx 'Version: 1.3.4' ctrl/control
           grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64$' ctrl/control
 
@@ -545,8 +556,8 @@ jobs:
               p = plistlib.load(f)
           assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
           assert p["CFBundleName"] == "GlassFoldersPrefs"
-          assert p["CFBundleShortVersionString"] == "1.3.3"
-          assert p["CFBundleVersion"] == "1.3.3.1"
+          assert p["CFBundleShortVersionString"] == "1.3.4"
+          assert p["CFBundleVersion"] == "1.3.4.1"
           assert p["CFBundleDisplayName"] == "Luma Glass"
           assert p["NSPrincipalClass"] == "GFRootListController"
           print("Preference bundle Info.plist verified.")
@@ -626,7 +637,7 @@ jobs:
       - name: Upload rootless deb
         uses: actions/upload-artifact@v4
         with:
-          name: LumaGlass-1.3.3-Rootless-arm64
+          name: LumaGlass-1.3.4-Rootless-arm64
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
