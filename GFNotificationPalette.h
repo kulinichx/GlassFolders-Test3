@@ -38,11 +38,11 @@ static inline GFNotificationPalette GFNotificationPaletteForWallpaper(
     double luminance = 0.2126 * GFNotificationLinearChannel(red) +
                        0.7152 * GFNotificationLinearChannel(green) +
                        0.0722 * GFNotificationLinearChannel(blue);
-    double threshold = hasPrevious ? (previousLight ? 0.16 : 0.20) : 0.18;
+    double threshold = hasPrevious ? (previousLight ? 0.16 : 0.185) : 0.18;
     GFNotificationPalette result = GFNotificationPaletteForAppearance(luminance >= threshold);
     result.luminance = luminance;
-    result.secondaryWhite = result.lightSurface ? 0.16 + 0.21 * luminance :
-        0.78 + 0.20 * fmin(1.0, luminance / 0.20);
+    result.secondaryWhite = result.lightSurface ? 0.07 + 0.30 * luminance :
+        0.82 + 0.16 * fmin(1.0, luminance / 0.185);
     return result;
 }
 #endif

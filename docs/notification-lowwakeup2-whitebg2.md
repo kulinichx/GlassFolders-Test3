@@ -33,7 +33,7 @@ approximation, not Apple's private Liquid Glass implementation.
 - Validate object-return signatures with the existing guarded getter before
   calling these optional private interfaces. If no usable color is available,
   preserve native material rather than invent a brightness value.
-- Calculate sRGB luminance, with a 0.18 initial threshold and 0.16/0.20
+- Calculate sRGB luminance, with a 0.18 initial threshold and 0.16/0.185
   hysteresis. This uses a system wallpaper average, not a local per-card
   luminance sample; mixed wallpaper can still defeat a global decision.
 - Cache color decisions per card and wallpaper generation; invalidate on
@@ -92,7 +92,8 @@ These are static runtime/header references, not an Apple-supported ABI.
   scheduler, settings, Makefile and public key. Stripping the three explicitly
   delimited notification additions must reproduce the full baseline Tweak hash.
 - `tests/test_notification_palette.c`: actual production palette, golden
-  luminance, hysteresis, invalid values and 1,001 uniform gray backgrounds.
+  luminance, hysteresis, invalid values and 6,006 primary/secondary contrast
+  cases across 1,001 uniform gray backgrounds and three hysteresis states.
   These numerical checks do not represent real wallpaper texture.
 - `tests/notification_foreground_harness.m`: actual production foreground
   state against Foundation-based view/text/layer doubles on macOS. Tests

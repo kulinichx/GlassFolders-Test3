@@ -76,8 +76,8 @@ jobs:
           mkdir -p "$SDK_ROOT"
           rm -rf "$SDK_EXACT" "$SDK_ARCHIVE"
 
-          curl -fL --retry 3 --retry-delay 2 \
-            "https://github.com/theos/sdks/releases/latest/download/iPhoneOS16.5.sdk.tar.xz" \
+          curl -fL --connect-timeout 15 --max-time 180 --retry 4 --retry-delay 3 \
+            "https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS16.5.sdk.tar.xz" \
             -o "$SDK_ARCHIVE"
           tar -xJf "$SDK_ARCHIVE" -C "$SDK_ROOT"
 
@@ -349,8 +349,8 @@ jobs:
           mkdir -p "$SDK_ROOT"
           rm -rf "$SDK_EXACT" "$SDK_ARCHIVE"
 
-          curl -fL --retry 3 --retry-delay 2 \
-            "https://github.com/theos/sdks/releases/latest/download/iPhoneOS16.5.sdk.tar.xz" \
+          curl -fL --connect-timeout 15 --max-time 180 --retry 4 --retry-delay 3 \
+            "https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS16.5.sdk.tar.xz" \
             -o "$SDK_ARCHIVE"
           tar -xJf "$SDK_ARCHIVE" -C "$SDK_ROOT"
 

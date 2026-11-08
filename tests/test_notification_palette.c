@@ -26,8 +26,10 @@ int main(void) {
     CHECK(!GFNotificationPaletteForWallpaper(1, INFINITY, 1, 1, false, false).valid);
     for (int i = 0; i <= 1000; i++) {
         double input = i / 1000.0;
+        for (int previous = 0; previous < 3; previous++) {
         GFNotificationPalette palette =
-            GFNotificationPaletteForWallpaper(input, input, input, 1, false, false);
+            GFNotificationPaletteForWallpaper(input, input, input, 1,
+                                               previous != 0, previous == 1);
         CHECK(palette.valid);
         CHECK(palette.bodyOpacity >= 0 && palette.bodyOpacity <= .18);
         CHECK(palette.secondaryWhite >= 0 && palette.secondaryWhite <= 1);
@@ -36,8 +38,12 @@ int main(void) {
         double text = GFNotificationLinearChannel(palette.primaryWhite);
         double contrast = (fmax(background, text) + .05) / (fmin(background, text) + .05);
         CHECK(contrast >= 4.5);
+        double secondary = GFNotificationLinearChannel(palette.secondaryWhite);
+        contrast = (fmax(background, secondary) + .05) / (fmin(background, secondary) + .05);
+        CHECK(contrast >= 4.5);
+        }
     }
     puts("Wallpaper palette: endpoints, golden luminance, hysteresis, invalid input, "
-         "thin body and 1001 uniform-background primary contrast cases PASS");
+         "thin body and 6006 primary/secondary/hysteresis contrast cases PASS");
     return 0;
 }
