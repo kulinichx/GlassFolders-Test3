@@ -105,7 +105,19 @@ These are static runtime/header references, not an Apple-supported ABI.
   light/dark/native decision and managed text-slot count, without notification
   text, app names or sampled images.
 
-Build status: pending.
+Build status: PASS, run `42471454102`, source commit
+`d6f6570f2b47473bc3b2fa0b8b96675fdffb8809`. Actual iOS tweak/preferences,
+production state harness and package checks passed. RootHide job: 1m16s.
+Only obsolete linker-option warnings appeared in the actual compilation.
+
+Downloaded package:
+`G:\AITEST\GlassFolders 1.0\DEB\11-8\kulinich.glassfolders_1.3.1-lowwakeup2-whitebg2.deb`,
+90,184 bytes. Local SHA256 matches the successful remote build log:
+`77fdcc54f46220d3b2e09dd8d43015ed93193e14e54db680e1437d3c6f66e555`.
+Local package inspection independently checked version, thin arm64e tweak
+and preferences, new foreground implementation, bundle version and single
+Settings entry. Standard rootless was skipped intentionally.
+
 Device acceptance: pending. Never describe a successful build as visual approval.
 
 Initial builds `42470820490` and `42471095597` passed the production foreground
