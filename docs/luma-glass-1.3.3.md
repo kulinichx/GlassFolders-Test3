@@ -92,5 +92,19 @@ adaptation. The numerical palette remains this project's calibration.
 - Actual tweak/preferences compilation and package checks validate the new
   public name, compatible internal identity, arm64e and one Settings entry.
 
-Build and local artifact verification: pending.
+Build and local artifact verification: PASS. Run `42474762013`, source
+`4a9fb24446def0161bbec5da8546c405a16389d9`. RootHide job: 1m41s.
+All production harnesses passed, followed by actual iOS tweak/preferences
+compilation, package verification and artifact upload. Only existing obsolete
+`-multiply_defined` linker-option warnings appeared during compilation.
+
+Downloaded package:
+`G:\AITEST\GlassFolders 1.0\DEB\11-8\LumaGlass-1.3.3\LumaGlass_1.3.3_roothide-arm64e.deb`.
+Bytes: 93,784. SHA256:
+`8996fe48576eb5d9933c2c756c261c12124f3785256b87808306f4d10bec545c`.
+The local hash matches the successful build log. Local read-only DEB inspection
+also confirmed the public names, compatible package ID, version 1.3.3,
+preference build 1.3.3.1, thin arm64e tweak/preferences, home/library selectors,
+About text and exactly one Settings entry. No device installation was performed.
+
 Home Screen banner and App Library device acceptance: pending.
