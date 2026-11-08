@@ -68,6 +68,8 @@ jobs:
 
       - name: Install iOS 16.5 SDK
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           SDK_ROOT="$THEOS/sdks"
@@ -76,9 +78,9 @@ jobs:
           mkdir -p "$SDK_ROOT"
           rm -rf "$SDK_EXACT" "$SDK_ARCHIVE"
 
-          curl -fL --connect-timeout 15 --max-time 180 --retry 4 --retry-delay 3 \
-            "https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS16.5.sdk.tar.xz" \
-            -o "$SDK_ARCHIVE"
+          gh release download master-146e41f --repo theos/sdks \
+            --pattern iPhoneOS16.5.sdk.tar.xz --dir /tmp --clobber
+          echo "5e0fd3f01266cce4ce012d4a99b38eb56578fca40d09edc81cd83dee958202fb  $SDK_ARCHIVE" | shasum -a 256 -c -
           tar -xJf "$SDK_ARCHIVE" -C "$SDK_ROOT"
 
           FOUND="$(find "$SDK_ROOT" -maxdepth 3 -type d -name 'iPhoneOS16.5.sdk' -print -quit)"
@@ -341,6 +343,8 @@ jobs:
 
       - name: Install iOS 16.5 SDK
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           SDK_ROOT="$THEOS/sdks"
@@ -349,9 +353,9 @@ jobs:
           mkdir -p "$SDK_ROOT"
           rm -rf "$SDK_EXACT" "$SDK_ARCHIVE"
 
-          curl -fL --connect-timeout 15 --max-time 180 --retry 4 --retry-delay 3 \
-            "https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS16.5.sdk.tar.xz" \
-            -o "$SDK_ARCHIVE"
+          gh release download master-146e41f --repo theos/sdks \
+            --pattern iPhoneOS16.5.sdk.tar.xz --dir /tmp --clobber
+          echo "5e0fd3f01266cce4ce012d4a99b38eb56578fca40d09edc81cd83dee958202fb  $SDK_ARCHIVE" | shasum -a 256 -c -
           tar -xJf "$SDK_ARCHIVE" -C "$SDK_ROOT"
 
           FOUND="$(find "$SDK_ROOT" -maxdepth 3 -type d -name 'iPhoneOS16.5.sdk' -print -quit)"

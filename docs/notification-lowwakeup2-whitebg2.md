@@ -108,6 +108,14 @@ These are static runtime/header references, not an Apple-supported ABI.
 Build status: pending.
 Device acceptance: pending. Never describe a successful build as visual approval.
 
+Initial builds `42470820490` and `42471095597` passed the production foreground
+state harness but stopped at the official SDK browser download with HTTP 504,
+before compiling the tweak. The official release API download was then tested
+locally: release `theos/sdks`, tag `master-146e41f`, asset
+`iPhoneOS16.5.sdk.tar.xz`, 17,446,920 bytes. SHA256:
+`5e0fd3f01266cce4ce012d4a99b38eb56578fca40d09edc81cd83dee958202fb`.
+The workflow uses that API download and verifies this hash before extraction.
+
 ## Device Acceptance
 
 Use the same light wallpaper and notifications as the user's first screenshot.
