@@ -4,6 +4,7 @@
 #define GF_LOCK_SCREEN_GLASS_H
 
 #import "GFGlassRim.h"
+#import "GFNotificationForeground.h"
 
 // Lock-screen optics have a fixed recipe, independent of folder preferences.
 // Keep wallpaper detail behind cards, and use still less blur for small buttons.
@@ -44,9 +45,12 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 
 @interface GFLockScreenGlassView : GFPanelGlassView
 @property (nonatomic, assign) BOOL gfCircular;
+@property (nonatomic, assign) BOOL gfUsesNotificationPalette;
+@property (nonatomic, assign) GFNotificationPalette gfNotificationPalette;
 @property (nonatomic, strong) GFLockRimView *gfLockRim;
 @property (nonatomic, strong) CAGradientLayer *gfBodyVeil;
 - (void)gfRefreshBodyVeil;
+- (void)gfApplyNotificationPalette:(GFNotificationPalette)palette;
 @end
 @implementation GFLockScreenGlassView
 - (instancetype)initWithStyle:(NSInteger)style strength:(CGFloat)strength {
@@ -82,10 +86,28 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
     [self gfRefreshBodyVeil];
     [self.gfLockRim setNeedsLayout];
 }
+- (void)gfApplyNotificationPalette:(GFNotificationPalette)palette {
+    if (self.gfUsesNotificationPalette &&
+        self.gfNotificationPalette.lightSurface == palette.lightSurface) return;
+    self.gfUsesNotificationPalette = YES;
+    self.gfNotificationPalette = palette;
+    self.gfLockRim.gfLightSurface = palette.lightSurface;
+    [self gfRefreshBodyVeil];
+    [self.gfLockRim setNeedsLayout];
+}
 - (void)gfRefreshBodyVeil {
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
-    if (self.gfLockRim.gfSubdued) {
+    if (self.gfUsesNotificationPalette) {
+        GFNotificationPalette palette = self.gfNotificationPalette;
+        CGFloat opacity = self.gfLockRim.gfSubdued ? palette.bodyOpacity * 0.40 :
+                                                   palette.bodyOpacity;
+        UIColor *body = [UIColor colorWithWhite:palette.bodyWhite alpha:opacity];
+        self.gfBodyVeil.colors = @[(id)body.CGColor, (id)body.CGColor,
+                                  (id)body.CGColor, (id)body.CGColor];
+        self.gfBodyVeil.startPoint = CGPointMake(0.5, 0.0);
+        self.gfBodyVeil.endPoint = CGPointMake(0.5, 1.0);
+    } else if (self.gfLockRim.gfSubdued) {
         // A little neutral absorption separates exposed rear strips from the
         // wallpaper. No white fill or additive lift that can wash out a stack.
         self.gfBodyVeil.colors = @[
@@ -194,10 +216,13 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 @property (nonatomic, assign) BOOL originalHidden;
 @property (nonatomic, weak) UIView *stackOverlay;
 @property (nonatomic, assign) BOOL originalStackOverlayHidden;
+@property (nonatomic, strong) GFNotificationForegroundState *foreground;
 - (void)restore;
 @end
 @implementation GFLockBackgroundState
 - (void)restore {
+    [self.foreground restore];
+    self.foreground = nil;
     if (self.background) self.background.hidden = self.originalHidden;
     if (self.stackOverlay) self.stackOverlay.hidden = self.originalStackOverlayHidden;
     self.stackOverlay = nil;
@@ -433,7 +458,7 @@ static void GFLockSyncStackOverlay(UIView *host, GFLockBackgroundState *state) {
 }
 
 static void GFUpdateLockScreenSurface(UIView *host) {
-    if (!host) return;
+    if (!host || GFNotificationUpdatingForeground) return;
     GFLockBackgroundState *state = objc_getAssociatedObject(host, &kGFLockBackgroundKey);
     if (!state && !GFBannerNotificationsEnabled && !GFLockNotificationsEnabled && !GFLockQuickActionsEnabled &&
         !GFLockMusicEnabled && !GFLockActivitiesEnabled) return;
@@ -490,6 +515,18 @@ static void GFUpdateLockScreenSurface(UIView *host) {
         if (state) GFRestoreLockScreenSurface(host);
         return;
     }
+    BOOL adaptiveNotification = notification && !banner;
+    GFNotificationPalette palette = {0};
+    GFNotificationForegroundState *foreground = state.foreground;
+    if (adaptiveNotification) {
+        if (!foreground) foreground = [GFNotificationForegroundState new];
+        palette = [foreground paletteForHost:host];
+        if (!palette.valid || UIAccessibilityIsReduceTransparencyEnabled() ||
+            UIAccessibilityDarkerSystemColorsEnabled()) {
+            if (state) GFRestoreLockScreenSurface(host);
+            return;
+        }
+    }
     Class glassClass = circle ? GFQuickActionGlassView.class :
         (banner ? GFBannerGlassView.class :
          (notification ? GFNotificationGlassView.class : GFLockScreenGlassView.class));
@@ -508,6 +545,16 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     }
     UIView *container = background.superview;
     GFLockScreenGlassView *glass = state.glass;
+    if (adaptiveNotification) {
+        state.foreground = foreground;
+        [glass gfApplyNotificationPalette:palette];
+        NSUInteger textCount = [foreground applyToHost:host content:content];
+        BOOL contentHidden = GFLockBool(host, @"isNotificationContentViewHidden", NO);
+        if (!textCount && !contentHidden) {
+            GFRestoreLockScreenSurface(host);
+            return;
+        }
+    }
     // UIKit may initially hide a banner material until presentation finishes.
     // Observe a subsequent native reveal instead of freezing that initial
     // hidden state for the entire lifetime of the replacement.
@@ -533,6 +580,23 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     glass.gfCircular = circle;
     [glass setPreferredRadius:radius];
     if (!background.hidden) background.hidden = YES;
+}
+
+static void GFRefreshNotificationTextOwner(UIView *content) {
+    if (GFNotificationUpdatingForeground) return;
+    UIView *node = content;
+    for (NSUInteger depth = 0; node && depth < 12; depth++, node = node.superview) {
+        if (GFLockIsKind(node, "NCNotificationShortLookView")) {
+            // Child-only layout/style changes can occur without platter layout.
+            GFLockBackgroundState *state = objc_getAssociatedObject(node, &kGFLockBackgroundKey);
+            if (state.foreground) {
+                UIView *body = GFLockView(GFLockObject(node, @"_notificationContentView"));
+                if (!body) body = GFLockView(GFLockIvar(node, "_notificationContentView"));
+                if (body) [state.foreground applyToHost:node content:body];
+            }
+            return;
+        }
+    }
 }
 
 // One event-driven pass after lock-screen presentation/state changes. No

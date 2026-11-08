@@ -80,6 +80,7 @@ static CGFloat GFLockRimCumulativeOpacity(GFLockRimProfile profile, NSUInteger i
 @property (nonatomic, assign) CGFloat gfRadius;
 @property (nonatomic, assign) BOOL gfCircular;
 @property (nonatomic, assign) BOOL gfSubdued;
+@property (nonatomic, assign) BOOL gfLightSurface;
 @end
 @implementation GFLockRimView
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -131,9 +132,11 @@ static CGFloat GFLockRimCumulativeOpacity(GFLockRimProfile profile, NSUInteger i
     // Keep a substantial, compact reflection like the existing folder rim.
     // Thickness belongs at the edge, not in a broad inward gray/white halo.
     // Rear strips need an identifiable rim even after native stack fading.
-    self.gfShoulder.opacity = self.gfSubdued ? 0.30 : 1.0;
-    self.gfReflection.opacity = self.gfSubdued ? 0.78 : 1.0;
+    self.gfShoulder.opacity = (self.gfSubdued ? 0.30 : 1.0) * (self.gfLightSurface ? 0.55 : 1.0);
+    self.gfReflection.opacity = (self.gfSubdued ? 0.78 : 1.0) * (self.gfLightSurface ? 0.60 : 1.0);
     self.gfInnerShade.opacity = self.gfSubdued ? 0.90 : 1.0;
+    // The existing narrow inner dark band defines a pale notification;
+    // suppress the white reflection rather than adding a broad gray fill.
     for (CAGradientLayer *band in @[self.gfInnerShade, self.gfShoulder, self.gfReflection]) {
         // A collapsed stack reveals mostly bottom strips. A diagonal light
         // leaves their middle almost invisible; distribute the restrained

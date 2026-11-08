@@ -1,0 +1,213 @@
+// Runs the production foreground state against small Foundation test doubles.
+// This verifies lifecycle behavior, not UIKit rendering or private API presence.
+#import <Foundation/Foundation.h>
+#import <objc/runtime.h>
+#import <objc/message.h>
+#include <math.h>
+
+typedef double CGFloat;
+NSString * const NSForegroundColorAttributeName = @"ForegroundColor";
+
+@interface UITraitCollection : NSObject
+@end
+@implementation UITraitCollection
+@end
+
+@interface UIColor : NSObject
+@property double white;
+@property double alpha;
++ (instancetype)colorWithWhite:(CGFloat)white alpha:(CGFloat)alpha;
+- (UIColor *)resolvedColorWithTraitCollection:(UITraitCollection *)traits;
+- (BOOL)getRed:(CGFloat *)r green:(CGFloat *)g blue:(CGFloat *)b alpha:(CGFloat *)a;
+- (BOOL)getWhite:(CGFloat *)w alpha:(CGFloat *)a;
+@end
+@implementation UIColor
++ (instancetype)colorWithWhite:(CGFloat)white alpha:(CGFloat)alpha {
+    UIColor *color = [self new]; color.white = white; color.alpha = alpha; return color;
+}
+- (UIColor *)resolvedColorWithTraitCollection:(UITraitCollection *)traits { return self; }
+- (BOOL)getRed:(CGFloat *)r green:(CGFloat *)g blue:(CGFloat *)b alpha:(CGFloat *)a {
+    *r = *g = *b = self.white; *a = self.alpha; return YES;
+}
+- (BOOL)getWhite:(CGFloat *)w alpha:(CGFloat *)a { *w = self.white; *a = self.alpha; return YES; }
+- (BOOL)isEqual:(id)other {
+    return [other isKindOfClass:UIColor.class] &&
+        self.white == [(UIColor *)other white] && self.alpha == [(UIColor *)other alpha];
+}
+@end
+
+@interface CALayer : NSObject
+@property (strong) id compositingFilter;
+@property (copy) NSArray *filters;
+@end
+@implementation CALayer
+@end
+
+@interface UIView : NSObject
+@property (strong) CALayer *layer;
+@property (weak) UIView *superview;
+@property (strong) UITraitCollection *traitCollection;
+- (BOOL)isDescendantOfView:(UIView *)view;
+@end
+@implementation UIView
+- (instancetype)init {
+    self = [super init];
+    if (self) { _layer = [CALayer new]; _traitCollection = [UITraitCollection new]; }
+    return self;
+}
+- (BOOL)isDescendantOfView:(UIView *)view {
+    for (UIView *node = self; node; node = node.superview) if (node == view) return YES;
+    return NO;
+}
+@end
+typedef UIView UIResponder;
+
+@interface UILabel : UIView
+@property (strong) UIColor *textColor;
+@property (copy) NSAttributedString *attributedText;
+@end
+@implementation UILabel
+@end
+@interface UITextView : UILabel
+@end
+@implementation UITextView
+@end
+
+@interface TestContent : UIView {
+@public
+    UILabel *_primaryTextLabel;
+    UILabel *_dateLabel;
+    UILabel *_secondaryTextElement;
+}
+@end
+@implementation TestContent
+@end
+
+@interface TestProvider : NSObject
+@property (strong) UIColor *color;
+@property NSUInteger reads;
+- (UIColor *)averageColorForCurrentWallpaper;
+@end
+@implementation TestProvider
+- (UIColor *)averageColorForCurrentWallpaper { self.reads++; return self.color; }
+@end
+
+@interface TestCover : UIView
+@property (strong) TestProvider *wallpaperColorProvider;
+@end
+@implementation TestCover
+@end
+
+#import "../GFNotificationForeground.h"
+
+static id GFLockObject(id object, NSString *name) {
+    SEL selector = NSSelectorFromString(name);
+    Method method = object ? class_getInstanceMethod(object_getClass(object), selector) : NULL;
+    char type[8] = {0};
+    if (method) method_getReturnType(method, type, sizeof(type));
+    if (!method || method_getNumberOfArguments(method) != 2 || type[0] != '@') return nil;
+    return ((id (*)(id, SEL))objc_msgSend)(object, selector);
+}
+static id GFLockIvar(id object, const char *name) {
+    Ivar ivar = object ? class_getInstanceVariable(object_getClass(object), name) : NULL;
+    return ivar && ivar_getTypeEncoding(ivar)[0] == '@' ? object_getIvar(object, ivar) : nil;
+}
+static BOOL GFLockIsKind(id object, const char *name) {
+    Class cls = objc_getClass(name); return cls && [object isKindOfClass:cls];
+}
+static UIResponder *GFLockCoverSheetOwner(UIView *host) {
+    for (UIView *node = host; node; node = node.superview)
+        if ([node isKindOfClass:TestCover.class]) return node;
+    return nil;
+}
+
+#define CHECK(x) do { if (!(x)) { \
+    fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #x); return 1; \
+} } while (0)
+
+int main(void) {
+    @autoreleasepool {
+        UIColor *white = [UIColor colorWithWhite:1 alpha:1];
+        UIColor *black = [UIColor colorWithWhite:0 alpha:1];
+        UIColor *native = [UIColor colorWithWhite:.8 alpha:.9];
+        UILabel *label = [UILabel new];
+        label.textColor = native;
+        label.attributedText = [[NSAttributedString alloc] initWithString:@"Title"
+            attributes:@{NSForegroundColorAttributeName: native, @"Font": @"original"}];
+        label.layer.compositingFilter = @"vibrantLight";
+        label.layer.filters = @[@"vibrantDark", @"keep-this-filter"];
+        NSAttributedString *original = label.attributedText;
+        GFNotificationTextState *state = [GFNotificationTextState new];
+        state.view = label;
+        [state applyColor:black];
+        CHECK([label.textColor isEqual:black]);
+        CHECK(!label.layer.compositingFilter);
+        CHECK([label.layer.filters isEqual:@[@"keep-this-filter"]]);
+        CHECK([[label.attributedText attribute:@"Font" atIndex:0 effectiveRange:NULL] isEqual:@"original"]);
+        [state applyColor:black];
+        [state applyColor:white];
+        [state restore];
+        CHECK([label.textColor isEqual:native]);
+        CHECK([label.attributedText isEqualToAttributedString:original]);
+        CHECK([label.layer.compositingFilter isEqual:@"vibrantLight"]);
+        CHECK([label.layer.filters isEqual:(@[@"vibrantDark", @"keep-this-filter"])]);
+
+        [state applyColor:black];
+        UIColor *newNative = [UIColor colorWithWhite:.6 alpha:1];
+        label.textColor = newNative;
+        label.attributedText = [[NSAttributedString alloc] initWithString:@"New content"
+            attributes:@{NSForegroundColorAttributeName: newNative}];
+        [state applyColor:white];
+        [state restore];
+        CHECK([label.textColor isEqual:newNative]);
+        CHECK([label.attributedText.string isEqual:@"New content"]);
+        CHECK([[label.attributedText attribute:NSForegroundColorAttributeName
+            atIndex:0 effectiveRange:NULL] isEqual:newNative]);
+        [state applyColor:black];
+        label.textColor = newNative;
+        label.attributedText = [[NSAttributedString alloc] initWithString:@"Native after disable"];
+        [state restore];
+        CHECK([label.textColor isEqual:newNative]);
+        CHECK([label.attributedText.string isEqual:@"Native after disable"]);
+
+        TestCover *cover = [TestCover new];
+        TestProvider *provider = [TestProvider new];
+        cover.wallpaperColorProvider = provider;
+        provider.color = white;
+        UIView *host = [UIView new]; host.superview = cover;
+        TestContent *content = [TestContent new]; content.superview = host;
+        content->_primaryTextLabel = [UILabel new];
+        content->_primaryTextLabel.superview = content;
+        content->_primaryTextLabel.textColor = white;
+        content->_dateLabel = [UILabel new];
+        content->_dateLabel.superview = content;
+        content->_dateLabel.textColor = native;
+        UILabel *unmanaged = [UILabel new]; unmanaged.superview = content;
+        unmanaged.textColor = white;
+        GFNotificationForegroundState *foreground = [GFNotificationForegroundState new];
+        CHECK([foreground paletteForHost:host].lightSurface);
+        CHECK([foreground applyToHost:host content:content] == 2);
+        CHECK(content->_primaryTextLabel.textColor.white < .1);
+        CHECK(content->_dateLabel.textColor.white > content->_primaryTextLabel.textColor.white);
+        CHECK([unmanaged.textColor isEqual:white]);
+        for (NSUInteger i = 0; i < 100; i++) [foreground paletteForHost:host];
+        CHECK(provider.reads == 1);
+        provider.color = black;
+        GFNotificationInvalidateWallpaper();
+        CHECK(![foreground paletteForHost:host].lightSurface);
+        CHECK(provider.reads == 2);
+        [foreground applyToHost:host content:content];
+        CHECK(content->_primaryTextLabel.textColor.white > .95);
+        [foreground restore];
+        CHECK([content->_primaryTextLabel.textColor isEqual:white]);
+        CHECK([content->_dateLabel.textColor isEqual:native]);
+        provider.color = nil;
+        GFNotificationInvalidateWallpaper();
+        CHECK(![foreground paletteForHost:host].valid);
+        CHECK(GFNotificationHasVoidMethod(UIView.class, @selector(setLayer:), YES));
+        CHECK(!GFNotificationHasVoidMethod(UIView.class, @selector(layer), NO));
+        puts("Production foreground state: recolor, attributed runs, filter restoration, "
+             "native updates, scoped slots, cache and wallpaper invalidation PASS");
+    }
+    return 0;
+}

@@ -4174,9 +4174,81 @@ static void GFUpdateDockBackground(UIView *host) {
     %orig;
     GFUpdateLockScreenSurface((UIView *)self);
 }
+// GF_NOTIFICATION_WHITEBG2_BEGIN
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    %orig;
+    GFNotificationInvalidateWallpaper();
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+// GF_NOTIFICATION_WHITEBG2_END
 %end
 %end
 
+// GF_NOTIFICATION_WHITEBG2_BEGIN
+%group GFNotificationSeamlessTextHooks
+%hook NCNotificationSeamlessContentView
+- (void)layoutSubviews {
+    %orig;
+    GFRefreshNotificationTextOwner((UIView *)self);
+}
+%end
+%end
+
+%group GFNotificationSeamlessAttributesHooks
+%hook NCNotificationSeamlessContentView
+- (void)_updateTextAttributes {
+    %orig;
+    GFRefreshNotificationTextOwner((UIView *)self);
+}
+%end
+%end
+
+%group GFNotificationSeamlessDateHooks
+%hook NCNotificationSeamlessContentView
+- (void)dateLabelDidChange:(id)label {
+    %orig;
+    GFRefreshNotificationTextOwner((UIView *)self);
+}
+%end
+%end
+
+%group GFNotificationClassicTextHooks
+%hook NCNotificationContentView
+- (void)layoutSubviews {
+    %orig;
+    GFRefreshNotificationTextOwner((UIView *)self);
+}
+%end
+%end
+
+%group GFNotificationHeaderTextHooks
+%hook PLPlatterHeaderContentView
+- (void)layoutSubviews {
+    %orig;
+    GFRefreshNotificationTextOwner((UIView *)self);
+}
+%end
+%end
+
+%group GFNotificationHeaderDateHooks
+%hook PLPlatterHeaderContentView
+- (void)dateLabelDidChange:(id)label {
+    %orig;
+    GFRefreshNotificationTextOwner((UIView *)self);
+}
+%end
+%end
+
+%group GFNotificationWallpaperHooks
+%hook CSCoverSheetViewController
+- (void)_updateLegibilitySettings {
+    %orig;
+    GFNotificationInvalidateWallpaper();
+    GFLockScheduleRefresh();
+}
+%end
+%end
+// GF_NOTIFICATION_WHITEBG2_END
 %group GFNotificationContainerHooks
 %hook NCNotificationViewControllerView
 - (void)layoutSubviews {
@@ -4724,6 +4796,44 @@ static void GFUpdateOpenedFolderBackground(
         GFLoadPreferences();
 
         Class coverSheetClass = objc_getClass("CSCoverSheetViewController");
+        // GF_NOTIFICATION_WHITEBG2_BEGIN
+        if (GFNotificationHasVoidMethod(coverSheetClass,
+                                       NSSelectorFromString(@"_updateLegibilitySettings"), NO)) {
+            %init(GFNotificationWallpaperHooks);
+        }
+        Class seamlessClass = objc_getClass("NCNotificationSeamlessContentView");
+        if ([seamlessClass isSubclassOfClass:UIView.class]) {
+            %init(GFNotificationSeamlessTextHooks);
+            if (GFNotificationHasVoidMethod(seamlessClass,
+                                           NSSelectorFromString(@"_updateTextAttributes"), NO)) {
+                %init(GFNotificationSeamlessAttributesHooks);
+            }
+            if (GFNotificationHasVoidMethod(seamlessClass,
+                                           NSSelectorFromString(@"dateLabelDidChange:"), YES)) {
+                %init(GFNotificationSeamlessDateHooks);
+            }
+        }
+        Class classicContentClass = objc_getClass("NCNotificationContentView");
+        if ([classicContentClass isSubclassOfClass:UIView.class]) {
+            %init(GFNotificationClassicTextHooks);
+        }
+        Class notificationHeaderClass = objc_getClass("PLPlatterHeaderContentView");
+        if ([notificationHeaderClass isSubclassOfClass:UIView.class]) {
+            %init(GFNotificationHeaderTextHooks);
+            if (GFNotificationHasVoidMethod(notificationHeaderClass,
+                                           NSSelectorFromString(@"dateLabelDidChange:"), YES)) {
+                %init(GFNotificationHeaderDateHooks);
+            }
+        }
+        for (NSString *name in @[UIAccessibilityReduceTransparencyStatusDidChangeNotification,
+                                 UIAccessibilityDarkerSystemColorsStatusDidChangeNotification]) {
+            [NSNotificationCenter.defaultCenter addObserverForName:name object:nil
+                queue:NSOperationQueue.mainQueue usingBlock:^(__unused NSNotification *note) {
+                    GFNotificationInvalidateWallpaper();
+                    GFLockScheduleRefresh();
+                }];
+        }
+        // GF_NOTIFICATION_WHITEBG2_END
         if ([coverSheetClass isSubclassOfClass:UIViewController.class] &&
             GFLockHasBoolArgumentMethod(coverSheetClass, @selector(viewWillAppear:)) &&
             GFLockHasBoolArgumentMethod(coverSheetClass, @selector(viewDidAppear:)) &&
