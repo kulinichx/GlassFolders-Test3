@@ -76,4 +76,21 @@ accessibility, invalid data caching and rejected ABI signatures.
 Retain existing palette, foreground, stack, material and rim tests, actual iOS
 compilation, and DEB metadata/architecture/single-entry checks.
 
-Build, artifact verification and device acceptance: pending.
+Build and artifact verification: PASS. Run `42477497139`, source
+`00cbfeb4632d22e795bcd369a15ecd2ff2009b88`. RootHide job `128722006109`
+completed in 3m39s. All production harnesses passed, followed by actual iOS
+tweak/preferences compilation, package checks and artifact upload. Compilation
+reported only the existing obsolete `-multiply_defined` linker warnings.
+
+Downloaded artifact:
+`G:\AITEST\GlassFolders 1.0\DEB\11-8\LumaGlass-1.3.4\LumaGlass_1.3.4_roothide-arm64e.deb`.
+Bytes: 96,656. SHA256:
+`1f55a45e15d04318dc61502ec74199ba4a7e5504d308460b71628a0fad987def`.
+Local SHA matches the successful build log. Read-only local DEB inspection
+confirms public name Luma Glass, package ID `com.kulinich.glassfolders`, version
+1.3.4, preference build 1.3.4.1, thin arm64e tweak/preferences, native Library
+routing markers and exactly one compatible Settings entry.
+
+No phone connection or installation was performed. Device acceptance remains
+pending: white/dark wallpaper title and placeholder polarity, native search
+glyph styling, disabled-state restoration and return from expanded categories.
