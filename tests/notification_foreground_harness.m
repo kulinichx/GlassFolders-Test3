@@ -83,6 +83,22 @@ typedef UIView UIResponder;
 @implementation TestContent
 @end
 
+@interface TestHeader : UIView {
+@public
+    UILabel *_titleLabel;
+    UILabel *_dateLabel;
+}
+@end
+@implementation TestHeader
+@end
+@interface TestHost : UIView {
+@public
+    TestHeader *_headerContentView;
+}
+@end
+@implementation TestHost
+@end
+
 @interface TestProvider : NSObject
 @property (strong) UIColor *color;
 @property NSUInteger reads;
@@ -174,7 +190,7 @@ int main(void) {
         TestProvider *provider = [TestProvider new];
         cover.wallpaperColorProvider = provider;
         provider.color = white;
-        UIView *host = [UIView new]; host.superview = cover;
+        TestHost *host = [TestHost new]; host.superview = cover;
         TestContent *content = [TestContent new]; content.superview = host;
         content->_primaryTextLabel = [UILabel new];
         content->_primaryTextLabel.superview = content;
@@ -201,6 +217,39 @@ int main(void) {
         [foreground restore];
         CHECK([content->_primaryTextLabel.textColor isEqual:white]);
         CHECK([content->_dateLabel.textColor isEqual:native]);
+        // Header dates and seamless dates can be restyled without host layout.
+        provider.color = white;
+        GFNotificationInvalidateWallpaper();
+        [foreground paletteForHost:host];
+        host->_headerContentView = [TestHeader new];
+        host->_headerContentView.superview = host;
+        UILabel *headerDate = [UILabel new];
+        headerDate.superview = host->_headerContentView;
+        headerDate.textColor = white;
+        host->_headerContentView->_dateLabel = headerDate;
+        CHECK([foreground applyToHost:host content:content] == 3);
+        CHECK(headerDate.textColor.white < .4);
+        headerDate.textColor = white;
+        headerDate.attributedText = [[NSAttributedString alloc] initWithString:@"2m ago"
+            attributes:@{NSForegroundColorAttributeName:white, @"Font":@"date-font"}];
+        headerDate.layer.compositingFilter = @"vibrantLight";
+        [foreground applyToHost:host content:content];
+        CHECK(headerDate.textColor.white < .4);
+        CHECK([[headerDate.attributedText attribute:NSForegroundColorAttributeName
+            atIndex:0 effectiveRange:NULL] white] < .4);
+        CHECK([[headerDate.attributedText attribute:@"Font"
+            atIndex:0 effectiveRange:NULL] isEqual:@"date-font"]);
+        CHECK(!headerDate.layer.compositingFilter);
+        UILabel *replacementDate = [UILabel new];
+        replacementDate.superview = host->_headerContentView;
+        replacementDate.textColor = native;
+        host->_headerContentView->_dateLabel = replacementDate;
+        CHECK([foreground applyToHost:host content:content] == 3);
+        CHECK([headerDate.textColor isEqual:white]);
+        CHECK([headerDate.layer.compositingFilter isEqual:@"vibrantLight"]);
+        CHECK(replacementDate.textColor.white < .4);
+        [foreground restore];
+        CHECK([replacementDate.textColor isEqual:native]);
         provider.color = nil;
         GFNotificationInvalidateWallpaper();
         CHECK(![foreground paletteForHost:host].valid);

@@ -118,7 +118,10 @@ Local package inspection independently checked version, thin arm64e tweak
 and preferences, new foreground implementation, bundle version and single
 Settings entry. Standard rootless was skipped intentionally.
 
-Device acceptance: pending. Never describe a successful build as visual approval.
+Device acceptance: failed. On 2026-11-08 the user reported readable main text,
+an almost invisible panel on white wallpaper and a flash during stack expansion.
+The supplied screenshot also shows white timestamps. See
+`notification-lowwakeup2-whitebg3.md` for the corrective candidate.
 
 Initial builds `42470820490` and `42471095597` passed the production foreground
 state harness but stopped at the official SDK browser download with HTTP 504,

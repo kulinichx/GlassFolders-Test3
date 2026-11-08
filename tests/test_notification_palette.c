@@ -15,8 +15,11 @@ int main(void) {
     CHECK(fabs(black.luminance) < 0.000001);
     CHECK(white.secondaryWhite > white.primaryWhite);
     CHECK(black.secondaryWhite < black.primaryWhite);
+    double whiteBody = 1.0 * (1.0 - white.bodyOpacity) + white.bodyWhite * white.bodyOpacity;
+    CHECK(whiteBody >= .95 && whiteBody < .99);
     GFNotificationPalette gray = GFNotificationPaletteForWallpaper(.5, .5, .5, 1, false, false);
     CHECK(fabs(gray.luminance - 0.21404114048) < 0.000001);
+    CHECK(gray.bodyWhite == 1.0);
     GFNotificationPalette middleLight = GFNotificationPaletteForWallpaper(.46, .46, .46, 1, true, true);
     GFNotificationPalette middleDark = GFNotificationPaletteForWallpaper(.46, .46, .46, 1, true, false);
     CHECK(middleLight.lightSurface && !middleDark.lightSurface);

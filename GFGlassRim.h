@@ -77,6 +77,7 @@ static CGFloat GFLockRimCumulativeOpacity(GFLockRimProfile profile, NSUInteger i
 @property (nonatomic, strong) CAGradientLayer *gfReflection;
 @property (nonatomic, strong) CAGradientLayer *gfShoulder;
 @property (nonatomic, strong) CAGradientLayer *gfInnerShade;
+@property (nonatomic, strong) CAGradientLayer *gfLightContour;
 @property (nonatomic, assign) CGFloat gfRadius;
 @property (nonatomic, assign) BOOL gfCircular;
 @property (nonatomic, assign) BOOL gfSubdued;
@@ -119,9 +120,23 @@ static CGFloat GFLockRimCumulativeOpacity(GFLockRimProfile profile, NSUInteger i
             (id)[UIColor colorWithWhite:1.0 alpha:0.29].CGColor,
             (id)[UIColor colorWithWhite:1.0 alpha:0.32].CGColor
         ]);
+        // A white reflection cannot define glass against white wallpaper.
+        // Keep absorption confined to the edge, using the same continuous curve.
+        self.gfLightContour = GFLockRimBand(@[
+            (id)[UIColor colorWithWhite:0.0 alpha:0.12].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.10].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.07].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.06].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.09].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.13].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.16].CGColor,
+            (id)[UIColor colorWithWhite:0.0 alpha:0.16].CGColor
+        ]);
+        self.gfLightContour.hidden = YES;
         [self.layer addSublayer:self.gfInnerShade];
         [self.layer addSublayer:self.gfShoulder];
         [self.layer addSublayer:self.gfReflection];
+        [self.layer addSublayer:self.gfLightContour];
     }
     return self;
 }
@@ -135,9 +150,11 @@ static CGFloat GFLockRimCumulativeOpacity(GFLockRimProfile profile, NSUInteger i
     self.gfShoulder.opacity = (self.gfSubdued ? 0.30 : 1.0) * (self.gfLightSurface ? 0.55 : 1.0);
     self.gfReflection.opacity = (self.gfSubdued ? 0.78 : 1.0) * (self.gfLightSurface ? 0.60 : 1.0);
     self.gfInnerShade.opacity = self.gfSubdued ? 0.90 : 1.0;
-    // The existing narrow inner dark band defines a pale notification;
-    // suppress the white reflection rather than adding a broad gray fill.
-    for (CAGradientLayer *band in @[self.gfInnerShade, self.gfShoulder, self.gfReflection]) {
+    self.gfLightContour.hidden = !self.gfLightSurface || self.gfCircular;
+    self.gfLightContour.opacity = self.gfSubdued ? 0.80 : 1.0;
+    for (CAGradientLayer *band in @[self.gfInnerShade, self.gfShoulder,
+                                   self.gfReflection, self.gfLightContour]) {
+        BOOL contour = band == self.gfLightContour;
         // A collapsed stack reveals mostly bottom strips. A diagonal light
         // leaves their middle almost invisible; distribute the restrained
         // reflection along the lower edge, without brightening the body.
@@ -153,6 +170,12 @@ static CGFloat GFLockRimCumulativeOpacity(GFLockRimProfile profile, NSUInteger i
         CGFloat width = band == self.gfShoulder ? (self.gfCircular ? 1.6 : 2.4) :
                         (band == self.gfReflection ? reflectionWidth :
                          (self.gfCircular ? 1.2 : 1.6));
+        if (contour) {
+            // Subpixel feathering over one point, not a second inset outline.
+            inset = 0.0;
+            width = 1.0;
+            profile = GFLockRimProfileShoulder;
+        }
         CGFloat scale = self.window.screen.scale ?: UIScreen.mainScreen.scale;
         NSUInteger count = 5;
         if (profile != GFLockRimProfileLegacy) {
@@ -189,8 +212,17 @@ static CGFloat GFLockRimCumulativeOpacity(GFLockRimProfile profile, NSUInteger i
             ringRect.size.height = MAX(0.0, ringRect.size.height);
             ring.frame = ringRect;
             ring.contentsScale = scale;
-            ring.opacity = cumulative ? GFLockRimCumulativeOpacity(profile, index, count) :
+            CGFloat opacity = cumulative ? GFLockRimCumulativeOpacity(profile, index, count) :
                 GFLockRimSampleCoverage(profile, index, count);
+            // Shoulder coverage peaks at .55; the absorbing contour needs
+            // its own full edge coverage before falling inward.
+            if (contour) {
+                CGFloat target = 1.0 - GFLockRimSmoothstep((index + 0.5) / count);
+                CGFloat below = index + 1 < count ?
+                    1.0 - GFLockRimSmoothstep((index + 1.5) / count) : 0.0;
+                opacity = (target - below) / MAX(0.0001, 1.0 - below);
+            }
+            ring.opacity = opacity;
             ring.borderWidth = cumulative ? width * (index + 1) / count : width / count;
             ring.cornerRadius = MAX(0.0, self.gfRadius - inset - featherInset);
             ring.cornerCurve = self.gfCircular ? kCACornerCurveCircular : kCACornerCurveContinuous;

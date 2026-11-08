@@ -4212,6 +4212,15 @@ static void GFUpdateDockBackground(UIView *host) {
 %end
 %end
 
+%group GFNotificationSeamlessDateAttributesHooks
+%hook NCNotificationSeamlessContentView
+- (void)_updateTextAttributesForDateLabel {
+    %orig;
+    GFRefreshNotificationTextOwner((UIView *)self);
+}
+%end
+%end
+
 %group GFNotificationClassicTextHooks
 %hook NCNotificationContentView
 - (void)layoutSubviews {
@@ -4233,6 +4242,15 @@ static void GFUpdateDockBackground(UIView *host) {
 %group GFNotificationHeaderDateHooks
 %hook PLPlatterHeaderContentView
 - (void)dateLabelDidChange:(id)label {
+    %orig;
+    GFRefreshNotificationTextOwner((UIView *)self);
+}
+%end
+%end
+
+%group GFNotificationHeaderDateAttributesHooks
+%hook PLPlatterHeaderContentView
+- (void)_updateTextAttributesForDateLabel {
     %orig;
     GFRefreshNotificationTextOwner((UIView *)self);
 }
@@ -4812,6 +4830,10 @@ static void GFUpdateOpenedFolderBackground(
                                            NSSelectorFromString(@"dateLabelDidChange:"), YES)) {
                 %init(GFNotificationSeamlessDateHooks);
             }
+            if (GFNotificationHasVoidMethod(seamlessClass,
+                                           NSSelectorFromString(@"_updateTextAttributesForDateLabel"), NO)) {
+                %init(GFNotificationSeamlessDateAttributesHooks);
+            }
         }
         Class classicContentClass = objc_getClass("NCNotificationContentView");
         if ([classicContentClass isSubclassOfClass:UIView.class]) {
@@ -4823,6 +4845,10 @@ static void GFUpdateOpenedFolderBackground(
             if (GFNotificationHasVoidMethod(notificationHeaderClass,
                                            NSSelectorFromString(@"dateLabelDidChange:"), YES)) {
                 %init(GFNotificationHeaderDateHooks);
+            }
+            if (GFNotificationHasVoidMethod(notificationHeaderClass,
+                                           NSSelectorFromString(@"_updateTextAttributesForDateLabel"), NO)) {
+                %init(GFNotificationHeaderDateAttributesHooks);
             }
         }
         for (NSString *name in @[UIAccessibilityReduceTransparencyStatusDidChangeNotification,

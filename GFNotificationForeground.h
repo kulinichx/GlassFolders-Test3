@@ -177,7 +177,7 @@ static BOOL GFNotificationIsVibrancy(id filter) {
     NSInteger mode = result.valid ? (result.lightSurface ? 1 : 0) : 2;
     if (self.loggedMode != mode && (mode != 2 || !GFNotificationReportedUnavailable)) {
         // No notification content, application identity, or sampled image is logged.
-        NSLog(@"[GlassFolders WhiteBG2] input=%@ mode=%@", input,
+        NSLog(@"[GlassFolders WhiteBG3] input=%@ mode=%@", input,
               mode == 1 ? @"light" : (mode == 0 ? @"dark" : @"native"));
         self.loggedMode = mode;
         if (mode == 2) GFNotificationReportedUnavailable = YES;
@@ -235,7 +235,7 @@ static BOOL GFNotificationIsVibrancy(id filter) {
     }
     GFNotificationUpdatingForeground = NO;
     if (!self.loggedTextCount || self.previousTextCount != seen.count) {
-        NSLog(@"[GlassFolders WhiteBG2] text-slots=%lu", (unsigned long)seen.count);
+        NSLog(@"[GlassFolders WhiteBG3] text-slots=%lu", (unsigned long)seen.count);
         self.previousTextCount = seen.count;
         self.loggedTextCount = YES;
     }

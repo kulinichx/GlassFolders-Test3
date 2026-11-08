@@ -22,7 +22,7 @@ static inline double GFNotificationLinearChannel(double value) {
 static inline GFNotificationPalette GFNotificationPaletteForAppearance(bool light) {
     GFNotificationPalette result = {
         true, light, -1.0, light ? 0.07 : 0.98, light ? 0.37 : 0.78,
-        light ? 1.0 : 0.0, light ? 0.18 : 0.035
+        light ? 0.90 : 0.0, light ? 0.18 : 0.035
     };
     return result;
 }
@@ -43,6 +43,13 @@ static inline GFNotificationPalette GFNotificationPaletteForWallpaper(
     result.luminance = luminance;
     result.secondaryWhite = result.lightSurface ? 0.07 + 0.30 * luminance :
         0.82 + 0.16 * fmin(1.0, luminance / 0.185);
+    if (result.lightSurface) {
+        // Preserve a white lift while there is headroom; near white, a small
+        // neutral absorption keeps the surface distinguishable without a slab.
+        double highlight = fmax(0.0, fmin(1.0, (luminance - 0.85) / 0.15));
+        highlight = highlight * highlight * (3.0 - 2.0 * highlight);
+        result.bodyWhite = 1.0 - 0.22 * highlight;
+    }
     return result;
 }
 #endif

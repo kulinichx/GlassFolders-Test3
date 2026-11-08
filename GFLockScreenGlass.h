@@ -9,6 +9,7 @@
 // Lock-screen optics have a fixed recipe, independent of folder preferences.
 // Keep wallpaper detail behind cards, and use still less blur for small buttons.
 static const CGFloat GFLockCardBlurRadius = 8.0;
+static const CGFloat GFNotificationLightBlurRadius = 3.0;
 static const CGFloat GFLockButtonBlurRadius = 3.0;
 
 static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, CGFloat radius) {
@@ -72,7 +73,8 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 - (void)gfRefreshMaterial {
     [super gfRefreshMaterial];
     GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.cards",
-                             GFLockCardBlurRadius);
+        self.gfUsesNotificationPalette && self.gfNotificationPalette.lightSurface ?
+        GFNotificationLightBlurRadius : GFLockCardBlurRadius);
     if (self.gfFallbackBlurView) {
         self.gfFallbackBlurView.effect =
             [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterial];
@@ -88,9 +90,18 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 }
 - (void)gfApplyNotificationPalette:(GFNotificationPalette)palette {
     if (self.gfUsesNotificationPalette &&
-        self.gfNotificationPalette.lightSurface == palette.lightSurface) return;
+        self.gfNotificationPalette.lightSurface == palette.lightSurface &&
+        self.gfNotificationPalette.bodyWhite == palette.bodyWhite &&
+        self.gfNotificationPalette.bodyOpacity == palette.bodyOpacity) return;
+    BOOL backdropChanged = !self.gfUsesNotificationPalette ||
+        self.gfNotificationPalette.lightSurface != palette.lightSurface;
     self.gfUsesNotificationPalette = YES;
     self.gfNotificationPalette = palette;
+    if (backdropChanged) {
+        // Reconfigure only on a wallpaper-mode change, never a stack change.
+        GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.cards",
+            palette.lightSurface ? GFNotificationLightBlurRadius : GFLockCardBlurRadius);
+    }
     self.gfLockRim.gfLightSurface = palette.lightSurface;
     [self gfRefreshBodyVeil];
     [self.gfLockRim setNeedsLayout];
@@ -100,8 +111,8 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
     [CATransaction setDisableActions:YES];
     if (self.gfUsesNotificationPalette) {
         GFNotificationPalette palette = self.gfNotificationPalette;
-        CGFloat opacity = self.gfLockRim.gfSubdued ? palette.bodyOpacity * 0.40 :
-                                                   palette.bodyOpacity;
+        // Keep transmission stable while a card crosses the stack threshold.
+        CGFloat opacity = palette.bodyOpacity;
         UIColor *body = [UIColor colorWithWhite:palette.bodyWhite alpha:opacity];
         self.gfBodyVeil.colors = @[(id)body.CGColor, (id)body.CGColor,
                                   (id)body.CGColor, (id)body.CGColor];
@@ -162,22 +173,7 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 }
 @end
 
-@interface GFNotificationGlassView : GFLockScreenGlassView
-@property (nonatomic, assign) BOOL gfStacked;
-@end
-@implementation GFNotificationGlassView
-- (void)setGfStacked:(BOOL)stacked {
-    if (_gfStacked == stacked) return;
-    _gfStacked = stacked;
-    [self gfRefreshMaterial];
-}
-- (void)gfRefreshMaterial {
-    [super gfRefreshMaterial];
-    self.gfLockRim.gfSubdued = self.gfStacked;
-    [self gfRefreshBodyVeil];
-    [self.gfLockRim setNeedsLayout];
-}
-@end
+#import "GFNotificationGlassView.h"
 
 // Small circular controls share the layered rim, but use a narrower shoulder
 // and their own lighter backdrop. Selection and press feedback stay native.
@@ -510,9 +506,19 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     // an opaque remotely rendered Live Activity is never made transparent.
     if (!enabled || !host.window || (!banner && !GFLockScreenVisible(host)) || !background ||
         background == host || ![background isDescendantOfView:host] ||
-        !content || ![content isDescendantOfView:host] || [content isDescendantOfView:background] ||
-        background.bounds.size.width <= 0.0 || background.bounds.size.height <= 0.0) {
+        !content || ![content isDescendantOfView:host] || [content isDescendantOfView:background]) {
         if (state) GFRestoreLockScreenSurface(host);
+        return;
+    }
+    if (background.bounds.size.width <= 0.0 || background.bounds.size.height <= 0.0) {
+        // Native layout can pass through empty bounds during stack animation.
+        // Hide that frame, retaining the material instead of flashing native
+        // blur and rebuilding our capture group on the following layout.
+        if (state && notification && !banner && state.background == background) {
+            state.glass.hidden = YES;
+        } else if (state) {
+            GFRestoreLockScreenSurface(host);
+        }
         return;
     }
     BOOL adaptiveNotification = notification && !banner;
@@ -567,12 +573,15 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     if (glass.superview != container ||
         [container.subviews indexOfObjectIdenticalTo:glass] != index + 1)
         [container insertSubview:glass aboveSubview:background];
-    glass.bounds = (CGRect){CGPointZero, background.bounds.size};
-    glass.center = background.center;
-    glass.transform = background.transform;
-    glass.alpha = background.alpha;
-    glass.hidden = state.originalHidden;
-    glass.layer.zPosition = background.layer.zPosition;
+    CGRect bounds = (CGRect){CGPointZero, background.bounds.size};
+    if (!CGRectEqualToRect(glass.bounds, bounds)) glass.bounds = bounds;
+    if (!CGPointEqualToPoint(glass.center, background.center)) glass.center = background.center;
+    if (!CGAffineTransformEqualToTransform(glass.transform, background.transform))
+        glass.transform = background.transform;
+    if (glass.alpha != background.alpha) glass.alpha = background.alpha;
+    if (glass.hidden != state.originalHidden) glass.hidden = state.originalHidden;
+    if (glass.layer.zPosition != background.layer.zPosition)
+        glass.layer.zPosition = background.layer.zPosition;
     CGFloat radius = circle ? MIN(background.bounds.size.width, background.bounds.size.height) * 0.5 :
                              GFLockRadius(radiusOwner);
     if (radius <= 0.0) radius = background.layer.cornerRadius;

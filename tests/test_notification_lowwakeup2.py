@@ -6,7 +6,7 @@ import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "1.3.1~lowwakeup2+whitebg2"
+VERSION = "1.3.1~lowwakeup2+whitebg3"
 BASELINE = {
     "GFLivePreferencesPrelude.h": "a264e6bc2d97c05b70395cceb2855e79a099ac242a131d0300854e5dc215b988",
     "prefs/GFRootListController.m": "442ce9593397c785140ff90bb15b7f3830029b5006d4d6343f9e1e39ee0491c3",
@@ -35,7 +35,7 @@ class NotificationIntegration(unittest.TestCase):
         self.assertIn("Version: " + VERSION + "\n", control)
         self.assertIn("Architecture: iphoneos-arm64e", control)
         info = plistlib.loads((ROOT / "prefs/Resources/Info.plist").read_bytes())
-        self.assertEqual(info["CFBundleVersion"], "1.3.1.3")
+        self.assertEqual(info["CFBundleVersion"], "1.3.1.4")
         self.assertEqual(info["CFBundleShortVersionString"], "1.3.1")
         self.assertEqual(info["CFBundleIdentifier"], "com.kulinich.glassfolders.preferences")
 
@@ -53,6 +53,9 @@ class NotificationIntegration(unittest.TestCase):
             self.assertNotIn(name, foreground)
         self.assertIn("if (body) [state.foreground applyToHost:node content:body]", lock)
         self.assertIn("GFNotificationHasVoidMethod", tweak)
+        self.assertEqual(tweak.count("- (void)_updateTextAttributesForDateLabel"), 2)
+        self.assertIn("%init(GFNotificationSeamlessDateAttributesHooks)", tweak)
+        self.assertIn("%init(GFNotificationHeaderDateAttributesHooks)", tweak)
 
     def test_restoration_and_slots(self):
         text = (ROOT / "GFNotificationForeground.h").read_text(encoding="utf-8")
