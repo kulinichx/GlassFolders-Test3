@@ -84,5 +84,25 @@ No scheduler, activation, preference controller or global label hook changes.
 - The workflow compiles the actual iOS tweak and preferences and validates DEB
   identity, architecture, resources and single preference entry.
 
-Build and artifact verification: pending.
+Build and artifact verification: PASS, run `42473220244`, source
+`924b603f5cbaf176cc69ffa4298702c2613ecdaf`. RootHide job: 1m59s.
+The production foreground, stack and edge-render harnesses all passed, followed
+by actual iOS tweak/preferences compilation and package validation. The edge
+render measured 211/255 at its darkest sampled top-edge pixel and 245/255 in the
+body on pure white. The paired PNG was downloaded and visually inspected;
+new contours are visible and background marks remain visible. This is isolated
+edge composition, not a device screenshot.
+
+Package:
+`G:\AITEST\GlassFolders 1.0\DEB\11-8\WhiteBG3\kulinich.glassfolders_1.3.1-lowwakeup2-whitebg3.deb`
+(91,002 bytes).
+
+SHA256:
+`4ae4b214ef95a523fea57dab31c0f06573fdc3890a83cde7ffdbe4ea980aae98`.
+The local hash matches the successful build log. Read-only local inspection
+also confirmed package/version, preference build `1.3.1.4`, thin arm64e tweak
+and preferences, new correction selectors, and exactly one Settings entry.
+The only actual linker warnings were the existing obsolete
+`-multiply_defined` option. Standard rootless was skipped.
+
 Device visual and animation acceptance: pending.
