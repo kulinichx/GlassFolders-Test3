@@ -1,4 +1,4 @@
-name: GlassFolders LowWakeup2 WhiteBG3
+name: Luma Glass 1.3.3
 
 on:
   workflow_dispatch:
@@ -44,7 +44,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS LOWWAKEUP2 WHITEBG3 / ROOTHIDE ARM64E ==="
+          echo "=== LUMA GLASS 1.3.3 / ROOTHIDE ARM64E ==="
 
       - name: Exercise production foreground state
         run: |
@@ -57,6 +57,13 @@ jobs:
           clang -fobjc-arc -Wall -Wextra -framework Foundation \
             tests/notification_stack_harness.m -o /tmp/gf-stack
           /tmp/gf-stack
+
+      - name: Exercise production Home Screen and library behavior
+        run: |
+          clang -fobjc-arc -Wall -Wextra -Wno-unused-parameter -Wno-unused-function \
+            -framework AppKit -framework QuartzCore \
+            tests/home_library_harness.m -o /tmp/gf-library
+          /tmp/gf-library
 
       - name: Render production edge layers
         run: |
@@ -157,7 +164,7 @@ jobs:
           set -euo pipefail
           ORIGINAL="$(find packages -maxdepth 1 -type f -name '*.deb' | sort | tail -n 1)"
           test -n "$ORIGINAL"
-          DEB="packages/kulinich.glassfolders_1.3.1-lowwakeup2-whitebg3.deb"
+          DEB="packages/LumaGlass_1.3.3_roothide-arm64e.deb"
           cp "$ORIGINAL" "$DEB"
           test -n "$DEB"
           echo "deb=$DEB" >> "$GITHUB_OUTPUT"
@@ -181,7 +188,8 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -Fqx 'Version: 1.3.1~lowwakeup2+whitebg3' ctrl/control
+          grep -Fqx 'Name: Luma Glass' ctrl/control
+          grep -Fqx 'Version: 1.3.3' ctrl/control
           grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64e$' ctrl/control
 
@@ -214,6 +222,9 @@ jobs:
           grep -aq 'GFLockRimView' "$DYLIB"
           grep -aq 'GFNotificationForegroundState' "$DYLIB"
           grep -aq 'averageColorForCurrentWallpaper' "$DYLIB"
+          grep -aq 'averageColorForVariant:' "$DYLIB"
+          grep -aq 'isShowingHomescreen' "$DYLIB"
+          grep -aq 'gfAdaptiveRim' "$DYLIB"
           grep -aq 'GFAppLibraryBackdropView' "$DYLIB"
           grep -aq 'gfCardRim' "$DYLIB"
           grep -aq 'GFHorizontalGlassRimView' "$DYLIB"
@@ -243,8 +254,9 @@ jobs:
               p = plistlib.load(f)
           assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
           assert p["CFBundleName"] == "GlassFoldersPrefs"
-          assert p["CFBundleShortVersionString"] == "1.3.1"
-          assert p["CFBundleVersion"] == "1.3.1.4"
+          assert p["CFBundleShortVersionString"] == "1.3.3"
+          assert p["CFBundleVersion"] == "1.3.3.1"
+          assert p["CFBundleDisplayName"] == "Luma Glass"
           assert p["NSPrincipalClass"] == "GFRootListController"
           print("Preference bundle Info.plist verified.")
           PY
@@ -255,7 +267,7 @@ jobs:
               p = plistlib.load(f)
           e = p["entry"]
           assert e["cell"] == "PSLinkCell"
-          assert e["label"] == "GlassFolders"
+          assert e["label"] == "Luma Glass"
           assert e["isController"] is True
           assert e["bundle"] == "GlassFoldersPrefs"
           assert e["icon"] == "GlassFolders.png"
@@ -322,7 +334,7 @@ jobs:
       - name: Upload RootHide deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.3.1-lowwakeup2-whitebg3-RootHide-arm64e
+          name: LumaGlass-1.3.3-RootHide-arm64e
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14
@@ -342,7 +354,7 @@ jobs:
 
       - name: Workflow stamp
         run: |
-          echo "=== GLASSFOLDERS 1.3.1 LOW WAKEUP / STANDARD ROOTLESS ARM64 ==="
+          echo "=== LUMA GLASS 1.3.3 / STANDARD ROOTLESS ARM64 ==="
 
       - name: Install dependencies
         shell: bash
@@ -456,7 +468,8 @@ jobs:
           tar -xf "$CONTROL" -C ctrl
 
           grep -q '^Package: com.kulinich.glassfolders$' ctrl/control
-          grep -Fqx 'Version: 1.3.1~lowwakeup2+whitebg3' ctrl/control
+          grep -Fqx 'Name: Luma Glass' ctrl/control
+          grep -Fqx 'Version: 1.3.3' ctrl/control
           grep -Fq 'firmware (>= 16.0), firmware (<< 17.3.2)' ctrl/control
           grep -q '^Architecture: iphoneos-arm64$' ctrl/control
 
@@ -532,8 +545,9 @@ jobs:
               p = plistlib.load(f)
           assert p["CFBundleIdentifier"] == "com.kulinich.glassfolders.preferences"
           assert p["CFBundleName"] == "GlassFoldersPrefs"
-          assert p["CFBundleShortVersionString"] == "1.3.1"
-          assert p["CFBundleVersion"] == "1.3.1.4"
+          assert p["CFBundleShortVersionString"] == "1.3.3"
+          assert p["CFBundleVersion"] == "1.3.3.1"
+          assert p["CFBundleDisplayName"] == "Luma Glass"
           assert p["NSPrincipalClass"] == "GFRootListController"
           print("Preference bundle Info.plist verified.")
           PY
@@ -544,7 +558,7 @@ jobs:
               p = plistlib.load(f)
           e = p["entry"]
           assert e["cell"] == "PSLinkCell"
-          assert e["label"] == "GlassFolders"
+          assert e["label"] == "Luma Glass"
           assert e["isController"] is True
           assert e["bundle"] == "GlassFoldersPrefs"
           assert e["icon"] == "GlassFolders.png"
@@ -612,7 +626,7 @@ jobs:
       - name: Upload rootless deb
         uses: actions/upload-artifact@v4
         with:
-          name: GlassFolders-1.3.1-lowwakeup2-whitebg3-Rootless-arm64
+          name: LumaGlass-1.3.3-Rootless-arm64
           path: ${{ steps.package.outputs.deb }}
           if-no-files-found: error
           retention-days: 14

@@ -114,6 +114,60 @@ typedef UIView UIResponder;
 @implementation TestCover
 @end
 
+@interface UIApplication : NSObject
++ (instancetype)sharedApplication;
+@property BOOL showingHome;
+- (BOOL)isShowingHomescreen;
+@end
+@implementation UIApplication
++ (instancetype)sharedApplication {
+    static UIApplication *application;
+    if (!application) application = [self new];
+    return application;
+}
+- (BOOL)isShowingHomescreen { return self.showingHome; }
+@end
+
+@interface TestLegibility : NSObject
+@property (strong) UIColor *primaryColor;
+@end
+@implementation TestLegibility
+@end
+@interface SBWallpaperController : NSObject
++ (instancetype)sharedInstance;
+@property (strong) UIColor *homeColor;
+@property (strong) TestLegibility *settings;
+@property NSUInteger homeReads;
+@property NSInteger lastVariant;
+- (UIColor *)averageColorForVariant:(NSInteger)variant;
+- (TestLegibility *)legibilitySettingsForVariant:(NSInteger)variant;
+@end
+@implementation SBWallpaperController
++ (instancetype)sharedInstance {
+    static SBWallpaperController *controller;
+    if (!controller) controller = [self new];
+    return controller;
+}
+- (UIColor *)averageColorForVariant:(NSInteger)variant {
+    self.homeReads++;
+    self.lastVariant = variant;
+    return self.homeColor;
+}
+- (TestLegibility *)legibilitySettingsForVariant:(NSInteger)variant {
+    self.lastVariant = variant;
+    return self.settings;
+}
+@end
+
+@interface WrongVariantProvider : NSObject
+- (UIColor *)averageColorForVariant:(id)variant;
+@end
+@implementation WrongVariantProvider
+- (UIColor *)averageColorForVariant:(id)variant {
+    @throw [NSException exceptionWithName:@"MustNotCall" reason:@"Wrong ABI" userInfo:nil];
+}
+@end
+
 #import "../GFNotificationForeground.h"
 
 static id GFLockObject(id object, NSString *name) {
@@ -253,10 +307,50 @@ int main(void) {
         provider.color = nil;
         GFNotificationInvalidateWallpaper();
         CHECK(![foreground paletteForHost:host].valid);
+        // Home and lock wallpapers differ; banners must never use lock input.
+        SBWallpaperController *home = [SBWallpaperController sharedInstance];
+        home.homeColor = black;
+        provider.color = white;
+        GFHomeInvalidateWallpaper();
+        GFNotificationInvalidateWallpaper();
+        CHECK([foreground paletteForHost:host].lightSurface);
+        CHECK(![foreground paletteForHomeBannerHost:host].lightSurface);
+        CHECK(home.lastVariant == 1 && home.homeReads == 1);
+        for (NSUInteger i = 0; i < 100; i++)
+            [foreground paletteForHomeBannerHost:host];
+        CHECK(home.homeReads == 1);
+        CHECK([foreground paletteForHost:host].lightSurface);
+        home.homeColor = white;
+        GFHomeInvalidateWallpaper();
+        CHECK([foreground paletteForHomeBannerHost:host].lightSurface);
+        CHECK(home.homeReads == 2);
+        CHECK(!GFHomeScreenVisible());
+        [UIApplication sharedApplication].showingHome = YES;
+        CHECK(GFHomeScreenVisible());
+        [UIApplication sharedApplication].showingHome = NO;
+        CHECK(!GFHomeScreenVisible());
+        CHECK(!GFHomeVariantObject([WrongVariantProvider new], @"averageColorForVariant:"));
+        home.homeColor = nil;
+        home.settings = [TestLegibility new];
+        home.settings.primaryColor = black;
+        GFHomeInvalidateWallpaper();
+        CHECK([foreground paletteForHomeBannerHost:host].lightSurface);
+        home.settings.primaryColor = white;
+        GFHomeInvalidateWallpaper();
+        CHECK(![foreground paletteForHomeBannerHost:host].lightSurface);
+        home.settings = nil;
+        GFHomeInvalidateWallpaper();
+        CHECK(![foreground paletteForHomeBannerHost:host].valid);
+        NSUInteger missingReads = home.homeReads;
+        for (NSUInteger i = 0; i < 100; i++)
+            CHECK(![foreground paletteForHomeBannerHost:host].valid);
+        CHECK(home.homeReads == missingReads);
         CHECK(GFNotificationHasVoidMethod(UIView.class, @selector(setLayer:), YES));
         CHECK(!GFNotificationHasVoidMethod(UIView.class, @selector(layer), NO));
         puts("Production foreground state: recolor, attributed runs, filter restoration, "
              "native updates, scoped slots, cache and wallpaper invalidation PASS");
+        puts("Production Home Screen input: separate wallpaper variant, cache, visibility, "
+             "legibility fallback, invalid input and ABI guard PASS");
     }
     return 0;
 }

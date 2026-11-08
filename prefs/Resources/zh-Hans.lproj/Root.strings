@@ -11,7 +11,7 @@
 "About" = "关于";
 "Developer" = "作者";
 
-"Activate GlassFolders" = "激活 GlassFolders";
+"Activate GlassFolders" = "激活 Luma Glass";
 "Activate to enable glass effects." = "完成设备授权后即可启用玻璃效果。";
 "Activate Now" = "前往激活";
 "License Management" = "授权管理";
@@ -41,7 +41,7 @@
 "Paste License" = "粘贴授权";
 "Create Device Proof" = "生成并复制设备回执";
 "Paste the binding challenge from the developer. It expires after five minutes." = "粘贴开发者发来的绑定码，绑定码在五分钟后失效。";
-"Paste the GlassFolders license from the developer." = "粘贴开发者签发的 GlassFolders 专用授权。";
+"Paste the GlassFolders license from the developer." = "粘贴开发者签发的 Luma Glass 授权。";
 "Device Code copied. Send it to the developer to receive a binding challenge." = "设备码已复制，请发送给开发者获取绑定码。";
 "Device proof copied. Send it to the developer for verification and signing." = "设备回执已复制，请在绑定码到期前发送给开发者验证并签发授权。";
 "License saved. Tap Reload SpringBoard to enable glass effects." = "授权已保存，点击“重新载入桌面”启用玻璃效果。";
@@ -49,7 +49,7 @@
 "License removed. Tap Reload SpringBoard." = "授权已移除，请点击“重新载入桌面”。";
 "Invalid license format" = "授权格式错误，请粘贴完整的 GF1 授权。";
 "Invalid license signature" = "授权签名无效，请检查是否复制完整或联系开发者。";
-"Unsupported license payload" = "该授权不适用于此版本的 GlassFolders。";
+"Unsupported license payload" = "该授权不适用于此版本的 Luma Glass。";
 "Device identifier unavailable" = "无法读取本机设备标识，请确认越狱和插件运行环境。";
 "License is for another device" = "此授权属于另一台设备。";
 "Unable to save license" = "授权保存失败，请检查设置权限后重试。";
@@ -71,10 +71,10 @@
 "Flashlight and Camera" = "电筒与相机";
 "Music Panel" = "音乐面板";
 "Live Activities" = "实时活动";
-"Independent switches. Changes take effect immediately; turn off to restore the system appearance. A valid GlassFolders license is required." = "各项可独立开启，设置即时生效；关闭后恢复系统样式。需要有效的 GlassFolders 授权。";
+"Independent switches. Changes take effect immediately; turn off to restore the system appearance. A valid GlassFolders license is required." = "各项可独立开启，设置即时生效；关闭后恢复系统样式。需要有效的 Luma Glass 授权。";
 "Live Activities replace compatible system backgrounds only. App-drawn opaque backgrounds may remain. Flashlight-on and pressed buttons keep system feedback. Test on your device." = "实时活动仅替换兼容的系统底板；应用自绘的不透明背景可能保留。电筒点亮及按钮按住时保留系统反馈，效果请以本机实测为准。";
 
-"Independent switches with tuned glass effects. Lock screen appearance is independent of folder strength. Changes take effect immediately. A valid GlassFolders license is required." = "各项可独立开启，使用已调好的玻璃效果，不受文件夹强度影响；设置即时生效。需要有效的 GlassFolders 授权。";
+"Independent switches with tuned glass effects. Lock screen appearance is independent of folder strength. Changes take effect immediately. A valid GlassFolders license is required." = "各项可独立开启，使用已调好的玻璃效果，不受文件夹强度影响；设置即时生效。需要有效的 Luma Glass 授权。";
 
 "Notification Banners" = "通知横幅";
 "Glass Banners" = "横幅玻璃效果";

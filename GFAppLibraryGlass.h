@@ -3,6 +3,7 @@
 #define GF_APP_LIBRARY_GLASS_H
 
 #import "GFHorizontalGlassRim.h"
+#import "GFHomeScreenPalette.h"
 
 @interface GFAppLibraryBackdropView : UIView
 @end
@@ -20,6 +21,7 @@
 @property (nonatomic, strong) UIVisualEffectView *gfFallbackBlurView;
 @property (nonatomic, strong) CAGradientLayer *gfBodyVeil;
 @property (nonatomic, strong) GFHorizontalGlassRimView *gfCardRim;
+@property (nonatomic, strong) GFLockRimView *gfAdaptiveRim;
 @property (nonatomic, assign) CGFloat gfStrength;
 @property (nonatomic, assign) CGFloat gfPreferredRadius;
 @property (nonatomic, assign) BOOL gfSearchVariant;
@@ -29,6 +31,8 @@
 @property (nonatomic, assign) NSInteger gfMaterialStyle;
 @property (nonatomic, assign) BOOL gfMaterialSearchVariant;
 @property (nonatomic, assign) BOOL gfMaterialDockVariant;
+@property (nonatomic, assign) BOOL gfMaterialAdaptiveLight;
+@property (nonatomic, assign) double gfMaterialBodyWhite;
 - (instancetype)initWithStrength:(CGFloat)strength;
 - (void)setPreferredRadius:(CGFloat)radius;
 - (void)gfRefreshMaterial;
@@ -63,6 +67,10 @@
         _gfCardRim =
             [[GFHorizontalGlassRimView alloc] initWithFrame:CGRectZero];
         [self addSubview:_gfCardRim];
+        _gfAdaptiveRim = [[GFLockRimView alloc] initWithFrame:CGRectZero];
+        _gfAdaptiveRim.gfLightSurface = YES;
+        _gfAdaptiveRim.hidden = YES;
+        [self addSubview:_gfAdaptiveRim];
         [self gfRefreshMaterial];
     }
     return self;
@@ -79,12 +87,19 @@
 - (void)gfRefreshMaterial {
     BOOL dark = GFUsesDarkAppearance(self);
     NSInteger style = self.gfDockVariant ? 1 : GFResolvedAppLibraryStyle();
+    GFNotificationPalette palette = {0};
+    if (!self.gfDockVariant) palette = GFHomeWallpaperPalette(self.traitCollection);
+    BOOL adaptiveLight = palette.valid && palette.lightSurface &&
+        !UIAccessibilityIsReduceTransparencyEnabled() &&
+        !UIAccessibilityDarkerSystemColorsEnabled();
 
     if (self.gfHasMaterial &&
         self.gfMaterialDark == dark &&
         self.gfMaterialStyle == style &&
         self.gfMaterialSearchVariant == self.gfSearchVariant &&
-        self.gfMaterialDockVariant == self.gfDockVariant) {
+        self.gfMaterialDockVariant == self.gfDockVariant &&
+        self.gfMaterialAdaptiveLight == adaptiveLight &&
+        (!adaptiveLight || self.gfMaterialBodyWhite == palette.bodyWhite)) {
         return;
     }
 
@@ -93,10 +108,13 @@
     self.gfMaterialStyle = style;
     self.gfMaterialSearchVariant = self.gfSearchVariant;
     self.gfMaterialDockVariant = self.gfDockVariant;
+    self.gfMaterialAdaptiveLight = adaptiveLight;
+    self.gfMaterialBodyWhite = palette.bodyWhite;
 
     GFAppLibraryMaterialRecipe recipe = self.gfDockVariant
         ? (GFAppLibraryMaterialRecipe){10.0, 1.04, 1.0}
         : GFAppLibraryRecipe(self.gfSearchVariant, dark);
+    if (adaptiveLight) recipe.blur = style == 1 ? 3.0 : 4.0;
 
     CALayer *backdrop = self.gfBackdropSampleView.layer;
     BOOL hasBlur = NO;
@@ -164,6 +182,15 @@
         (id)[UIColor colorWithWhite:1.0 alpha:0.003 * density].CGColor,
         (id)[UIColor colorWithWhite:1.0 alpha:0.006 * density].CGColor
     ];
+    if (adaptiveLight) {
+        UIColor *body = [UIColor colorWithWhite:palette.bodyWhite
+            alpha:palette.bodyOpacity * (self.gfSearchVariant ? 0.8 : 1.0)];
+        self.gfBodyVeil.colors = @[(id)body.CGColor, (id)body.CGColor,
+                                  (id)body.CGColor, (id)body.CGColor,
+                                  (id)body.CGColor, (id)body.CGColor];
+    }
+    self.gfCardRim.hidden = adaptiveLight;
+    self.gfAdaptiveRim.hidden = !adaptiveLight;
     self.gfCardRim.alpha = 1.0;
     [CATransaction commit];
     [self setNeedsLayout];
@@ -215,6 +242,12 @@
         self.gfCardRim.gfSearchVariant = self.gfSearchVariant;
         self.gfCardRim.gfDockVariant = self.gfDockVariant;
         [self.gfCardRim setNeedsLayout];
+    }
+    if (!CGRectEqualToRect(self.gfAdaptiveRim.frame, self.bounds) ||
+        fabs(self.gfAdaptiveRim.gfRadius - radius) > 0.01) {
+        self.gfAdaptiveRim.frame = self.bounds;
+        self.gfAdaptiveRim.gfRadius = radius;
+        [self.gfAdaptiveRim setNeedsLayout];
     }
     [CATransaction commit];
 }

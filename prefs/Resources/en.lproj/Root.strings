@@ -16,7 +16,7 @@
 "Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material." = "Folders and App Library can be enabled independently. “Follow Folder” syncs only the Clear / Liquid Glass style; App Library keeps its optimized material.";
 
 /* Offline license */
-"Activate GlassFolders" = "Activate GlassFolders";
+"Activate GlassFolders" = "Activate Luma Glass";
 "Activate to enable glass effects." = "Activate to enable glass effects.";
 "Activate Now" = "Activate Now";
 "License Management" = "License Management";
@@ -46,7 +46,7 @@
 "Paste License" = "Paste License";
 "Create Device Proof" = "Create Device Proof";
 "Paste the binding challenge from the developer. It expires after five minutes." = "Paste the binding challenge from the developer. It expires after five minutes.";
-"Paste the GlassFolders license from the developer." = "Paste the GlassFolders license from the developer.";
+"Paste the GlassFolders license from the developer." = "Paste the Luma Glass license from the developer.";
 "Device Code copied. Send it to the developer to receive a binding challenge." = "Device Code copied. Send it to the developer to receive a binding challenge.";
 "Device proof copied. Send it to the developer for verification and signing." = "Device proof copied. Send it to the developer for verification and signing.";
 "License saved. Tap Reload SpringBoard to enable glass effects." = "License saved. Tap Reload SpringBoard to enable glass effects.";
@@ -72,10 +72,10 @@
 "Flashlight and Camera" = "Flashlight and Camera";
 "Music Panel" = "Music Panel";
 "Live Activities" = "Live Activities";
-"Independent switches. Changes take effect immediately; turn off to restore the system appearance. A valid GlassFolders license is required." = "Independent switches. Changes take effect immediately; turn off to restore the system appearance. A valid GlassFolders license is required.";
+"Independent switches. Changes take effect immediately; turn off to restore the system appearance. A valid GlassFolders license is required." = "Independent switches. Changes take effect immediately; turn off to restore the system appearance. A valid Luma Glass license is required.";
 "Live Activities replace compatible system backgrounds only. App-drawn opaque backgrounds may remain. Flashlight-on and pressed buttons keep system feedback. Test on your device." = "Live Activities replace compatible system backgrounds only. App-drawn opaque backgrounds may remain. Flashlight-on and pressed buttons keep system feedback. Test on your device.";
 
-"Independent switches with tuned glass effects. Lock screen appearance is independent of folder strength. Changes take effect immediately. A valid GlassFolders license is required." = "Independent switches with tuned glass effects. Lock screen appearance is independent of folder strength. Changes take effect immediately. A valid GlassFolders license is required.";
+"Independent switches with tuned glass effects. Lock screen appearance is independent of folder strength. Changes take effect immediately. A valid GlassFolders license is required." = "Independent switches with tuned glass effects. Lock screen appearance is independent of folder strength. Changes take effect immediately. A valid Luma Glass license is required.";
 
 "Notification Banners" = "Notification Banners";
 "Glass Banners" = "Glass Banners";

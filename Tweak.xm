@@ -4178,6 +4178,7 @@ static void GFUpdateDockBackground(UIView *host) {
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
     %orig;
     GFNotificationInvalidateWallpaper();
+    GFHomeInvalidateWallpaper();
     GFUpdateLockScreenSurface((UIView *)self);
 }
 // GF_NOTIFICATION_WHITEBG2_END
@@ -4262,6 +4263,26 @@ static void GFUpdateDockBackground(UIView *host) {
 - (void)_updateLegibilitySettings {
     %orig;
     GFNotificationInvalidateWallpaper();
+    GFLockScheduleRefresh();
+}
+%end
+%end
+
+%group GFHomeWallpaperHooks
+%hook SBUIController
+- (void)_updateLegibility {
+    %orig;
+    GFHomeInvalidateWallpaper();
+    GFLockScheduleRefresh();
+}
+%end
+%end
+
+%group GFHomePresenceHooks
+%hook SpringBoard
+- (void)_updateHomeScreenPresenceNotification:(id)notification {
+    %orig;
+    GFHomeInvalidateWallpaper();
     GFLockScheduleRefresh();
 }
 %end
@@ -4815,6 +4836,14 @@ static void GFUpdateOpenedFolderBackground(
 
         Class coverSheetClass = objc_getClass("CSCoverSheetViewController");
         // GF_NOTIFICATION_WHITEBG2_BEGIN
+        if (GFNotificationHasVoidMethod(objc_getClass("SBUIController"),
+                                       NSSelectorFromString(@"_updateLegibility"), NO)) {
+            %init(GFHomeWallpaperHooks);
+        }
+        if (GFNotificationHasVoidMethod(objc_getClass("SpringBoard"),
+                                       NSSelectorFromString(@"_updateHomeScreenPresenceNotification:"), YES)) {
+            %init(GFHomePresenceHooks);
+        }
         if (GFNotificationHasVoidMethod(coverSheetClass,
                                        NSSelectorFromString(@"_updateLegibilitySettings"), NO)) {
             %init(GFNotificationWallpaperHooks);
@@ -4856,6 +4885,7 @@ static void GFUpdateOpenedFolderBackground(
             [NSNotificationCenter.defaultCenter addObserverForName:name object:nil
                 queue:NSOperationQueue.mainQueue usingBlock:^(__unused NSNotification *note) {
                     GFNotificationInvalidateWallpaper();
+                    GFHomeInvalidateWallpaper();
                     GFLockScheduleRefresh();
                 }];
         }

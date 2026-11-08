@@ -52,6 +52,8 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 @property (nonatomic, strong) CAGradientLayer *gfBodyVeil;
 - (void)gfRefreshBodyVeil;
 - (void)gfApplyNotificationPalette:(GFNotificationPalette)palette;
+- (void)gfClearNotificationPalette;
+- (NSString *)gfBackdropGroupName;
 @end
 @implementation GFLockScreenGlassView
 - (instancetype)initWithStyle:(NSInteger)style strength:(CGFloat)strength {
@@ -72,7 +74,7 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 }
 - (void)gfRefreshMaterial {
     [super gfRefreshMaterial];
-    GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.cards",
+    GFLockApplyBackdropRecipe(self, [self gfBackdropGroupName],
         self.gfUsesNotificationPalette && self.gfNotificationPalette.lightSurface ?
         GFNotificationLightBlurRadius : GFLockCardBlurRadius);
     if (self.gfFallbackBlurView) {
@@ -88,6 +90,9 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
     [self gfRefreshBodyVeil];
     [self.gfLockRim setNeedsLayout];
 }
+- (NSString *)gfBackdropGroupName {
+    return @"com.kulinich.glassfolders.lock.cards";
+}
 - (void)gfApplyNotificationPalette:(GFNotificationPalette)palette {
     if (self.gfUsesNotificationPalette &&
         self.gfNotificationPalette.lightSurface == palette.lightSurface &&
@@ -99,10 +104,18 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
     self.gfNotificationPalette = palette;
     if (backdropChanged) {
         // Reconfigure only on a wallpaper-mode change, never a stack change.
-        GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.cards",
+        GFLockApplyBackdropRecipe(self, [self gfBackdropGroupName],
             palette.lightSurface ? GFNotificationLightBlurRadius : GFLockCardBlurRadius);
     }
     self.gfLockRim.gfLightSurface = palette.lightSurface;
+    [self gfRefreshBodyVeil];
+    [self.gfLockRim setNeedsLayout];
+}
+- (void)gfClearNotificationPalette {
+    if (!self.gfUsesNotificationPalette) return;
+    self.gfUsesNotificationPalette = NO;
+    self.gfLockRim.gfLightSurface = NO;
+    GFLockApplyBackdropRecipe(self, [self gfBackdropGroupName], GFLockCardBlurRadius);
     [self gfRefreshBodyVeil];
     [self.gfLockRim setNeedsLayout];
 }
@@ -166,10 +179,8 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 @interface GFBannerGlassView : GFLockScreenGlassView
 @end
 @implementation GFBannerGlassView
-- (void)gfRefreshMaterial {
-    [super gfRefreshMaterial];
-    GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.notifications.banners",
-                             GFLockCardBlurRadius);
+- (NSString *)gfBackdropGroupName {
+    return @"com.kulinich.glassfolders.notifications.banners";
 }
 @end
 
@@ -521,12 +532,14 @@ static void GFUpdateLockScreenSurface(UIView *host) {
         }
         return;
     }
-    BOOL adaptiveNotification = notification && !banner;
+    BOOL homeBanner = notification && banner && GFHomeScreenVisible();
+    BOOL adaptiveNotification = notification && (!banner || homeBanner);
     GFNotificationPalette palette = {0};
     GFNotificationForegroundState *foreground = state.foreground;
     if (adaptiveNotification) {
         if (!foreground) foreground = [GFNotificationForegroundState new];
-        palette = [foreground paletteForHost:host];
+        palette = homeBanner ? [foreground paletteForHomeBannerHost:host] :
+                               [foreground paletteForHost:host];
         if (!palette.valid || UIAccessibilityIsReduceTransparencyEnabled() ||
             UIAccessibilityDarkerSystemColorsEnabled()) {
             if (state) GFRestoreLockScreenSurface(host);
@@ -551,6 +564,11 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     }
     UIView *container = background.superview;
     GFLockScreenGlassView *glass = state.glass;
+    if (banner && !homeBanner && state.foreground) {
+        [state.foreground restore];
+        state.foreground = nil;
+        [glass gfClearNotificationPalette];
+    }
     if (adaptiveNotification) {
         state.foreground = foreground;
         [glass gfApplyNotificationPalette:palette];

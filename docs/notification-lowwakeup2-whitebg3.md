@@ -105,4 +105,7 @@ and preferences, new correction selectors, and exactly one Settings entry.
 The only actual linker warnings were the existing obsolete
 `-multiply_defined` option. Standard rootless was skipped.
 
-Device visual and animation acceptance: pending.
+Device feedback on 2026-11-08: user said the lock-screen appearance is acceptable
+and requested the same treatment for Home Screen banners and App Library.
+No claim of exhaustive animation/accessibility acceptance is made.
+Follow-up: `luma-glass-1.3.3.md`.

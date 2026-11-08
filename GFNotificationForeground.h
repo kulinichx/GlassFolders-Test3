@@ -2,6 +2,7 @@
 #define GF_NOTIFICATION_FOREGROUND_H
 
 #import "GFNotificationPalette.h"
+#import "GFHomeScreenPalette.h"
 
 static id GFLockObject(id object, NSString *name);
 static id GFLockIvar(id object, const char *name);
@@ -127,6 +128,7 @@ static BOOL GFNotificationIsVibrancy(id filter) {
 @property (nonatomic, assign) BOOL loggedTextCount;
 @property (nonatomic, assign) NSUInteger previousTextCount;
 - (GFNotificationPalette)paletteForHost:(UIView *)host;
+- (GFNotificationPalette)paletteForHomeBannerHost:(UIView *)host;
 - (NSUInteger)applyToHost:(UIView *)host content:(UIView *)content;
 - (void)restore;
 @end
@@ -139,6 +141,14 @@ static BOOL GFNotificationIsVibrancy(id filter) {
         _loggedMode = -1;
     }
     return self;
+}
+- (GFNotificationPalette)paletteForHomeBannerHost:(UIView *)host {
+    self.host = host;
+    // A reused platter returning to lock screen must re-read its own provider.
+    self.generation = 0;
+    self.wallpaperProvider = nil;
+    self.palette = GFHomeWallpaperPalette(host.traitCollection);
+    return self.palette;
 }
 - (GFNotificationPalette)paletteForHost:(UIView *)host {
     id cover = GFLockCoverSheetOwner(host);
