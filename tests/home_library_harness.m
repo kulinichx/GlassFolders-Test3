@@ -162,7 +162,7 @@ static id GFCreateCAFilter(NSString *name) {
 }
 static BOOL TestDarkAppearance = YES;
 static BOOL TestReduceTransparency = NO;
-static CGFloat GFDockBlurAmount = 0.5;
+static CGFloat GFGlassStrength = 0.5;
 static BOOL GFUsesDarkAppearance(UIView *view) { return TestDarkAppearance; }
 static BOOL UIAccessibilityIsReduceTransparencyEnabled(void) { return TestReduceTransparency; }
 static BOOL UIAccessibilityDarkerSystemColorsEnabled(void) { return NO; }
@@ -242,21 +242,21 @@ int main(void) {
         writes = layer.assignments;
         for (NSUInteger i = 0; i < 400; i++) [pod layoutSubviews];
         CHECK(layer.testFilters == filters && layer.assignments == writes);
-        GFDockBlurAmount = 0.25;
+        GFGlassStrength = 0.25;
         [pod gfRefreshMaterial];
         CHECK(BlurRadius(pod) == 1.5);
-        GFDockBlurAmount = 0;
+        GFGlassStrength = 0;
         [pod gfRefreshMaterial];
         CHECK(BlurRadius(pod) == -1 && !pod.gfBackdropSampleView.hidden);
         CHECK(!pod.gfFallbackBlurView || pod.gfFallbackBlurView.hidden);
-        GFDockBlurAmount = 1;
+        GFGlassStrength = 1;
         [pod gfRefreshMaterial];
         CHECK(BlurRadius(pod) == 6);
         provider.homeColor = [UIColor colorWithWhite:0 alpha:1];
         GFHomeInvalidateWallpaper();
         [pod gfRefreshMaterial];
         CHECK(!pod.gfMaterialAdaptiveLight && BlurRadius(pod) == 10);
-        GFDockBlurAmount = 0.5;
+        GFGlassStrength = 0.5;
         [pod gfRefreshMaterial];
         CHECK(BlurRadius(pod) == 5);
         CHECK(!pod.gfCardRim.hidden && pod.gfAdaptiveRim.hidden);
@@ -265,26 +265,29 @@ int main(void) {
         TestBackdropLayer *libraryLayer = (TestBackdropLayer *)library.gfBackdropSampleView.layer;
         NSArray *libraryFilters = libraryLayer.testFilters;
         CHECK(BlurRadius(library) == 8);
-        GFDockBlurAmount = -1;
+        GFGlassStrength = -1;
         [pod gfRefreshMaterial];
         CHECK(BlurRadius(pod) == -1);
         [library gfRefreshMaterial];
-        CHECK(libraryLayer.testFilters == libraryFilters && BlurRadius(library) == 8);
-        GFDockBlurAmount = NAN;
+        CHECK(libraryLayer.testFilters != libraryFilters && BlurRadius(library) == -1);
+        libraryFilters = libraryLayer.testFilters;
+        [library gfRefreshMaterial];
+        CHECK(libraryLayer.testFilters == libraryFilters);
+        GFGlassStrength = NAN;
         [pod gfRefreshMaterial];
         CHECK(BlurRadius(pod) == 5);
-        GFDockBlurAmount = INFINITY;
+        GFGlassStrength = INFINITY;
         [pod gfRefreshMaterial];
         CHECK(BlurRadius(pod) == 5);
-        GFDockBlurAmount = 2;
+        GFGlassStrength = 2;
         [pod gfRefreshMaterial];
         CHECK(BlurRadius(pod) == 10);
         TestFailBlur = YES;
-        GFDockBlurAmount = 0.5;
+        GFGlassStrength = 0.5;
         [pod gfRefreshMaterial];
         CHECK(pod.gfBackdropSampleView.hidden && !pod.gfFallbackBlurView.hidden);
         CHECK(fabs(pod.gfFallbackBlurView.alpha - 0.22) < 0.0001);
-        GFDockBlurAmount = 0;
+        GFGlassStrength = 0;
         [pod gfRefreshMaterial];
         CHECK(!pod.gfBackdropSampleView.hidden && pod.gfFallbackBlurView.hidden);
         // Model a platform with no native backdrop, not merely a missing filter.
@@ -292,15 +295,15 @@ int main(void) {
         pod.gfHasMaterial = NO;
         [pod gfRefreshMaterial];
         CHECK(!pod.gfFallbackBlurView.hidden && pod.gfFallbackBlurView.alpha == 0);
-        GFDockBlurAmount = 0.25;
+        GFGlassStrength = 0.25;
         [pod gfRefreshMaterial];
         CHECK(fabs(pod.gfFallbackBlurView.alpha - 0.11) < 0.0001);
-        GFDockBlurAmount = 1;
+        GFGlassStrength = 1;
         [pod gfRefreshMaterial];
         CHECK(fabs(pod.gfFallbackBlurView.alpha - 0.44) < 0.0001);
         puts("Production library renderer: light wallpaper in dark UI, pod/search, "
              "100 stable layouts, style changes, wallpaper invalidation, "
-             "accessibility and independent Dock blur/zero/fallback/400 stable layouts PASS");
+             "accessibility and shared Dock/library strength/zero/fallback/400 stable layouts PASS");
     }
     return 0;
 }

@@ -4,6 +4,7 @@
 
 #import "GFHorizontalGlassRim.h"
 #import "GFHomeScreenPalette.h"
+#import "GFGlassStrength.h"
 
 @interface GFAppLibraryBackdropView : UIView
 @end
@@ -33,7 +34,7 @@
 @property (nonatomic, assign) BOOL gfMaterialDockVariant;
 @property (nonatomic, assign) BOOL gfMaterialAdaptiveLight;
 @property (nonatomic, assign) double gfMaterialBodyWhite;
-@property (nonatomic, assign) CGFloat gfMaterialDockBlurAmount;
+@property (nonatomic, assign) CGFloat gfMaterialGlassAmount;
 - (instancetype)initWithStrength:(CGFloat)strength;
 - (void)setPreferredRadius:(CGFloat)radius;
 - (void)gfRefreshMaterial;
@@ -92,15 +93,14 @@
     BOOL adaptiveLight = palette.valid && palette.lightSurface &&
         !UIAccessibilityIsReduceTransparencyEnabled() &&
         !UIAccessibilityDarkerSystemColorsEnabled();
-    CGFloat dockBlur = self.gfDockVariant ?
-        (isfinite(GFDockBlurAmount) ? GFClamp01(GFDockBlurAmount) : 0.5) : 0.0;
+    CGFloat amount = GFSharedGlassAmount(GFGlassStrength);
 
     if (self.gfHasMaterial &&
         self.gfMaterialDark == dark &&
         self.gfMaterialStyle == style &&
         self.gfMaterialSearchVariant == self.gfSearchVariant &&
         self.gfMaterialDockVariant == self.gfDockVariant &&
-        self.gfMaterialDockBlurAmount == dockBlur &&
+        self.gfMaterialGlassAmount == amount &&
         self.gfMaterialAdaptiveLight == adaptiveLight &&
         (!adaptiveLight || self.gfMaterialBodyWhite == palette.bodyWhite)) {
         return;
@@ -113,13 +113,14 @@
     self.gfMaterialDockVariant = self.gfDockVariant;
     self.gfMaterialAdaptiveLight = adaptiveLight;
     self.gfMaterialBodyWhite = palette.bodyWhite;
-    self.gfMaterialDockBlurAmount = dockBlur;
+    self.gfMaterialGlassAmount = amount;
 
     GFAppLibraryMaterialRecipe recipe = self.gfDockVariant
-        ? (GFAppLibraryMaterialRecipe){10.0 * dockBlur, 1.04, 1.0}
+        ? (GFAppLibraryMaterialRecipe){5.0, 1.04, 1.0}
         : GFAppLibraryRecipe(self.gfSearchVariant, dark);
-    if (adaptiveLight) recipe.blur = self.gfDockVariant ? 6.0 * dockBlur :
+    if (adaptiveLight) recipe.blur = self.gfDockVariant ? 3.0 :
         (style == 1 ? 3.0 : 4.0);
+    recipe.blur *= GFSharedGlassScale(amount);
 
     CALayer *backdrop = self.gfBackdropSampleView.layer;
     BOOL hasNativeMaterial = NO;
@@ -173,7 +174,7 @@
                 ? UIBlurEffectStyleSystemUltraThinMaterial
                 : UIBlurEffectStyleSystemThinMaterial];
         self.gfFallbackBlurView.alpha =
-            self.gfDockVariant ? 0.44 * dockBlur : (style == 1 ? 0.22 : 0.28);
+            (style == 1 ? 0.22 : 0.28) * GFSharedGlassScale(amount);
     }
     self.gfFallbackBlurView.hidden = hasNativeMaterial;
 

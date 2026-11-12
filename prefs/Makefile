@@ -5,7 +5,7 @@ THEOS_PACKAGE_SCHEME = roothide
 include $(THEOS)/makefiles/common.mk
 
 BUNDLE_NAME = GlassFoldersPrefs
-GlassFoldersPrefs_FILES = GFRootListController.m GFLivePreferencesNotifier.m
+GlassFoldersPrefs_FILES = GFRootListController.m GFPercentSliderCell.m GFLivePreferencesNotifier.m
 GlassFoldersPrefs_FRAMEWORKS = UIKit CoreFoundation Security
 GlassFoldersPrefs_PRIVATE_FRAMEWORKS = Preferences
 GlassFoldersPrefs_CFLAGS = -fobjc-arc

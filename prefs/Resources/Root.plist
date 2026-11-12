@@ -101,8 +101,6 @@
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
-			<key>footerText</key>
-			<string>Lock screen glass is independent of folder strength.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -174,34 +172,6 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>Notification Blur</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSliderCell</string>
-			<key>cellClass</key>
-			<string>GFPercentSliderCell</string>
-			<key>label</key>
-			<string>Notification Blur</string>
-			<key>key</key>
-			<string>NotificationBlur</string>
-			<key>default</key>
-			<integer>50</integer>
-			<key>defaults</key>
-			<string>com.kulinich.glassfolders</string>
-			<key>min</key>
-			<integer>0</integer>
-			<key>max</key>
-			<integer>100</integer>
-			<key>showValue</key>
-			<false/>
-			<key>PostNotification</key>
-			<string>com.kulinich.glassfolders/preferenceschanged</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>label</key>
 			<string>Folder Style</string>
 		</dict>
 		<dict>
@@ -236,7 +206,7 @@
 		</dict>
 		<dict>
 			<key>cell</key>
-			<string>PSSliderCell</string>
+			<string>PSStaticTextCell</string>
 			<key>cellClass</key>
 			<string>GFPercentSliderCell</string>
 			<key>label</key>
@@ -266,7 +236,7 @@
 		</dict>
 		<dict>
 			<key>cell</key>
-			<string>PSSliderCell</string>
+			<string>PSStaticTextCell</string>
 			<key>cellClass</key>
 			<string>GFPercentSliderCell</string>
 			<key>label</key>
@@ -343,34 +313,6 @@
 				<integer>0</integer>
 				<integer>1</integer>
 			</array>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Dock Blur</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSliderCell</string>
-			<key>cellClass</key>
-			<string>GFPercentSliderCell</string>
-			<key>label</key>
-			<string>Dock Blur</string>
-			<key>key</key>
-			<string>DockBlur</string>
-			<key>default</key>
-			<integer>50</integer>
-			<key>defaults</key>
-			<string>com.kulinich.glassfolders</string>
-			<key>min</key>
-			<integer>0</integer>
-			<key>max</key>
-			<integer>100</integer>
-			<key>showValue</key>
-			<false/>
-			<key>PostNotification</key>
-			<string>com.kulinich.glassfolders/preferenceschanged</string>
 		</dict>
 		<dict>
 			<key>cell</key>

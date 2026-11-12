@@ -1,5 +1,9 @@
 # Adjustable Dock Blur Test
 
+Historical independent-control candidate. Superseded by
+`unified-glass-strength.md` after the user's device feedback and unified-control
+request; `DockBlur` is no longer an active preference.
+
 2026-11-13. Follow-up to the notification motion/slider fixes at source
 `84efc56418fd8d9ca05574f7569d5d76fc63b7e2`. The user asked to update Dock glass
 as well. This is an independent Dock blur control, not a folder-strength change
@@ -56,3 +60,17 @@ The combined package must also include the preceding lock-screen semantic stack
 classification and slider-coordinate fixes. Device comparison should cover
 white/black/detailed wallpaper, 0/25/50/100%, page swipes, folder transitions,
 Dock mode changes and disabling/restoring the native Dock background.
+
+## Build Result
+
+Source `bbdb3eab3346ce2a321eaff57b9fc43bbabd855f`, Actions run `43280869227`:
+baseline checks, native production tests and RootHide build/package checks passed.
+Standard rootless was intentionally skipped. Local archive inspection confirmed
+thin arm64e tweak/preferences binaries, both independent sliders and localizations,
+existing Dock modes, one Settings entry and no retired renderer markers.
+
+Delivered to `DEB/11-13/LumaGlass-DockBlur-MotionFix` in the parent workspace.
+Package `LumaGlass_1.3.4_roothide-arm64e.deb` is 96,678 bytes; SHA256
+`c71607ef697f754d60c8a5f7d219e3720acdfc3eac84ea937c2d7c8d9f5db6f1` matches CI.
+Version remains 1.3.4, clearly separated as a test build. No device installation
+or on-device appearance/performance/energy measurement was performed.

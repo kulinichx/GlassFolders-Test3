@@ -1,5 +1,8 @@
 # Adjustable Notification Blur Candidate
 
+Historical independent-control candidate. Superseded by
+`unified-glass-strength.md`; `NotificationBlur` is no longer an active preference.
+
 2026-11-13. Source candidate on the 1.3.4 baseline, not a released or installed
 package. Intended device: iPhone 14 Pro / iOS 16.6 (20G75). The user requested
 a compromise first version after the RC9 material study: adjustable blur and a

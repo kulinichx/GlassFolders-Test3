@@ -9,8 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = "1.3.4"
 BASELINE = {
     "GFLivePreferencesPrelude.h": "a264e6bc2d97c05b70395cceb2855e79a099ac242a131d0300854e5dc215b988",
-    # Slider coordinates/masking corrected after the first device test.
-    "prefs/GFRootListController.m": "ca847b33c6d48cb2076b1b8d105b0f26bd30765adf8a06120ee070f118aaebc5",
+    # The owned slider now lives in GFPercentSliderCell.m; license/controller stays guarded.
+    "prefs/GFRootListController.m": "9a532ca25b1c995b4eb445209698d41db4921989c9eac3de59901fddd0ffe587",
     "Makefile": "38b92b58065d3c8e08518f8378cf1b50ca492f9608d92bc74a98e3fac41c5b17",
     "GFLicensePublicKey.h": "28aeae09e8717c64e5762ac2b9e708a3bf15c674787d6bdf0f12c8a26a56bdb9",
 }
@@ -34,18 +34,8 @@ class NotificationIntegration(unittest.TestCase):
             "", stripped, flags=re.S | re.M,
         )
         self.assertEqual(count, 7)
-        stripped, count = re.subn(
-            r"^[ \t]*// GF_NOTIFICATION_BLUR_BEGIN\n.*?"
-            r"^[ \t]*// GF_NOTIFICATION_BLUR_END\n\n",
-            "", stripped, flags=re.S | re.M,
-        )
-        self.assertEqual(count, 2)
-        stripped, count = re.subn(
-            r"^[ \t]*// GF_DOCK_BLUR_BEGIN\n.*?"
-            r"^[ \t]*// GF_DOCK_BLUR_END\n\n",
-            "", stripped, flags=re.S | re.M,
-        )
-        self.assertEqual(count, 2)
+        self.assertNotIn("GF_NOTIFICATION_BLUR_BEGIN", stripped)
+        self.assertNotIn("GF_DOCK_BLUR_BEGIN", stripped)
         # Stack callbacks no longer retain animation-scale classifications.
         self.assertEqual(hashlib.sha256(stripped.encode()).hexdigest(),
                          "31c8f592ebb932bab629b8f881619130daae23eae526ef25b7c7697fd1091a0d")
@@ -119,8 +109,7 @@ class NotificationIntegration(unittest.TestCase):
             "CGFloat radius = !self.gfUsesNotificationPalette ? GFLockCardBlurRadius : "
             "(self.gfNotificationPalette.lightSurface ? "
             "GFNotificationLightBlurRadius : GFNotificationDarkBlurRadius); "
-            "return [self gfUsesNotificationBlurControl] ? "
-            "radius * GFNotificationBlurScale(GFNotificationBlurAmount) : radius;")
+            "return radius * GFSharedGlassScale(GFGlassStrength);")
         for name in ("gfRefreshMaterial", "gfClearNotificationPalette"):
             body = re.search(r"- \(void\)" + name + r" \{(.*?)\n\}", lock, re.S)
             self.assertIsNotNone(body)

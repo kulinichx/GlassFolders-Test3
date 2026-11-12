@@ -5,9 +5,9 @@
 
 #import "GFGlassRim.h"
 #import "GFNotificationForeground.h"
-#import "GFNotificationBlur.h"
+#import "GFGlassStrength.h"
 
-// Notification blur has its own control, independent of folder preferences.
+// All enabled surfaces follow the active Clear/Liquid Glass strength.
 // Keep wallpaper detail behind cards, and use still less blur for small buttons.
 static const CGFloat GFLockCardBlurRadius = 8.0;
 static const CGFloat GFNotificationLightBlurRadius = 3.0;
@@ -59,7 +59,6 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 - (void)gfClearNotificationPalette;
 - (NSString *)gfBackdropGroupName;
 - (CGFloat)gfBackdropBlurRadius;
-- (BOOL)gfUsesNotificationBlurControl;
 - (void)gfRefreshBackdropBlurIfNeeded;
 @end
 @implementation GFLockScreenGlassView
@@ -103,18 +102,13 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
     CGFloat radius = !self.gfUsesNotificationPalette ? GFLockCardBlurRadius :
         (self.gfNotificationPalette.lightSurface ?
          GFNotificationLightBlurRadius : GFNotificationDarkBlurRadius);
-    return [self gfUsesNotificationBlurControl] ?
-        radius * GFNotificationBlurScale(GFNotificationBlurAmount) : radius;
-}
-- (BOOL)gfUsesNotificationBlurControl {
-    return NO;
+    return radius * GFSharedGlassScale(GFGlassStrength);
 }
 - (void)gfRefreshBackdropBlurIfNeeded {
     CGFloat radius = [self gfBackdropBlurRadius];
     if (self.gfHasBackdropBlurRadius && self.gfAppliedBackdropBlurRadius == radius) return;
     GFLockApplyBackdropRecipe(self, [self gfBackdropGroupName], radius);
-    self.gfFallbackBlurView.alpha = 0.22 * ([self gfUsesNotificationBlurControl] ?
-        GFNotificationBlurScale(GFNotificationBlurAmount) : 1.0);
+    self.gfFallbackBlurView.alpha = 0.22 * GFSharedGlassScale(GFGlassStrength);
     self.gfAppliedBackdropBlurRadius = radius;
     self.gfHasBackdropBlurRadius = YES;
 }
@@ -203,9 +197,6 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 @interface GFBannerGlassView : GFLockScreenGlassView
 @end
 @implementation GFBannerGlassView
-- (BOOL)gfUsesNotificationBlurControl {
-    return YES;
-}
 - (NSString *)gfBackdropGroupName {
     return @"com.kulinich.glassfolders.notifications.banners";
 }
@@ -226,15 +217,19 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
     }
     return self;
 }
+- (NSString *)gfBackdropGroupName {
+    return @"com.kulinich.glassfolders.lock.buttons";
+}
+- (CGFloat)gfBackdropBlurRadius {
+    return GFLockButtonBlurRadius * GFSharedGlassScale(GFGlassStrength);
+}
+- (void)gfRefreshBackdropBlurIfNeeded {
+    [super gfRefreshBackdropBlurIfNeeded];
+    CGFloat alpha = 0.18 * GFSharedGlassScale(GFGlassStrength);
+    if (self.gfFallbackBlurView.alpha != alpha) self.gfFallbackBlurView.alpha = alpha;
+}
 - (void)gfRefreshMaterial {
     [super gfRefreshMaterial];
-    GFLockApplyBackdropRecipe(self, @"com.kulinich.glassfolders.lock.buttons",
-                             GFLockButtonBlurRadius);
-    if (self.gfFallbackBlurView) {
-        self.gfFallbackBlurView.effect =
-            [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterial];
-        self.gfFallbackBlurView.alpha = 0.18;
-    }
     self.gfTintView.alpha = GFUsesDarkAppearance(self) ? 0.045 : 0.028;
 }
 - (void)layoutSubviews {
@@ -590,8 +585,8 @@ static void GFUpdateLockScreenSurface(UIView *host) {
             return;
         }
     }
-    // Slider changes reach retained cards even when their palette is unchanged.
-    if (notification) [glass gfRefreshBackdropBlurIfNeeded];
+    // One strength change also reaches retained music/activity/button surfaces.
+    [glass gfRefreshBackdropBlurIfNeeded];
     // UIKit may initially hide a banner material until presentation finishes.
     // Observe a subsequent native reveal instead of freezing that initial
     // hidden state for the entire lifetime of the replacement.

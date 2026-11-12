@@ -68,7 +68,6 @@
 "Turn off to restore the system Dock. Dock works independently of folders and App Library." = "关闭后恢复系统 Dock 背景。Dock 与文件夹、资源库可独立开关。";
 "Lock Screen Glass" = "锁屏玻璃";
 "Notification Cards" = "通知卡片";
-"Notification Blur" = "通知模糊度";
 "Flashlight and Camera" = "电筒与相机";
 "Music Panel" = "音乐面板";
 "Live Activities" = "实时活动";
@@ -83,9 +82,7 @@
 
 "Home Screen Glass" = "主屏玻璃";
 "Dock Mode" = "Dock 模式";
-"Dock Blur" = "Dock 模糊度";
 "Switches and appearance changes take effect immediately." = "开关与外观调整即时生效。";
-"Lock screen glass is independent of folder strength." = "锁屏玻璃不受文件夹强度影响。";
 "Reload after installing an update or changing the license." = "安装新版或更改授权后使用，日常调整无需重新载入。";
 "Expanded" = "已展开";
 "Collapsed" = "已收起";

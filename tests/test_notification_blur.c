@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "../GFNotificationBlur.h"
+#include "../GFGlassStrength.h"
 #include "../GFNotificationPalette.h"
 
 #define CHECK(x) do { if (!(x)) { \
@@ -7,20 +7,20 @@
 } } while (0)
 
 int main(void) {
-    CHECK(GFNotificationBlurScale(0.0) == 0.0);
-    CHECK(GFNotificationBlurScale(0.5) == 1.0);
-    CHECK(GFNotificationBlurScale(1.0) == 2.0);
-    CHECK(GFNotificationBlurScale(-100.0) == 0.0);
-    CHECK(GFNotificationBlurScale(100.0) == 2.0);
-    CHECK(GFNotificationBlurScale(NAN) == 1.0);
-    CHECK(GFNotificationBlurScale(INFINITY) == 1.0);
-    CHECK(GFNotificationBlurScale(-INFINITY) == 1.0);
+    CHECK(GFSharedGlassScale(0.0) == 0.0);
+    CHECK(GFSharedGlassScale(0.5) == 1.0);
+    CHECK(GFSharedGlassScale(1.0) == 2.0);
+    CHECK(GFSharedGlassScale(-100.0) == 0.0);
+    CHECK(GFSharedGlassScale(100.0) == 2.0);
+    CHECK(GFSharedGlassScale(NAN) == 1.0);
+    CHECK(GFSharedGlassScale(INFINITY) == 1.0);
+    CHECK(GFSharedGlassScale(-INFINITY) == 1.0);
 
     GFNotificationPalette white = GFNotificationPaletteForWallpaper(1, 1, 1, 1, false, false);
     GFNotificationPalette black = GFNotificationPaletteForWallpaper(0, 0, 0, 1, false, false);
     double previous = -1.0;
     for (int i = 0; i <= 1000; ++i) {
-        double scale = GFNotificationBlurScale(i / 1000.0);
+        double scale = GFSharedGlassScale(i / 1000.0);
         CHECK(isfinite(scale) && scale >= previous && scale >= 0.0 && scale <= 2.0);
         previous = scale;
         CHECK(3.0 * scale <= 6.0 && 4.0 * scale <= 8.0 && 8.0 * scale <= 16.0);

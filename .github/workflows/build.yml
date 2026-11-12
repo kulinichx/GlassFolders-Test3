@@ -31,7 +31,7 @@ jobs:
         run: python3 tests/test_notification_blur.py -v
       - name: Check notification motion and slider layout
         run: python3 tests/test_notification_motion.py -v
-      - name: Check independent Dock blur wiring
+      - name: Check shared Home and Dock strength wiring
         run: python3 tests/test_dock_blur.py -v
       - name: Exercise wallpaper palette
         run: |
@@ -76,6 +76,18 @@ jobs:
         run: python3 tests/test_notification_blur.py -v
       - name: Exercise production notification motion and slider layout
         run: python3 tests/test_notification_motion.py -v
+
+      - name: Validate actual UIKit slider layout and drawing
+        run: python3 tests/run_slider_uikit.py
+
+      - name: Upload actual UIKit slider captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slider-UIKit-validation
+          path: test-artifacts/slider-uikit
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Exercise production Home Screen and library behavior
         run: |

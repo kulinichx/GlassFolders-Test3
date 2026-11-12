@@ -29,26 +29,27 @@ class NotificationMotionTests(unittest.TestCase):
         self.assertIn("%orig;", callback)
         self.assertIn("GFUpdateLockScreenSurface", callback)
 
-    def test_slider_has_separate_coordinate_space_and_no_opaque_mask(self):
-        source = (ROOT / "prefs/GFRootListController.m").read_text(encoding="utf-8")
-        label = block(source, "- (void)gfEnsurePercentLabel")
-        self.assertIn("label.backgroundColor = UIColor.clearColor", label)
-        layout = block(source, "- (void)layoutSubviews")
-        self.assertIn("[slider convertRect:slider.bounds toView:self.contentView]", layout)
-        self.assertIn("[self.contentView convertRect:sliderFrame toView:slider.superview]", layout)
-        self.assertIn("slider.clipsToBounds = NO", layout)
-        self.assertIn("slider.layer.masksToBounds = NO", layout)
-        self.assertNotIn("bringSubviewToFront", layout)
-        self.assertNotIn("MAX(120.0", layout)
+    def test_owned_slider_has_disjoint_constraint_regions(self):
+        source = (ROOT / "prefs/GFPercentSliderCell.m").read_text(encoding="utf-8")
+        header = (ROOT / "prefs/GFPercentSliderCell.h").read_text(encoding="utf-8")
+        self.assertIn("GFPercentSliderCell : PSTableCell", header)
+        self.assertIn("[[UISlider alloc] initWithFrame:CGRectZero]", source)
+        self.assertIn("label.backgroundColor = UIColor.clearColor", source)
+        self.assertIn("[slider.leadingAnchor constraintEqualToAnchor:label.trailingAnchor constant:12]", source)
+        self.assertIn("[label.widthAnchor constraintEqualToConstant:52]", source)
+        self.assertIn("[slider.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-18]", source)
+        self.assertIn("slider.translatesAutoresizingMaskIntoConstraints = NO", source)
+        self.assertIn("if (self.gfOwnedSlider) return", source)
+        self.assertNotIn("[self control]", source)
+        self.assertIn("CFPreferencesSetAppValue", source)
+        self.assertIn("UIControlEventValueChanged", source)
 
     @unittest.skipUnless(sys.platform == "darwin" and shutil.which("clang"), "Requires macOS Foundation/QuartzCore")
     def test_native_production_state_and_layout(self):
         lock = (ROOT / "GFLockScreenGlass.h").read_text(encoding="utf-8")
-        prefs = (ROOT / "prefs/GFRootListController.m").read_text(encoding="utf-8")
         source = (ROOT / "tests/notification_motion_harness.m").read_text(encoding="utf-8")
         source = source.replace("/* PRODUCTION_STACK_QUERY */", block(lock,
             "static BOOL GFLockNotificationIsStacked(UIView *host)"))
-        source = source.replace("/* PRODUCTION_SLIDER_LAYOUT */", block(prefs, "- (void)layoutSubviews"))
         with tempfile.TemporaryDirectory(prefix="gf-notification-motion-") as directory:
             path = Path(directory) / "motion.m"
             binary = Path(directory) / "motion"

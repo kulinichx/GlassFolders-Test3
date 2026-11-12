@@ -47,20 +47,12 @@ static BOOL GFAppLibraryGlassEnabled = NO;
 static BOOL GFDockEnabled = NO;
 static NSInteger GFDockMode = 0; // 0 hide background, 1 glass
 
-// GF_DOCK_BLUR_BEGIN
-static CGFloat GFDockBlurAmount = 0.5;
-// GF_DOCK_BLUR_END
-
 // Lock-screen surfaces are independent, opt-in, and share the same entitlement.
 static BOOL GFLockNotificationsEnabled = NO;
 static BOOL GFLockQuickActionsEnabled = NO;
 static BOOL GFLockMusicEnabled = NO;
 static BOOL GFLockActivitiesEnabled = NO;
 static BOOL GFBannerNotificationsEnabled = NO;
-
-// GF_NOTIFICATION_BLUR_BEGIN
-static CGFloat GFNotificationBlurAmount = 0.5;
-// GF_NOTIFICATION_BLUR_END
 
 // Legacy value retained for preference compatibility:
 // 0 = Clear, 1 = Liquid Glass
@@ -162,19 +154,11 @@ static void GFLoadPreferences(void) {
     GFDockEnabled = licensed && GFReadBool(CFSTR("DockEnabled"), NO);
     GFDockMode = GFReadInteger(CFSTR("DockMode"), 0) == 1 ? 1 : 0;
 
-    // GF_DOCK_BLUR_BEGIN
-    GFDockBlurAmount = GFReadPercent(CFSTR("DockBlur"), 50.0);
-    // GF_DOCK_BLUR_END
-
     GFLockNotificationsEnabled = licensed && GFReadBool(CFSTR("LockNotificationsEnabled"), NO);
     GFLockQuickActionsEnabled = licensed && GFReadBool(CFSTR("LockQuickActionsEnabled"), NO);
     GFLockMusicEnabled = licensed && GFReadBool(CFSTR("LockMusicEnabled"), NO);
     GFLockActivitiesEnabled = licensed && GFReadBool(CFSTR("LockActivitiesEnabled"), NO);
     GFBannerNotificationsEnabled = licensed && GFReadBool(CFSTR("BannerNotificationsEnabled"), NO);
-
-    // GF_NOTIFICATION_BLUR_BEGIN
-    GFNotificationBlurAmount = GFReadPercent(CFSTR("NotificationBlur"), 50.0);
-    // GF_NOTIFICATION_BLUR_END
 
     GFAppLibraryStyle =
         GFReadInteger(CFSTR("AppLibraryStyle"), 0);

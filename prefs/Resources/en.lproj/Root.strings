@@ -69,7 +69,6 @@
 "Turn off to restore the system Dock. Dock works independently of folders and App Library." = "Turn off to restore the system Dock. Dock works independently of folders and App Library.";
 "Lock Screen Glass" = "Lock Screen Glass";
 "Notification Cards" = "Notification Cards";
-"Notification Blur" = "Notification Blur";
 "Flashlight and Camera" = "Flashlight and Camera";
 "Music Panel" = "Music Panel";
 "Live Activities" = "Live Activities";
@@ -84,9 +83,7 @@
 
 "Home Screen Glass" = "Home Screen Glass";
 "Dock Mode" = "Dock Mode";
-"Dock Blur" = "Dock Blur";
 "Switches and appearance changes take effect immediately." = "Switches and appearance changes take effect immediately.";
-"Lock screen glass is independent of folder strength." = "Lock screen glass is independent of folder strength.";
 "Reload after installing an update or changing the license." = "Reload after installing an update or changing the license.";
 "Expanded" = "Expanded";
 "Collapsed" = "Collapsed";

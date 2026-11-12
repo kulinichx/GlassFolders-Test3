@@ -7,9 +7,6 @@
 - (void)gfRefreshStackAppearance;
 @end
 @implementation GFNotificationGlassView
-- (BOOL)gfUsesNotificationBlurControl {
-    return YES;
-}
 - (void)setGfStacked:(BOOL)stacked {
     if (_gfStacked == stacked) return;
     _gfStacked = stacked;

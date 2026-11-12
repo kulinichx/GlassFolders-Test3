@@ -1,4 +1,4 @@
-"""Blur-only wiring plus native production math/cache tests when supported."""
+"""Unified strength wiring plus native production math/cache tests."""
 
 from pathlib import Path
 import plistlib
@@ -21,22 +21,19 @@ def method(source, signature):
 class NotificationBlurTests(unittest.TestCase):
     def test_slider_and_preference_contract(self):
         items = plistlib.loads((ROOT / "prefs/Resources/Root.plist").read_bytes())["items"]
-        sliders = [item for item in items if item.get("key") == "NotificationBlur"]
-        self.assertEqual(len(sliders), 1)
-        slider = sliders[0]
-        for key, value in {"cell": "PSSliderCell", "cellClass": "GFPercentSliderCell",
-                           "default": 50, "min": 0, "max": 100,
-                           "defaults": "com.kulinich.glassfolders",
-                           "PostNotification": "com.kulinich.glassfolders/preferenceschanged"}.items():
-            self.assertEqual(slider[key], value, key)
-        self.assertNotIn("gfSection", slider)
-        self.assertNotIn("gfStyle", slider)
+        sliders = [item for item in items if item.get("cellClass") == "GFPercentSliderCell"]
+        self.assertEqual({x["key"] for x in sliders}, {"ClearStrength", "LiquidGlassStrength"})
+        for slider in sliders:
+            for key, value in {"cell": "PSStaticTextCell", "default": 55, "min": 0, "max": 100,
+                               "defaults": "com.kulinich.glassfolders"}.items():
+                self.assertEqual(slider[key], value, key)
+        self.assertFalse(any(x.get("key") in {"NotificationBlur", "DockBlur"} for x in items))
         tweak = (ROOT / "Tweak.xm").read_text(encoding="utf-8")
-        self.assertIn('GFReadPercent(CFSTR("NotificationBlur"), 50.0)', tweak)
-        self.assertIn("static CGFloat GFNotificationBlurAmount = 0.5;", tweak)
+        self.assertNotIn("GFNotificationBlurAmount", tweak)
+        self.assertIn("(GFStyle == 0) ? GFClearStrength : GFLiquidGlassStrength", tweak)
         for locale in ("en", "zh-Hans"):
             text = (ROOT / f"prefs/Resources/{locale}.lproj/Root.strings").read_text(encoding="utf-8")
-            self.assertRegex(text, re.compile(r'^"Notification Blur" = "[^"]+";', re.M), locale)
+            self.assertRegex(text, re.compile(r'^"Clear Strength" = "[^"]+";', re.M), locale)
 
     def test_cached_refresh_and_zero_blur(self):
         lock = (ROOT / "GFLockScreenGlass.h").read_text(encoding="utf-8")
@@ -44,24 +41,24 @@ class NotificationBlurTests(unittest.TestCase):
         self.assertLess(refresh.index("self.gfAppliedBackdropBlurRadius == radius"),
                         refresh.index("GFLockApplyBackdropRecipe"))
         self.assertIn("self.gfHasBackdropBlurRadius = YES", refresh)
-        self.assertIn("GFNotificationBlurScale(GFNotificationBlurAmount)", refresh)
+        self.assertIn("GFSharedGlassScale(GFGlassStrength)", refresh)
         self.assertNotIn("gfRefreshMaterial", refresh)
         for forbidden in ("gfBodyVeil", "gfLockRim", "textColor", "gfTintView"):
             self.assertNotIn(forbidden, refresh)
         full = method(lock, "- (void)gfRefreshMaterial")
         self.assertLess(full.index("[super gfRefreshMaterial]"), full.index("self.gfHasBackdropBlurRadius = NO"))
         self.assertIn("if (blur && radius > 0.001)", lock)
-        self.assertIn("if (notification) [glass gfRefreshBackdropBlurIfNeeded];", lock)
+        self.assertIn("[glass gfRefreshBackdropBlurIfNeeded];", lock)
+        self.assertNotIn("if (notification) [glass gfRefreshBackdropBlurIfNeeded];", lock)
         self.assertNotIn("CFPreferences", lock)
         self.assertNotIn("CADisplayLink", lock)
 
     def test_scope_and_live_reload_are_preserved(self):
         lock = (ROOT / "GFLockScreenGlass.h").read_text(encoding="utf-8")
         notification = (ROOT / "GFNotificationGlassView.h").read_text(encoding="utf-8")
-        self.assertIn("return NO;", method(lock, "- (BOOL)gfUsesNotificationBlurControl"))
-        banner = lock.split("@implementation GFBannerGlassView", 1)[1]
-        self.assertIn("return YES;", method(banner, "- (BOOL)gfUsesNotificationBlurControl"))
-        self.assertIn("return YES;", method(notification, "- (BOOL)gfUsesNotificationBlurControl"))
+        self.assertNotIn("gfUsesNotificationBlurControl", lock + notification)
+        self.assertIn("return radius * GFSharedGlassScale(GFGlassStrength)", lock)
+        self.assertIn("return GFLockButtonBlurRadius * GFSharedGlassScale(GFGlassStrength)", lock)
         stack = method(notification, "- (void)gfRefreshStackAppearance")
         self.assertNotIn("Backdrop", stack)
         self.assertNotIn("Blur", stack)
@@ -84,18 +81,21 @@ class NotificationBlurTests(unittest.TestCase):
         lock = (ROOT / "GFLockScreenGlass.h").read_text(encoding="utf-8")
         notification = (ROOT / "GFNotificationGlassView.h").read_text(encoding="utf-8")
         selected = "\n".join(method(lock, signature) for signature in (
-            "- (CGFloat)gfBackdropBlurRadius", "- (BOOL)gfUsesNotificationBlurControl",
+            "- (CGFloat)gfBackdropBlurRadius",
             "- (void)gfRefreshBackdropBlurIfNeeded",
             "- (void)gfApplyNotificationPalette:(GFNotificationPalette)palette",
             "- (void)gfClearNotificationPalette"))
-        opt_in = method(notification, "- (BOOL)gfUsesNotificationBlurControl")
+        quick = lock.split("@implementation GFQuickActionGlassView", 1)[1]
+        quick_methods = "\n".join(method(quick, signature) for signature in (
+            "- (NSString *)gfBackdropGroupName", "- (CGFloat)gfBackdropBlurRadius",
+            "- (void)gfRefreshBackdropBlurIfNeeded"))
         harness = r'''
 #import <Foundation/Foundation.h>
-#import "GFNotificationBlur.h"
+#import "GFGlassStrength.h"
 #import "GFNotificationPalette.h"
 static const CGFloat GFLockCardBlurRadius = 8, GFNotificationLightBlurRadius = 3,
-    GFNotificationDarkBlurRadius = 4;
-static CGFloat GFNotificationBlurAmount = 0.5;
+    GFNotificationDarkBlurRadius = 4, GFLockButtonBlurRadius = 3;
+static CGFloat GFGlassStrength = 0.5;
 @interface TestRim : NSObject
 @property BOOL gfLightSurface;
 - (void)setNeedsLayout;
@@ -117,7 +117,6 @@ static CGFloat GFNotificationBlurAmount = 0.5;
 @property (strong) TestFallback *gfFallbackBlurView;
 @property NSUInteger recipeWrites;
 - (CGFloat)gfBackdropBlurRadius;
-- (BOOL)gfUsesNotificationBlurControl;
 - (void)gfRefreshBackdropBlurIfNeeded;
 - (void)gfApplyNotificationPalette:(GFNotificationPalette)palette;
 - (void)gfClearNotificationPalette;
@@ -133,7 +132,11 @@ static void GFLockApplyBackdropRecipe(GFLockScreenGlassView *glass, NSString *gr
 @interface TestNotification : GFLockScreenGlassView
 @end
 @implementation TestNotification
-/* PRODUCTION_OPT_IN */
+@end
+@interface TestButton : GFLockScreenGlassView
+@end
+@implementation TestButton
+/* PRODUCTION_BUTTON_METHODS */
 @end
 #define CHECK(x) do { if (!(x)) { fprintf(stderr, "FAIL %d: %s\n", __LINE__, #x); return 1; } } while (0)
 int main(void) {
@@ -147,12 +150,12 @@ int main(void) {
         CHECK(glass.gfAppliedBackdropBlurRadius == 4 && glass.recipeWrites == 1);
         for (NSUInteger i = 0; i < 400; i++) [glass gfRefreshBackdropBlurIfNeeded];
         CHECK(glass.recipeWrites == 1);
-        GFNotificationBlurAmount = 0;
+        GFGlassStrength = 0;
         [glass gfApplyNotificationPalette:dark];
         [glass gfRefreshBackdropBlurIfNeeded];
         CHECK(glass.gfAppliedBackdropBlurRadius == 0 && glass.recipeWrites == 2);
         CHECK(glass.gfFallbackBlurView.alpha == 0);
-        GFNotificationBlurAmount = 1;
+        GFGlassStrength = 1;
         [glass gfRefreshBackdropBlurIfNeeded];
         CHECK(glass.gfAppliedBackdropBlurRadius == 8 && glass.recipeWrites == 3);
         [glass gfApplyNotificationPalette:light];
@@ -160,7 +163,7 @@ int main(void) {
         CHECK(glass.gfNotificationPalette.bodyWhite == light.bodyWhite);
         [glass gfClearNotificationPalette];
         CHECK(glass.gfAppliedBackdropBlurRadius == 16 && !glass.gfLockRim.gfLightSurface);
-        GFNotificationBlurAmount = 0.5;
+        GFGlassStrength = 0.5;
         [glass gfRefreshBackdropBlurIfNeeded];
         CHECK(glass.gfAppliedBackdropBlurRadius == 8);
         [glass gfApplyNotificationPalette:light];
@@ -170,16 +173,28 @@ int main(void) {
         [glass gfRefreshBackdropBlurIfNeeded];
         CHECK(glass.recipeWrites == writes + 1);
         GFLockScreenGlassView *music = [GFLockScreenGlassView new];
-        GFNotificationBlurAmount = 0;
-        CHECK([music gfBackdropBlurRadius] == 8);
-        GFNotificationBlurAmount = 1;
-        CHECK([music gfBackdropBlurRadius] == 8);
-        puts("Production blur methods: retained cards, cache, zero, fallback, palette, app transition and scope PASS");
+        GFGlassStrength = 0;
+        [music gfRefreshBackdropBlurIfNeeded];
+        CHECK([music gfBackdropBlurRadius] == 0 && music.recipeWrites == 1);
+        GFGlassStrength = 1;
+        [music gfRefreshBackdropBlurIfNeeded];
+        CHECK([music gfBackdropBlurRadius] == 16 && music.recipeWrites == 2);
+        TestButton *button = [TestButton new];
+        button.gfFallbackBlurView = [TestFallback new];
+        [button gfRefreshBackdropBlurIfNeeded];
+        CHECK(button.gfAppliedBackdropBlurRadius == 6);
+        CHECK(button.gfFallbackBlurView.alpha == 0.36);
+        GFGlassStrength = 0;
+        [button gfRefreshBackdropBlurIfNeeded];
+        CHECK(button.gfAppliedBackdropBlurRadius == 0 && button.gfFallbackBlurView.alpha == 0);
+        CHECK([[button gfBackdropGroupName] isEqualToString:@"com.kulinich.glassfolders.lock.buttons"]);
+        puts("Production shared blur: retained cards, cache, zero, fallback, palette, banner, music/activity routing PASS");
     }
     return 0;
 }
 '''
-        harness = harness.replace("/* PRODUCTION_METHODS */", selected).replace("/* PRODUCTION_OPT_IN */", opt_in)
+        harness = harness.replace("/* PRODUCTION_METHODS */", selected).replace(
+            "/* PRODUCTION_BUTTON_METHODS */", quick_methods)
         with tempfile.TemporaryDirectory(prefix="gf-notification-cache-") as directory:
             source = Path(directory) / "cache.m"
             binary = Path(directory) / "cache"
