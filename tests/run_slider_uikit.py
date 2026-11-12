@@ -35,7 +35,8 @@ def surface_harness():
     text_state = production_function(foreground, "static BOOL GFNotificationIsVibrancy(")
     text_state += "\n\n" + foreground[foreground.index("static char kGFNotificationManagedTextKey;"):
                                      foreground.index("@interface GFNotificationForegroundState")]
-    state = lock[lock.index("@interface GFLockBackgroundState"):lock.index("static char kGFLockPressKey;")]
+    state = lock[lock.index("@interface GFLockBackgroundState"):
+                 lock.index("static char kGFLockCoverSheetVisibleKey;")]
     surfaces = "\n\n".join(production_function(lock, signature) for signature in (
         "static void GFRestoreLockScreenSurface(", "static BOOL GFLockNotificationIsStacked(",
         "static GFLockMaterialVisibility *GFLockSuppressDecoration(",

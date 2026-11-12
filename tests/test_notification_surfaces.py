@@ -15,6 +15,11 @@ class NotificationSurfaceTests(unittest.TestCase):
                      "GFLockSyncNotificationShadow", "GFLockSyncStackOverlay"):
             self.assertIn(production_function(source, f"static void {name}("), harness)
         self.assertNotIn("/* PRODUCTION_", harness)
+        for key in ("kGFLockBackgroundKey", "kGFLockPressKey"):
+            declaration = f"static char {key};"
+            self.assertEqual(harness.count(declaration), 1)
+            self.assertLess(harness.index(declaration),
+                            harness.index("static void GFUpdateLockScreenSurface("))
         self.assertIn("GFTestGlassCreations == creations", harness)
         self.assertIn("target.selections == 2", harness)
 
