@@ -4351,6 +4351,20 @@ static void GFUpdateDockBackground(UIView *host) {
 %end
 %end
 // GF_NOTIFICATION_WHITEBG2_END
+// GF_MATERIAL_VISIBILITY_BEGIN
+%group GFLockMaterialVisibilityHooks
+%hook MTMaterialView
+- (void)setAlpha:(CGFloat)alpha {
+    %orig;
+    GFLockMaterialAlphaChanged((UIView *)self, alpha);
+}
+- (void)setHidden:(BOOL)hidden {
+    %orig(GFLockMaterialHiddenValue((UIView *)self, hidden));
+}
+%end
+%end
+// GF_MATERIAL_VISIBILITY_END
+
 %group GFNotificationContainerHooks
 %hook NCNotificationViewControllerView
 - (void)layoutSubviews {
@@ -4959,6 +4973,12 @@ static void GFUpdateOpenedFolderBackground(
         }
 
         Class notificationClass = objc_getClass("NCNotificationShortLookView");
+        // GF_MATERIAL_VISIBILITY_BEGIN
+        Class materialClass = objc_getClass("MTMaterialView");
+        if ([materialClass isSubclassOfClass:UIView.class]) {
+            %init(GFLockMaterialVisibilityHooks);
+        }
+        // GF_MATERIAL_VISIBILITY_END
         Class notificationContainerClass = objc_getClass("NCNotificationViewControllerView");
         if ([notificationContainerClass isSubclassOfClass:UIView.class]) {
             %init(GFNotificationContainerHooks);

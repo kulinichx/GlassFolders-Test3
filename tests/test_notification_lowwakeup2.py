@@ -34,6 +34,12 @@ class NotificationIntegration(unittest.TestCase):
             "", stripped, flags=re.S | re.M,
         )
         self.assertEqual(count, 7)
+        stripped, count = re.subn(
+            r"^[ \t]*// GF_MATERIAL_VISIBILITY_BEGIN\n.*?"
+            r"^[ \t]*// GF_MATERIAL_VISIBILITY_END\n(?:\n)?",
+            "", stripped, flags=re.S | re.M,
+        )
+        self.assertEqual(count, 2)
         self.assertNotIn("GF_NOTIFICATION_BLUR_BEGIN", stripped)
         self.assertNotIn("GF_DOCK_BLUR_BEGIN", stripped)
         # Stack callbacks no longer retain animation-scale classifications.

@@ -6,6 +6,7 @@
 #import "GFGlassRim.h"
 #import "GFNotificationForeground.h"
 #import "GFGlassStrength.h"
+#import "GFLockMaterialVisibility.h"
 
 // System surfaces share their own strength, separate from folder glass.
 // Keep wallpaper detail behind cards, and use still less blur for small buttons.
@@ -243,6 +244,7 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 @property (nonatomic, weak) UIView *background;
 @property (nonatomic, strong) GFLockScreenGlassView *glass;
 @property (nonatomic, assign) BOOL originalHidden;
+@property (nonatomic, strong) GFLockMaterialVisibility *visibility;
 @property (nonatomic, weak) UIView *stackOverlay;
 @property (nonatomic, assign) BOOL originalStackOverlayHidden;
 @property (nonatomic, strong) GFNotificationForegroundState *foreground;
@@ -252,7 +254,9 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 - (void)restore {
     [self.foreground restore];
     self.foreground = nil;
-    if (self.background) self.background.hidden = self.originalHidden;
+    if (self.visibility) [self.visibility restore];
+    else if (self.background) self.background.hidden = self.originalHidden;
+    self.visibility = nil;
     if (self.stackOverlay) self.stackOverlay.hidden = self.originalStackOverlayHidden;
     self.stackOverlay = nil;
     [self.glass removeFromSuperview];
@@ -532,6 +536,7 @@ static void GFUpdateLockScreenSurface(UIView *host) {
         // Hide that frame, retaining the material instead of flashing native
         // blur and rebuilding our capture group on the following layout.
         if (state && notification && !banner && state.background == background) {
+            state.visibility.suspended = YES;
             state.glass.hidden = YES;
         } else if (state) {
             GFRestoreLockScreenSurface(host);
@@ -566,6 +571,10 @@ static void GFUpdateLockScreenSurface(UIView *host) {
         state.glass = [[glassClass alloc] initWithStyle:1 strength:0.55];
         state.glass.isAccessibilityElement = NO;
         state.glass.accessibilityElementsHidden = YES;
+        if (GFLockIsKind(background, "MTMaterialView")) {
+            state.visibility = [GFLockMaterialVisibility new];
+            [state.visibility attachBackground:background glass:state.glass];
+        }
         objc_setAssociatedObject(host, &kGFLockBackgroundKey, state, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     UIView *container = background.superview;
@@ -587,10 +596,9 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     }
     // One strength change also reaches retained music/activity/button surfaces.
     [glass gfRefreshBackdropBlurIfNeeded];
-    // UIKit may initially hide a banner material until presentation finishes.
-    // Observe a subsequent native reveal instead of freezing that initial
-    // hidden state for the entire lifetime of the replacement.
-    if (!background.hidden) state.originalHidden = NO;
+    // Non-MTMaterial fallbacks retain the layout-driven reveal path.
+    // Managed materials receive both hide and reveal at the native setter.
+    if (!state.visibility && !background.hidden) state.originalHidden = NO;
     if (notification && !banner) {
         ((GFNotificationGlassView *)glass).gfStacked = GFLockNotificationIsStacked(host);
         GFLockSyncStackOverlay(host, state);
@@ -605,7 +613,8 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     if (!CGAffineTransformEqualToTransform(glass.transform, background.transform))
         glass.transform = background.transform;
     if (glass.alpha != background.alpha) glass.alpha = background.alpha;
-    if (glass.hidden != state.originalHidden) glass.hidden = state.originalHidden;
+    if (state.visibility) state.visibility.suspended = NO;
+    else if (glass.hidden != state.originalHidden) glass.hidden = state.originalHidden;
     if (glass.layer.zPosition != background.layer.zPosition)
         glass.layer.zPosition = background.layer.zPosition;
     CGFloat radius = circle ? MIN(background.bounds.size.width, background.bounds.size.height) * 0.5 :
@@ -614,7 +623,8 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     if (radius <= 0.0) radius = MIN(24.0, background.bounds.size.height * 0.5);
     glass.gfCircular = circle;
     [glass setPreferredRadius:radius];
-    if (!background.hidden) background.hidden = YES;
+    if (state.visibility) [state.visibility suppressNativeBackground];
+    else if (!background.hidden) background.hidden = YES;
 }
 
 static void GFRefreshNotificationTextOwner(UIView *content) {

@@ -1,8 +1,24 @@
 // Actual production slider + UIKit. Only the Preferences cell/specifier are stubs.
 #import <UIKit/UIKit.h>
 #import <CoreFoundation/CoreFoundation.h>
+#import <QuartzCore/QuartzCore.h>
+#import <objc/runtime.h>
 #import <Preferences/PSSpecifier.h>
 #import "../prefs/GFPercentSliderCell.h"
+#import "../GFLockMaterialVisibility.h"
+
+// The material double invokes the same helpers as the shipping MTMaterialView hooks.
+@interface TestMaterialView : UIView
+@end
+@implementation TestMaterialView
+- (void)setAlpha:(CGFloat)alpha {
+    [super setAlpha:alpha];
+    GFLockMaterialAlphaChanged(self, alpha);
+}
+- (void)setHidden:(BOOL)hidden {
+    [super setHidden:GFLockMaterialHiddenValue(self, hidden)];
+}
+@end
 
 @implementation PSSpecifier
 - (id)propertyForKey:(NSString *)key { return self.properties[key]; }
@@ -56,6 +72,70 @@ static NSString *Documents(void) {
 @property (nonatomic, strong) UIWindow *window;
 @end
 @implementation SliderApp
+- (void)checkMaterialVisibility {
+    @try {
+        TestMaterialView *background = [TestMaterialView new];
+        background.frame = CGRectMake(12, 12, 40, 40);
+        UIView *glass = [[UIView alloc] initWithFrame:background.frame];
+        UIView *reference = [[UIView alloc] initWithFrame:CGRectMake(60, 12, 40, 40)];
+        glass.backgroundColor = reference.backgroundColor = UIColor.whiteColor;
+        [self.window addSubview:background];
+        [self.window addSubview:glass];
+        [self.window addSubview:reference];
+        GFLockMaterialVisibility *visibility = [GFLockMaterialVisibility new];
+        [visibility attachBackground:background glass:glass];
+        [visibility suppressNativeBackground];
+        NSCAssert(background.hidden && !glass.hidden && !visibility.nativeHidden, @"Suppression changed native intent");
+        for (NSUInteger i = 0; i < 100; i++) {
+            background.alpha = (CGFloat)(i % 11) / 10.0;
+            NSCAssert(glass.alpha == background.alpha, @"Alpha requires another layout");
+            background.hidden = YES;
+            NSCAssert(glass.hidden && visibility.nativeHidden, @"Hide not synchronized");
+            background.hidden = NO;
+            NSCAssert(background.hidden && !glass.hidden && !visibility.nativeHidden, @"Reveal not synchronized");
+        }
+        visibility.suspended = YES;
+        background.hidden = NO;
+        NSCAssert(glass.hidden, @"Empty bounds revealed glass");
+        visibility.suspended = NO;
+        NSCAssert(!glass.hidden, @"Valid bounds failed to restore glass");
+        background.hidden = YES;
+        [visibility restore];
+        NSCAssert(background.hidden, @"Restore lost latest native hidden state");
+        background.hidden = NO;
+        background.alpha = 0.8;
+        reference.alpha = 0.8;
+        [visibility attachBackground:background glass:glass];
+        [visibility suppressNativeBackground];
+        [CATransaction flush];
+        [UIView animateWithDuration:0.8 delay:0 options:UIViewAnimationOptionCurveLinear animations:^{
+            background.alpha = 0.2;
+            reference.alpha = 0.2;
+        } completion:nil];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 5), dispatch_get_main_queue(), ^{
+            @try {
+                CALayer *actual = glass.layer.presentationLayer;
+                CALayer *expected = reference.layer.presentationLayer;
+                NSCAssert(actual && expected, @"Missing UIKit presentation layers");
+                NSCAssert(expected.opacity > 0.2 && expected.opacity < 0.8, @"Animation not sampled in flight");
+                NSCAssert(fabs(actual.opacity - expected.opacity) < 0.03, @"Glass opacity lags native animation");
+                [visibility restore];
+                NSCAssert(!background.hidden, @"Restore failed to reveal native material");
+                CGFloat detachedAlpha = glass.alpha;
+                background.alpha = 0.9;
+                NSCAssert(glass.alpha == detachedAlpha, @"Detached background still drives glass");
+                [background removeFromSuperview];
+                [glass removeFromSuperview];
+                [reference removeFromSuperview];
+                [self checks];
+            } @catch (NSException *exception) {
+                [self writeResult:@{@"status":@"fail", @"reason":exception.reason ?: @"visibility animation"}];
+            }
+        });
+    } @catch (NSException *exception) {
+        [self writeResult:@{@"status":@"fail", @"reason":exception.reason ?: @"visibility lifecycle"}];
+    }
+}
 - (void)writeResult:(NSDictionary *)result {
     NSData *data = [NSJSONSerialization dataWithJSONObject:result options:NSJSONWritingPrettyPrinted error:nil];
     [data writeToFile:[Documents() stringByAppendingPathComponent:@"result.json"] atomically:YES];
@@ -110,7 +190,7 @@ static NSString *Documents(void) {
                 [self.window layoutIfNeeded];
                 [self capture:@"slider-light.png"];
                 [self writeResult:@{@"status":@"pass", @"widths":@6, @"values":@6,
-                    @"checks":@"Actual UIKit track/thumb bounds, repeated layout, reuse, continuous writes, independent keys, release detents"}];
+                    @"checks":@"Material alpha/hidden updates without layout, in-flight UIKit opacity synchronization, suspend/restore/detach; slider track/thumb bounds, reuse, writes and detents"}];
             } @catch (NSException *exception) {
                 [self writeResult:@{@"status":@"fail", @"reason":exception.reason ?: @"unknown"}];
             }
@@ -133,7 +213,7 @@ static NSString *Documents(void) {
     self.window.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
     self.window.rootViewController = [[SliderController alloc] initWithStyle:UITableViewStyleInsetGrouped];
     [self.window makeKeyAndVisible];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [self checks]; });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [self checkMaterialVisibility]; });
     return YES;
 }
 @end
