@@ -93,7 +93,7 @@
     BOOL adaptiveLight = palette.valid && palette.lightSurface &&
         !UIAccessibilityIsReduceTransparencyEnabled() &&
         !UIAccessibilityDarkerSystemColorsEnabled();
-    CGFloat amount = GFSharedGlassAmount(GFGlassStrength);
+    CGFloat amount = GFSharedGlassAmount(GFSystemGlassStrength);
 
     if (self.gfHasMaterial &&
         self.gfMaterialDark == dark &&

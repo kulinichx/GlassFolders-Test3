@@ -90,6 +90,19 @@
                         [key isEqualToString:@"LiquidGlassStrength"])) {
             stored = CFBridgingRelease(CFPreferencesCopyAppValue(CFSTR("GlassStrength"),
                                                                 (__bridge CFStringRef)domain));
+        } else if (!stored && [key isEqualToString:@"SystemGlassStrength"]) {
+            id oldNotification = CFBridgingRelease(CFPreferencesCopyAppValue(
+                CFSTR("NotificationBlur"), (__bridge CFStringRef)domain));
+            id oldDock = CFBridgingRelease(CFPreferencesCopyAppValue(
+                CFSTR("DockBlur"), (__bridge CFStringRef)domain));
+            if ([oldNotification isKindOfClass:NSNumber.class] &&
+                [oldDock isKindOfClass:NSNumber.class]) {
+                value = ([oldNotification doubleValue] + [oldDock doubleValue]) * 0.5;
+            } else if ([oldNotification isKindOfClass:NSNumber.class]) {
+                value = [oldNotification doubleValue];
+            } else if ([oldDock isKindOfClass:NSNumber.class]) {
+                value = [oldDock doubleValue];
+            }
         }
         if (stored && CFGetTypeID((__bridge CFTypeRef)stored) == CFNumberGetTypeID())
             value = [stored doubleValue];
@@ -98,7 +111,8 @@
     self.gfOwnedSlider.value = MAX(0, MIN(100, value));
     id enabled = [specifier propertyForKey:@"enabled"];
     self.gfOwnedSlider.enabled = !enabled || [enabled boolValue];
-    NSString *name = [key isEqualToString:@"ClearStrength"] ? @"Clear Strength" : @"Liquid Glass Strength";
+    NSString *name = [key isEqualToString:@"ClearStrength"] ? @"Clear Strength" :
+        ([key isEqualToString:@"SystemGlassStrength"] ? @"System Glass Strength" : @"Liquid Glass Strength");
     self.gfOwnedSlider.accessibilityLabel = [[NSBundle bundleForClass:self.class]
         localizedStringForKey:name value:name table:@"Root"];
     self.gfLastDetent = [self gfDetentForValue:self.gfOwnedSlider.value];

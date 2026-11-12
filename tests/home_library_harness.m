@@ -163,6 +163,7 @@ static id GFCreateCAFilter(NSString *name) {
 static BOOL TestDarkAppearance = YES;
 static BOOL TestReduceTransparency = NO;
 static CGFloat GFGlassStrength = 0.5;
+#define GFSystemGlassStrength GFGlassStrength
 static BOOL GFUsesDarkAppearance(UIView *view) { return TestDarkAppearance; }
 static BOOL UIAccessibilityIsReduceTransparencyEnabled(void) { return TestReduceTransparency; }
 static BOOL UIAccessibilityDarkerSystemColorsEnabled(void) { return NO; }

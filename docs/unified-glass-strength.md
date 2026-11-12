@@ -1,25 +1,26 @@
 # Unified Glass Strength And Reference Slider
 
-2026-11-13. Supersedes the independent notification/Dock blur controls after
-device feedback. The active Clear/Liquid Glass strength is now the single
-authority for all enabled glass surfaces. Per-surface switches remain separate.
+2026-11-13. One shared system-surface strength replaces the independent
+notification and Dock controls. Folder strength remains separate. Per-surface
+enable switches remain separate.
 
 ## Controls And Compatibility
 
-Only `ClearStrength` and `LiquidGlassStrength` remain as percentage specifiers;
-the selected style shows one of them. Their existing values and legacy
-`GlassStrength` fallback are retained. `NotificationBlur` and `DockBlur` are no
-longer read or exposed, but stored preferences are not deleted.
+The selected folder style shows its existing `ClearStrength` or
+`LiquidGlassStrength` slider. A separate `SystemGlassStrength` slider controls
+App Library, Dock, Home/app banners, lock notifications, music, Live Activities
+and quick-action buttons. Existing `NotificationBlur` and `DockBlur` values
+seed the new shared value when it has not been set; those stored preferences are
+not deleted. Folder values and the legacy `GlassStrength` fallback remain.
 
-The active `GFGlassStrength` drives folders, App Library, Dock, Home/app banners,
-lock notifications, music, Live Activities and quick-action buttons. At 50%,
-existing per-scene midpoint recipes apply. Zero omits our Gaussian; 100% doubles
-the midpoint radius. Different-sized surfaces keep appropriate baseline radii:
-Dock 5/3 (normal/light), notifications 4/3 (dark/light), generic cards/app banners
-8 and quick actions 3. Folder strength keeps its existing style-specific response
-rather than being silently recalibrated. Body palettes and edge geometry stay.
+`GFGlassStrength` remains the folder-only authority. `GFSystemGlassStrength`
+drives the named system surfaces. At 50%, existing per-scene midpoint recipes
+apply. Zero omits our Gaussian; 100% doubles the midpoint radius. Different-sized
+surfaces keep appropriate baseline radii: Dock 5/3 (normal/light), notifications
+4/3 (dark/light), generic cards/app banners 8 and quick actions 3. Body palettes
+and edge geometry stay.
 
-Cached material inputs now include the shared amount for library/Dock. Retained
+Cached material inputs include the shared amount for library/Dock. Retained
 music, activity and button backgrounds also receive the cached blur refresh.
 Fallback effect alpha scales with the same amount; it is not a Gaussian-radius
 equivalent. There is no new polling, screenshot capture or render loop in the

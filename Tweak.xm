@@ -39,6 +39,7 @@ static NSInteger GFStyle = 0;          // 0 Clear, 1 Liquid Glass
 static CGFloat GFClearStrength = 0.0;        // 0.0 ... 1.0, Clear blur authority
 static CGFloat GFLiquidGlassStrength = 0.0;  // 0.0 ... 1.0, Liquid composite authority
 static CGFloat GFGlassStrength = 0.0;        // active style strength for existing rendering paths
+static CGFloat GFSystemGlassStrength = 0.55; // shared Home, Dock, banner and Lock Screen strength
 
 // App Library remains intentionally independent from normal folders.
 static BOOL GFAppLibraryGlassEnabled = NO;
@@ -207,6 +208,19 @@ static void GFLoadPreferences(void) {
 
     GFGlassStrength =
         (GFStyle == 0) ? GFClearStrength : GFLiquidGlassStrength;
+
+    CFPropertyListRef systemStrength = CFPreferencesCopyAppValue(
+        CFSTR("SystemGlassStrength"), GFPreferencesDomain);
+    if (systemStrength && CFGetTypeID(systemStrength) == CFNumberGetTypeID()) {
+        double value = 55.0;
+        CFNumberGetValue((CFNumberRef)systemStrength, kCFNumberDoubleType, &value);
+        GFSystemGlassStrength = MIN(1.0, MAX(0.0, (CGFloat)value / 100.0));
+    } else {
+        CGFloat oldNotification = GFReadPercent(CFSTR("NotificationBlur"), 55.0);
+        CGFloat oldDock = GFReadPercent(CFSTR("DockBlur"), 55.0);
+        GFSystemGlassStrength = (oldNotification + oldDock) * 0.5;
+    }
+    if (systemStrength) CFRelease(systemStrength);
 }
 
 

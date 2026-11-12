@@ -38,7 +38,7 @@ class NotificationIntegration(unittest.TestCase):
         self.assertNotIn("GF_DOCK_BLUR_BEGIN", stripped)
         # Stack callbacks no longer retain animation-scale classifications.
         self.assertEqual(hashlib.sha256(stripped.encode()).hexdigest(),
-                         "31c8f592ebb932bab629b8f881619130daae23eae526ef25b7c7697fd1091a0d")
+                         "d01446053039be98ff40572ebf056a322e2dea7a28c888d0de04579211d7d384")
 
     def test_candidate_identity(self):
         control = (ROOT / "control").read_text(encoding="utf-8")
@@ -109,7 +109,7 @@ class NotificationIntegration(unittest.TestCase):
             "CGFloat radius = !self.gfUsesNotificationPalette ? GFLockCardBlurRadius : "
             "(self.gfNotificationPalette.lightSurface ? "
             "GFNotificationLightBlurRadius : GFNotificationDarkBlurRadius); "
-            "return radius * GFSharedGlassScale(GFGlassStrength);")
+            "return radius * GFSharedGlassScale(GFSystemGlassStrength);")
         for name in ("gfRefreshMaterial", "gfClearNotificationPalette"):
             body = re.search(r"- \(void\)" + name + r" \{(.*?)\n\}", lock, re.S)
             self.assertIsNotNone(body)

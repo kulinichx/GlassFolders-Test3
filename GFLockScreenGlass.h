@@ -7,7 +7,7 @@
 #import "GFNotificationForeground.h"
 #import "GFGlassStrength.h"
 
-// All enabled surfaces follow the active Clear/Liquid Glass strength.
+// System surfaces share their own strength, separate from folder glass.
 // Keep wallpaper detail behind cards, and use still less blur for small buttons.
 static const CGFloat GFLockCardBlurRadius = 8.0;
 static const CGFloat GFNotificationLightBlurRadius = 3.0;
@@ -102,13 +102,13 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
     CGFloat radius = !self.gfUsesNotificationPalette ? GFLockCardBlurRadius :
         (self.gfNotificationPalette.lightSurface ?
          GFNotificationLightBlurRadius : GFNotificationDarkBlurRadius);
-    return radius * GFSharedGlassScale(GFGlassStrength);
+    return radius * GFSharedGlassScale(GFSystemGlassStrength);
 }
 - (void)gfRefreshBackdropBlurIfNeeded {
     CGFloat radius = [self gfBackdropBlurRadius];
     if (self.gfHasBackdropBlurRadius && self.gfAppliedBackdropBlurRadius == radius) return;
     GFLockApplyBackdropRecipe(self, [self gfBackdropGroupName], radius);
-    self.gfFallbackBlurView.alpha = 0.22 * GFSharedGlassScale(GFGlassStrength);
+    self.gfFallbackBlurView.alpha = 0.22 * GFSharedGlassScale(GFSystemGlassStrength);
     self.gfAppliedBackdropBlurRadius = radius;
     self.gfHasBackdropBlurRadius = YES;
 }
@@ -221,11 +221,11 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
     return @"com.kulinich.glassfolders.lock.buttons";
 }
 - (CGFloat)gfBackdropBlurRadius {
-    return GFLockButtonBlurRadius * GFSharedGlassScale(GFGlassStrength);
+    return GFLockButtonBlurRadius * GFSharedGlassScale(GFSystemGlassStrength);
 }
 - (void)gfRefreshBackdropBlurIfNeeded {
     [super gfRefreshBackdropBlurIfNeeded];
-    CGFloat alpha = 0.18 * GFSharedGlassScale(GFGlassStrength);
+    CGFloat alpha = 0.18 * GFSharedGlassScale(GFSystemGlassStrength);
     if (self.gfFallbackBlurView.alpha != alpha) self.gfFallbackBlurView.alpha = alpha;
 }
 - (void)gfRefreshMaterial {

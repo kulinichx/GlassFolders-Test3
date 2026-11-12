@@ -22,7 +22,8 @@ class NotificationBlurTests(unittest.TestCase):
     def test_slider_and_preference_contract(self):
         items = plistlib.loads((ROOT / "prefs/Resources/Root.plist").read_bytes())["items"]
         sliders = [item for item in items if item.get("cellClass") == "GFPercentSliderCell"]
-        self.assertEqual({x["key"] for x in sliders}, {"ClearStrength", "LiquidGlassStrength"})
+        self.assertEqual({x["key"] for x in sliders},
+                         {"ClearStrength", "LiquidGlassStrength", "SystemGlassStrength"})
         for slider in sliders:
             for key, value in {"cell": "PSStaticTextCell", "default": 55, "min": 0, "max": 100,
                                "defaults": "com.kulinich.glassfolders"}.items():
@@ -31,9 +32,11 @@ class NotificationBlurTests(unittest.TestCase):
         tweak = (ROOT / "Tweak.xm").read_text(encoding="utf-8")
         self.assertNotIn("GFNotificationBlurAmount", tweak)
         self.assertIn("(GFStyle == 0) ? GFClearStrength : GFLiquidGlassStrength", tweak)
+        self.assertIn("GFSystemGlassStrength =", tweak)
         for locale in ("en", "zh-Hans"):
             text = (ROOT / f"prefs/Resources/{locale}.lproj/Root.strings").read_text(encoding="utf-8")
             self.assertRegex(text, re.compile(r'^"Clear Strength" = "[^"]+";', re.M), locale)
+            self.assertRegex(text, re.compile(r'^"System Glass Strength" = "[^"]+";', re.M), locale)
 
     def test_cached_refresh_and_zero_blur(self):
         lock = (ROOT / "GFLockScreenGlass.h").read_text(encoding="utf-8")
@@ -41,7 +44,7 @@ class NotificationBlurTests(unittest.TestCase):
         self.assertLess(refresh.index("self.gfAppliedBackdropBlurRadius == radius"),
                         refresh.index("GFLockApplyBackdropRecipe"))
         self.assertIn("self.gfHasBackdropBlurRadius = YES", refresh)
-        self.assertIn("GFSharedGlassScale(GFGlassStrength)", refresh)
+        self.assertIn("GFSharedGlassScale(GFSystemGlassStrength)", refresh)
         self.assertNotIn("gfRefreshMaterial", refresh)
         for forbidden in ("gfBodyVeil", "gfLockRim", "textColor", "gfTintView"):
             self.assertNotIn(forbidden, refresh)
@@ -57,8 +60,8 @@ class NotificationBlurTests(unittest.TestCase):
         lock = (ROOT / "GFLockScreenGlass.h").read_text(encoding="utf-8")
         notification = (ROOT / "GFNotificationGlassView.h").read_text(encoding="utf-8")
         self.assertNotIn("gfUsesNotificationBlurControl", lock + notification)
-        self.assertIn("return radius * GFSharedGlassScale(GFGlassStrength)", lock)
-        self.assertIn("return GFLockButtonBlurRadius * GFSharedGlassScale(GFGlassStrength)", lock)
+        self.assertIn("return radius * GFSharedGlassScale(GFSystemGlassStrength)", lock)
+        self.assertIn("return GFLockButtonBlurRadius * GFSharedGlassScale(GFSystemGlassStrength)", lock)
         stack = method(notification, "- (void)gfRefreshStackAppearance")
         self.assertNotIn("Backdrop", stack)
         self.assertNotIn("Blur", stack)
@@ -96,6 +99,7 @@ class NotificationBlurTests(unittest.TestCase):
 static const CGFloat GFLockCardBlurRadius = 8, GFNotificationLightBlurRadius = 3,
     GFNotificationDarkBlurRadius = 4, GFLockButtonBlurRadius = 3;
 static CGFloat GFGlassStrength = 0.5;
+#define GFSystemGlassStrength GFGlassStrength
 @interface TestRim : NSObject
 @property BOOL gfLightSurface;
 - (void)setNeedsLayout;

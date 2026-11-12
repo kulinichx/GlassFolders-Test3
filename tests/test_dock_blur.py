@@ -12,9 +12,12 @@ class DockBlurTests(unittest.TestCase):
     def test_shared_slider_and_live_reload(self):
         items = plistlib.loads((ROOT / "prefs/Resources/Root.plist").read_bytes())["items"]
         sliders = [x for x in items if x.get("cellClass") == "GFPercentSliderCell"]
-        self.assertEqual({x["key"] for x in sliders}, {"ClearStrength", "LiquidGlassStrength"})
+        self.assertEqual({x["key"] for x in sliders},
+                         {"ClearStrength", "LiquidGlassStrength", "SystemGlassStrength"})
+        self.assertIn("GFGlassStrength =", tweak := (ROOT / "Tweak.xm").read_text(encoding="utf-8"))
+        self.assertIn("GFSystemGlassStrength =", tweak)
+        self.assertIn("strength:GFGlassStrength", tweak)
         self.assertFalse(any(x.get("key") in {"DockBlur", "NotificationBlur"} for x in items))
-        tweak = (ROOT / "Tweak.xm").read_text(encoding="utf-8")
         self.assertNotIn("GFDockBlurAmount", tweak)
         self.assertIn("if (GFDockMode == 1)", tweak)
         self.assertIn("(GFStyle == 0) ? GFClearStrength : GFLiquidGlassStrength", tweak)
@@ -25,7 +28,7 @@ class DockBlurTests(unittest.TestCase):
     def test_cache_zero_blur_and_original_rim(self):
         library = (ROOT / "GFAppLibraryGlass.h").read_text(encoding="utf-8")
         self.assertIn("self.gfMaterialGlassAmount == amount", library)
-        self.assertIn("GFSharedGlassAmount(GFGlassStrength)", library)
+        self.assertIn("GFSharedGlassAmount(GFSystemGlassStrength)", library)
         self.assertIn("recipe.blur *= GFSharedGlassScale(amount)", library)
         self.assertIn("hasNativeMaterial = recipe.blur <= 0.001", library)
         self.assertIn("self.gfCardRim.hidden = adaptiveLight && !self.gfDockVariant", library)
