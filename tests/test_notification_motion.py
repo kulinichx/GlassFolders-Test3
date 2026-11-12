@@ -55,6 +55,7 @@ class NotificationMotionTests(unittest.TestCase):
             path.write_text(source, encoding="utf-8")
             subprocess.run(["clang", "-fobjc-arc", "-Wall", "-Wextra", "-Werror",
                             "-framework", "Foundation", "-framework", "QuartzCore",
+                            "-framework", "CoreGraphics",
                             str(path), "-o", str(binary)], check=True)
             subprocess.run([str(binary)], check=True)
 
