@@ -45,6 +45,7 @@ def main():
                     "-Wall", "-Wextra", "-Wno-unused-parameter", "-isysroot", sdk,
                     "-target", f"{arch}-apple-ios16.0-simulator", "-I", str(ROOT / "tests/slider_stubs"),
                     "-framework", "UIKit", "-framework", "Foundation", "-framework", "CoreFoundation",
+                    "-framework", "CoreGraphics",
                     str(ROOT / "prefs/GFPercentSliderCell.m"), str(ROOT / "tests/slider_uikit_harness.m"),
                     "-o", str(app / "SliderHarness"))
             command("codesign", "--force", "--sign", "-", str(app))
