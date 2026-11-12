@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = "1.3.4"
 BASELINE = {
     "GFLivePreferencesPrelude.h": "a264e6bc2d97c05b70395cceb2855e79a099ac242a131d0300854e5dc215b988",
-    "prefs/GFRootListController.m": "442ce9593397c785140ff90bb15b7f3830029b5006d4d6343f9e1e39ee0491c3",
+    # Slider coordinates/masking corrected after the first device test.
+    "prefs/GFRootListController.m": "ca847b33c6d48cb2076b1b8d105b0f26bd30765adf8a06120ee070f118aaebc5",
     "Makefile": "38b92b58065d3c8e08518f8378cf1b50ca492f9608d92bc74a98e3fac41c5b17",
     "GFLicensePublicKey.h": "28aeae09e8717c64e5762ac2b9e708a3bf15c674787d6bdf0f12c8a26a56bdb9",
 }
@@ -39,8 +40,9 @@ class NotificationIntegration(unittest.TestCase):
             "", stripped, flags=re.S | re.M,
         )
         self.assertEqual(count, 2)
+        # Stack callbacks no longer retain animation-scale classifications.
         self.assertEqual(hashlib.sha256(stripped.encode()).hexdigest(),
-                         "9e9f944efd9e06577f3830dd9b2858ccfd6618a67468adf5b5ed835db2fcf9c2")
+                         "31c8f592ebb932bab629b8f881619130daae23eae526ef25b7c7697fd1091a0d")
 
     def test_candidate_identity(self):
         control = (ROOT / "control").read_text(encoding="utf-8")

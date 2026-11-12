@@ -4362,8 +4362,6 @@ static void GFUpdateDockBackground(UIView *host) {
 %hook NCNotificationShortLookView
 - (void)configureStackDimmingForTransform:(CGAffineTransform)transform {
     %orig;
-    objc_setAssociatedObject(self, &kGFLockStackedKey,
-        @(GFLockTransformIsStacked(transform)), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     GFUpdateLockScreenSurface((UIView *)self);
 }
 %end
@@ -4375,7 +4373,6 @@ static void GFUpdateDockBackground(UIView *host) {
     // Reused short looks can switch presentation. Restore before UIKit
     // configures the new kind, then apply only its own independently gated recipe.
     GFRestoreLockScreenSurface((UIView *)self);
-    objc_setAssociatedObject(self, &kGFLockStackedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     %orig;
     GFUpdateLockScreenSurface((UIView *)self);
 }

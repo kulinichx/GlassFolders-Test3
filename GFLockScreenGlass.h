@@ -269,7 +269,6 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 
 static char kGFLockBackgroundKey;
 static char kGFLockPressKey;
-static char kGFLockStackedKey;
 static char kGFLockCoverSheetVisibleKey;
 static char kGFLockCoverSheetDismissingKey;
 
@@ -455,25 +454,10 @@ static void GFRestoreLockScreenSurface(UIView *host) {
     objc_setAssociatedObject(host, &kGFLockBackgroundKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
-static BOOL GFLockTransformIsStacked(CGAffineTransform transform) {
-    CGFloat scaleX = hypot(transform.a, transform.b);
-    CGFloat scaleY = hypot(transform.c, transform.d);
-    return isfinite(scaleX) && isfinite(scaleY) &&
-           (scaleX < 0.999 || scaleY < 0.999);
-}
-
 static BOOL GFLockNotificationIsStacked(UIView *host) {
-    if ([objc_getAssociatedObject(host, &kGFLockStackedKey) boolValue] ||
-        GFLockBool(host, @"isNotificationContentViewHidden", NO)) return YES;
-    // Initial/reused views may be laid out before the dimming callback. Check
-    // only this card's wrappers, stopping before the list's own transform.
-    UIView *node = host;
-    for (NSUInteger depth = 0; node && depth < 8; depth++, node = node.superview) {
-        if (GFLockIsKind(node, "NCNotificationListView")) break;
-        if (GFLockTransformIsStacked(node.transform)) return YES;
-        if (GFLockIsKind(node, "NCNotificationListCell")) break;
-    }
-    return NO;
+    // Swipe, bounce and dismissal also scale front cards. Only the native
+    // content-hidden state identifies a rear strip; unknown layouts stay front.
+    return GFLockBool(host, @"isNotificationContentViewHidden", NO);
 }
 
 static void GFLockSyncStackOverlay(UIView *host, GFLockBackgroundState *state) {

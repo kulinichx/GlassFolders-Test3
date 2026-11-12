@@ -29,8 +29,9 @@ UIVisualEffectView instead scales alpha from 0 to 0.44 (0.22 at default); it is
 not claimed to match a native Gaussian radius.
 
 Music, Live Activities, quick actions, folders, Dock and App Library do not use
-this slider. Their recipes and existing controls remain unchanged. No preference
-controller implementation or shared live-refresh bridge was modified.
+this slider. Their recipes and existing controls remain unchanged. The original
+blur-control revision did not modify the preference controller implementation
+or shared live-refresh bridge; the subsequent slider-layout fix is noted below.
 
 ## Visibility And Cost Boundaries
 
@@ -68,11 +69,49 @@ switches, return to app-banner radius, explicit cache invalidation and unrelated
 surface exclusion. These two tests are skipped on this Windows host; the CI
 workflow now runs them on its existing Linux/macOS jobs.
 
-The user has now requested a package build. The candidate is being submitted on
-`fix/notification-lowwakeup2-clear-blur-20G75` to the existing Actions workflow;
-build/package verification and download results will be recorded below when
-available. No device installation, GPU or energy test has been performed.
+The requested RootHide build completed successfully on
+`fix/notification-lowwakeup2-clear-blur-20G75`, source commit
+`d84e4b55d1ff5d4ae225be4176630e2471b1d2c2`, Actions run `43274583626`.
+Both baseline checks and the macOS build/native harness job passed. The standard
+rootless job was intentionally skipped.
+
+Downloaded artifact: `LumaGlass_1.3.4_roothide-arm64e.deb`, 96,916 bytes.
+SHA256: `511061ce5f465cc0554298c456f2700ab67cb6444a3469ba283c3a0136e4d271`.
+The local hash matches the CI package hash. Read-only archive inspection verified
+package identity/version, thin arm64e tweak and preferences binaries, exactly one
+PreferenceLoader entry, the 0-100/default-50 slider, Chinese localization and new
+blur selectors. Retired experimental renderer markers are absent.
+Delivery directory: `DEB/11-13/LumaGlass-NotificationBlur-Test` in the parent
+workspace. No device installation, GPU or energy test has been performed.
 The internal version remains 1.3.4; this is a separately identified test artifact,
 not a new public release. Device comparison must include 0/25/50/100%, white,
 black, detailed and mixed wallpaper, overlapping notifications, Home/app banner
 transitions, disable/restore, accessibility and fallback material behavior.
+
+## Device Feedback Follow-up
+
+The first device test reported a brief lock-screen appearance change while
+swiping, and a clipped slider thumb near the minimum (shown at 15%).
+
+The stack classifier previously treated any scale below 0.999 as a rear card,
+including transformations on wrappers. That can change the rim's subdued state
+during motion even when notification content remains visible. Classification
+now uses only the existing signature-checked native content-hidden getter;
+unknown hosts remain front cards. The native stack callback still runs and
+refreshes the replacement, but no longer stores a transform-derived flag.
+Rim geometry, palette recipes and blur-cache behavior are unchanged. This is a
+targeted candidate fix, not confirmation that every device flicker has the same
+cause; compositor/native shadow behavior has not been measured on the phone.
+
+The percentage label no longer uses an opaque masking background. Slider layout
+converts between contentView and the control's actual parent coordinate spaces,
+reserves a separate value column, retains endpoint margins and disables clipping
+on the slider itself. The existing native control, targets, preference writes,
+5% release detents and haptics remain. This shared layout correction also applies
+to the existing folder sliders.
+
+New regressions check semantic rear-state classification and execute extracted
+production stack-query/slider-layout methods on macOS with view doubles. They
+cover animated scale/rotation, unknown hosts, translated wrappers, repeated
+layout, several row widths and conventional thumb footprints at 0/5/15/50/100%.
+These are state/coordinate tests, not actual UIKit thumb or device screenshots.

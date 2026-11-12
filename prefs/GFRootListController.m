@@ -33,13 +33,7 @@ extern char **environ;
         [UIFont monospacedDigitSystemFontOfSize:15.0
                                          weight:UIFontWeightSemibold];
 
-    /*
-     * This opaque dynamic background also masks any internal slider track
-     * that PSSliderTableCell may attempt to draw under the number.
-     */
-    label.backgroundColor = UIColor.secondarySystemGroupedBackgroundColor;
-    label.layer.cornerRadius = 7.0;
-    label.clipsToBounds = YES;
+    label.backgroundColor = UIColor.clearColor;
     label.userInteractionEnabled = NO;
 
     [self.contentView addSubview:label];
@@ -240,22 +234,20 @@ extern char **environ;
         MAX(28.0, CGRectGetHeight(bounds) - 10.0)
     );
 
-    CGRect sliderFrame = slider.frame;
+    // Preferences may put its control in a wrapper, not directly in contentView.
+    CGRect sliderFrame = [slider convertRect:slider.bounds toView:self.contentView];
     sliderFrame.origin.x = leftInset + valueWidth + gap;
     sliderFrame.size.width =
-        MAX(120.0,
+        MAX(0.0,
             CGRectGetWidth(bounds) -
             sliderFrame.origin.x -
             rightInset);
+    sliderFrame.size.height = MAX(44.0, CGRectGetHeight(sliderFrame));
+    sliderFrame.origin.y = CGRectGetMidY(bounds) - CGRectGetHeight(sliderFrame) * 0.5;
 
-    slider.frame = sliderFrame;
-
-    /*
-     * Keep the opaque percentage badge above the slider's internal subviews.
-     * Even if Preferences relayouts its track, it cannot visually cross the
-     * number.
-     */
-    [self.contentView bringSubviewToFront:self.gfPercentLabel];
+    slider.frame = [self.contentView convertRect:sliderFrame toView:slider.superview];
+    slider.clipsToBounds = NO;
+    slider.layer.masksToBounds = NO;
 
     [self gfUpdatePercentLabel];
 }

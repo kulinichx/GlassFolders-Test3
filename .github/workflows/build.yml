@@ -29,6 +29,8 @@ jobs:
         run: python3 tests/test_mango_bridge_inspector.py -v
       - name: Exercise notification blur control and native math
         run: python3 tests/test_notification_blur.py -v
+      - name: Check notification motion and slider layout
+        run: python3 tests/test_notification_motion.py -v
       - name: Exercise wallpaper palette
         run: |
           cc -std=c11 -Wall -Wextra -Werror tests/test_notification_palette.c -lm -o /tmp/gf-palette
@@ -70,6 +72,8 @@ jobs:
 
       - name: Exercise production notification blur updates
         run: python3 tests/test_notification_blur.py -v
+      - name: Exercise production notification motion and slider layout
+        run: python3 tests/test_notification_motion.py -v
 
       - name: Exercise production Home Screen and library behavior
         run: |
