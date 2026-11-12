@@ -25,6 +25,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify installed baseline and notification scope
         run: python3 tests/test_notification_lowwakeup2.py -v
+      - name: Exercise offline bridge evidence verifier
+        run: python3 tests/test_mango_bridge_inspector.py -v
+      - name: Exercise notification blur control and native math
+        run: python3 tests/test_notification_blur.py -v
       - name: Exercise wallpaper palette
         run: |
           cc -std=c11 -Wall -Wextra -Werror tests/test_notification_palette.c -lm -o /tmp/gf-palette
@@ -63,6 +67,9 @@ jobs:
           clang -fobjc-arc -Wall -Wextra -framework Foundation \
             tests/notification_stack_harness.m -o /tmp/gf-stack
           /tmp/gf-stack
+
+      - name: Exercise production notification blur updates
+        run: python3 tests/test_notification_blur.py -v
 
       - name: Exercise production Home Screen and library behavior
         run: |

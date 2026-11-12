@@ -68,6 +68,7 @@
 "Turn off to restore the system Dock. Dock works independently of folders and App Library." = "关闭后恢复系统 Dock 背景。Dock 与文件夹、资源库可独立开关。";
 "Lock Screen Glass" = "锁屏玻璃";
 "Notification Cards" = "通知卡片";
+"Notification Blur" = "通知模糊度";
 "Flashlight and Camera" = "电筒与相机";
 "Music Panel" = "音乐面板";
 "Live Activities" = "实时活动";

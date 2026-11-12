@@ -54,6 +54,10 @@ static BOOL GFLockMusicEnabled = NO;
 static BOOL GFLockActivitiesEnabled = NO;
 static BOOL GFBannerNotificationsEnabled = NO;
 
+// GF_NOTIFICATION_BLUR_BEGIN
+static CGFloat GFNotificationBlurAmount = 0.5;
+// GF_NOTIFICATION_BLUR_END
+
 // Legacy value retained for preference compatibility:
 // 0 = Clear, 1 = Liquid Glass
 static NSInteger GFAppLibraryStyle = 0;
@@ -159,6 +163,10 @@ static void GFLoadPreferences(void) {
     GFLockMusicEnabled = licensed && GFReadBool(CFSTR("LockMusicEnabled"), NO);
     GFLockActivitiesEnabled = licensed && GFReadBool(CFSTR("LockActivitiesEnabled"), NO);
     GFBannerNotificationsEnabled = licensed && GFReadBool(CFSTR("BannerNotificationsEnabled"), NO);
+
+    // GF_NOTIFICATION_BLUR_BEGIN
+    GFNotificationBlurAmount = GFReadPercent(CFSTR("NotificationBlur"), 50.0);
+    // GF_NOTIFICATION_BLUR_END
 
     GFAppLibraryStyle =
         GFReadInteger(CFSTR("AppLibraryStyle"), 0);

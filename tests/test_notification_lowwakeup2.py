@@ -33,6 +33,12 @@ class NotificationIntegration(unittest.TestCase):
             "", stripped, flags=re.S | re.M,
         )
         self.assertEqual(count, 7)
+        stripped, count = re.subn(
+            r"^[ \t]*// GF_NOTIFICATION_BLUR_BEGIN\n.*?"
+            r"^[ \t]*// GF_NOTIFICATION_BLUR_END\n\n",
+            "", stripped, flags=re.S | re.M,
+        )
+        self.assertEqual(count, 2)
         self.assertEqual(hashlib.sha256(stripped.encode()).hexdigest(),
                          "9e9f944efd9e06577f3830dd9b2858ccfd6618a67468adf5b5ed835db2fcf9c2")
 
@@ -88,6 +94,49 @@ class NotificationIntegration(unittest.TestCase):
         self.assertIn("UIAccessibilityDarkerSystemColorsEnabled()", lock)
         self.assertNotIn("GFNotificationContrast", lock)
         self.assertNotIn("gfNotificationVeilOpacity", lock)
+
+    def test_notification_blur_candidate_scope(self):
+        lock = (ROOT / "GFLockScreenGlass.h").read_text(encoding="utf-8")
+        radii = dict(re.findall(
+            r"static const CGFloat (GF\w+BlurRadius) = (\d+\.\d+);", lock))
+        self.assertEqual(radii, {
+            "GFLockCardBlurRadius": "8.0",
+            "GFNotificationLightBlurRadius": "3.0",
+            "GFNotificationDarkBlurRadius": "4.0",
+            "GFLockButtonBlurRadius": "3.0",
+        })
+        recipe = re.search(r"- \(CGFloat\)gfBackdropBlurRadius \{([^}]+)\}", lock)
+        self.assertIsNotNone(recipe)
+        self.assertEqual(" ".join(recipe[1].split()),
+            "CGFloat radius = !self.gfUsesNotificationPalette ? GFLockCardBlurRadius : "
+            "(self.gfNotificationPalette.lightSurface ? "
+            "GFNotificationLightBlurRadius : GFNotificationDarkBlurRadius); "
+            "return [self gfUsesNotificationBlurControl] ? "
+            "radius * GFNotificationBlurScale(GFNotificationBlurAmount) : radius;")
+        for name in ("gfRefreshMaterial", "gfClearNotificationPalette"):
+            body = re.search(r"- \(void\)" + name + r" \{(.*?)\n\}", lock, re.S)
+            self.assertIsNotNone(body)
+            self.assertIn("[self gfRefreshBackdropBlurIfNeeded]", body[1])
+        apply = re.search(
+            r"- \(void\)gfApplyNotificationPalette:\(GFNotificationPalette\)palette \{(.*?)\n\}",
+            lock, re.S)
+        self.assertIsNotNone(apply)
+        self.assertIn("if (backdropChanged)", apply[1])
+        self.assertIn("[self gfRefreshBackdropBlurIfNeeded]", apply[1])
+        self.assertLess(apply[1].index("self.gfNotificationPalette = palette"),
+                        apply[1].index("[self gfRefreshBackdropBlurIfNeeded]"))
+        clear = re.search(r"- \(void\)gfClearNotificationPalette \{(.*?)\n\}", lock, re.S)[1]
+        self.assertLess(clear.index("self.gfUsesNotificationPalette = NO"),
+                        clear.index("[self gfRefreshBackdropBlurIfNeeded]"))
+
+    def test_blur_candidate_preserves_decoration_and_palette(self):
+        expected = {
+            "GFGlassRim.h": "534037542d6d6b6f0c9c5ab4143978e2984ac28bbb754de5d1d49b3d7d384fa0",
+            "GFNotificationPalette.h": "fb12d35d38c24b926fed753396438f575d16d22515fd5d35127c9830d298f80e",
+        }
+        for name, digest in expected.items():
+            text = (ROOT / name).read_text(encoding="utf-8")
+            self.assertEqual(hashlib.sha256(text.encode()).hexdigest(), digest, name)
 
     def test_library_native_legibility(self):
         library = (ROOT / "GFLibraryLegibility.h").read_text(encoding="utf-8")
