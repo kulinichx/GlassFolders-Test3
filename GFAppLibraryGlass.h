@@ -33,6 +33,7 @@
 @property (nonatomic, assign) BOOL gfMaterialDockVariant;
 @property (nonatomic, assign) BOOL gfMaterialAdaptiveLight;
 @property (nonatomic, assign) double gfMaterialBodyWhite;
+@property (nonatomic, assign) CGFloat gfMaterialDockBlurAmount;
 - (instancetype)initWithStrength:(CGFloat)strength;
 - (void)setPreferredRadius:(CGFloat)radius;
 - (void)gfRefreshMaterial;
@@ -87,17 +88,19 @@
 - (void)gfRefreshMaterial {
     BOOL dark = GFUsesDarkAppearance(self);
     NSInteger style = self.gfDockVariant ? 1 : GFResolvedAppLibraryStyle();
-    GFNotificationPalette palette = {0};
-    if (!self.gfDockVariant) palette = GFHomeWallpaperPalette(self.traitCollection);
+    GFNotificationPalette palette = GFHomeWallpaperPalette(self.traitCollection);
     BOOL adaptiveLight = palette.valid && palette.lightSurface &&
         !UIAccessibilityIsReduceTransparencyEnabled() &&
         !UIAccessibilityDarkerSystemColorsEnabled();
+    CGFloat dockBlur = self.gfDockVariant ?
+        (isfinite(GFDockBlurAmount) ? GFClamp01(GFDockBlurAmount) : 0.5) : 0.0;
 
     if (self.gfHasMaterial &&
         self.gfMaterialDark == dark &&
         self.gfMaterialStyle == style &&
         self.gfMaterialSearchVariant == self.gfSearchVariant &&
         self.gfMaterialDockVariant == self.gfDockVariant &&
+        self.gfMaterialDockBlurAmount == dockBlur &&
         self.gfMaterialAdaptiveLight == adaptiveLight &&
         (!adaptiveLight || self.gfMaterialBodyWhite == palette.bodyWhite)) {
         return;
@@ -110,15 +113,19 @@
     self.gfMaterialDockVariant = self.gfDockVariant;
     self.gfMaterialAdaptiveLight = adaptiveLight;
     self.gfMaterialBodyWhite = palette.bodyWhite;
+    self.gfMaterialDockBlurAmount = dockBlur;
 
     GFAppLibraryMaterialRecipe recipe = self.gfDockVariant
-        ? (GFAppLibraryMaterialRecipe){10.0, 1.04, 1.0}
+        ? (GFAppLibraryMaterialRecipe){10.0 * dockBlur, 1.04, 1.0}
         : GFAppLibraryRecipe(self.gfSearchVariant, dark);
-    if (adaptiveLight) recipe.blur = style == 1 ? 3.0 : 4.0;
+    if (adaptiveLight) recipe.blur = self.gfDockVariant ? 6.0 * dockBlur :
+        (style == 1 ? 3.0 : 4.0);
 
     CALayer *backdrop = self.gfBackdropSampleView.layer;
-    BOOL hasBlur = NO;
+    BOOL hasNativeMaterial = NO;
     if ([NSStringFromClass(backdrop.class) containsString:@"Backdrop"]) {
+        // A zero-radius native backdrop is valid, not a fallback failure.
+        hasNativeMaterial = recipe.blur <= 0.001;
         SEL group = NSSelectorFromString(@"setGroupName:");
         if ([backdrop respondsToSelector:group]) {
             ((void (*)(id, SEL, id))objc_msgSend)(
@@ -142,18 +149,18 @@
             [filters addObject:saturation];
         }
 
-        id blur = GFCreateCAFilter(@"gaussianBlur");
+        id blur = recipe.blur > 0.001 ? GFCreateCAFilter(@"gaussianBlur") : nil;
         if (blur && recipe.blur > 0.001) {
             [blur setValue:@(recipe.blur) forKey:@"inputRadius"];
             [blur setValue:@YES forKey:@"inputNormalizeEdges"];
             [filters addObject:blur];
-            hasBlur = YES;
+            hasNativeMaterial = YES;
         }
         [backdrop setValue:filters forKey:@"filters"];
     }
 
-    self.gfBackdropSampleView.hidden = !hasBlur;
-    if (!hasBlur) {
+    self.gfBackdropSampleView.hidden = !hasNativeMaterial;
+    if (!hasNativeMaterial) {
         if (!self.gfFallbackBlurView) {
             self.gfFallbackBlurView =
                 [[UIVisualEffectView alloc] initWithEffect:nil];
@@ -166,9 +173,9 @@
                 ? UIBlurEffectStyleSystemUltraThinMaterial
                 : UIBlurEffectStyleSystemThinMaterial];
         self.gfFallbackBlurView.alpha =
-            self.gfDockVariant ? 0.22 : (style == 1 ? 0.22 : 0.28);
+            self.gfDockVariant ? 0.44 * dockBlur : (style == 1 ? 0.22 : 0.28);
     }
-    self.gfFallbackBlurView.hidden = hasBlur;
+    self.gfFallbackBlurView.hidden = hasNativeMaterial;
 
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
@@ -189,8 +196,9 @@
                                   (id)body.CGColor, (id)body.CGColor,
                                   (id)body.CGColor, (id)body.CGColor];
     }
-    self.gfCardRim.hidden = adaptiveLight;
-    self.gfAdaptiveRim.hidden = !adaptiveLight;
+    // Dock keeps its horizontal rim geometry, including on white wallpaper.
+    self.gfCardRim.hidden = adaptiveLight && !self.gfDockVariant;
+    self.gfAdaptiveRim.hidden = !adaptiveLight || self.gfDockVariant;
     self.gfCardRim.alpha = 1.0;
     [CATransaction commit];
     [self setNeedsLayout];

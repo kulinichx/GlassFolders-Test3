@@ -348,6 +348,34 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+			<string>Dock Blur</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSliderCell</string>
+			<key>cellClass</key>
+			<string>GFPercentSliderCell</string>
+			<key>label</key>
+			<string>Dock Blur</string>
+			<key>key</key>
+			<string>DockBlur</string>
+			<key>default</key>
+			<integer>50</integer>
+			<key>defaults</key>
+			<string>com.kulinich.glassfolders</string>
+			<key>min</key>
+			<integer>0</integer>
+			<key>max</key>
+			<integer>100</integer>
+			<key>showValue</key>
+			<false/>
+			<key>PostNotification</key>
+			<string>com.kulinich.glassfolders/preferenceschanged</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>About</string>
 			<key>footerText</key>
 			<string>Luma Glass 1.3.3 · kulinich</string>

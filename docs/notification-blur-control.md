@@ -115,3 +115,11 @@ production stack-query/slider-layout methods on macOS with view doubles. They
 cover animated scale/rotation, unknown hosts, translated wrappers, repeated
 layout, several row widths and conventional thumb footprints at 0/5/15/50/100%.
 These are state/coordinate tests, not actual UIKit thumb or device screenshots.
+
+The motion/slider follow-up passed cloud native checks and package verification
+at source `84efc56418fd8d9ca05574f7569d5d76fc63b7e2`, Actions run `43278906414`.
+The separately retained `DEB/11-13/LumaGlass-NotificationBlur-MotionFix` package
+is 96,444 bytes with SHA256
+`94782c688bb0f40f7dfe9c29d779a1539eb1090f55f7d82cbea3dcff697852be`, matching
+CI. Both its tweak and preferences binaries differ from the first blur-control
+test package and were verified as thin arm64e. Device feedback is still needed.

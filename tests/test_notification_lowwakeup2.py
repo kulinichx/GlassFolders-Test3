@@ -40,6 +40,12 @@ class NotificationIntegration(unittest.TestCase):
             "", stripped, flags=re.S | re.M,
         )
         self.assertEqual(count, 2)
+        stripped, count = re.subn(
+            r"^[ \t]*// GF_DOCK_BLUR_BEGIN\n.*?"
+            r"^[ \t]*// GF_DOCK_BLUR_END\n\n",
+            "", stripped, flags=re.S | re.M,
+        )
+        self.assertEqual(count, 2)
         # Stack callbacks no longer retain animation-scale classifications.
         self.assertEqual(hashlib.sha256(stripped.encode()).hexdigest(),
                          "31c8f592ebb932bab629b8f881619130daae23eae526ef25b7c7697fd1091a0d")
@@ -81,8 +87,8 @@ class NotificationIntegration(unittest.TestCase):
         library = (ROOT / "GFAppLibraryGlass.h").read_text(encoding="utf-8")
         self.assertIn('@"averageColorForVariant:"', home)
         self.assertIn("GFHomeWallpaperGeneration", home)
-        self.assertIn("if (!self.gfDockVariant) palette = GFHomeWallpaperPalette", library)
-        self.assertIn("self.gfCardRim.hidden = adaptiveLight", library)
+        self.assertIn("GFNotificationPalette palette = GFHomeWallpaperPalette", library)
+        self.assertIn("self.gfCardRim.hidden = adaptiveLight && !self.gfDockVariant", library)
 
     def test_restoration_and_slots(self):
         text = (ROOT / "GFNotificationForeground.h").read_text(encoding="utf-8")

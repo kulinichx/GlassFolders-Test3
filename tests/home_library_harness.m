@@ -155,11 +155,14 @@ typedef NS_ENUM(NSInteger, UIBlurEffectStyle) {
 @end
 @implementation TestFilter
 @end
+static BOOL TestFailBlur = NO;
 static id GFCreateCAFilter(NSString *name) {
+    if (TestFailBlur && [name isEqualToString:@"gaussianBlur"]) return nil;
     TestFilter *filter = [TestFilter new]; filter.name = name; return filter;
 }
 static BOOL TestDarkAppearance = YES;
 static BOOL TestReduceTransparency = NO;
+static CGFloat GFDockBlurAmount = 0.5;
 static BOOL GFUsesDarkAppearance(UIView *view) { return TestDarkAppearance; }
 static BOOL UIAccessibilityIsReduceTransparencyEnabled(void) { return TestReduceTransparency; }
 static BOOL UIAccessibilityDarkerSystemColorsEnabled(void) { return NO; }
@@ -228,14 +231,76 @@ int main(void) {
         TestReduceTransparency = NO;
         [pod gfRefreshMaterial];
         CHECK(pod.gfMaterialAdaptiveLight);
+        pod.gfSearchVariant = NO;
         pod.gfDockVariant = YES;
         [pod gfRefreshMaterial];
-        CHECK(!pod.gfMaterialAdaptiveLight && BlurRadius(pod) == 10);
-        CHECK(pod.gfAdaptiveRim.hidden);
+        CHECK(pod.gfMaterialAdaptiveLight && BlurRadius(pod) == 3);
+        CHECK(pod.gfAdaptiveRim.hidden && !pod.gfCardRim.hidden);
         CHECK([layer.groupName isEqualToString:@"com.kulinich.glassfolders.dock.glass"]);
+        CHECK(!layer.allowsInPlaceFiltering);
+        filters = layer.testFilters;
+        writes = layer.assignments;
+        for (NSUInteger i = 0; i < 400; i++) [pod layoutSubviews];
+        CHECK(layer.testFilters == filters && layer.assignments == writes);
+        GFDockBlurAmount = 0.25;
+        [pod gfRefreshMaterial];
+        CHECK(BlurRadius(pod) == 1.5);
+        GFDockBlurAmount = 0;
+        [pod gfRefreshMaterial];
+        CHECK(BlurRadius(pod) == -1 && !pod.gfBackdropSampleView.hidden);
+        CHECK(!pod.gfFallbackBlurView || pod.gfFallbackBlurView.hidden);
+        GFDockBlurAmount = 1;
+        [pod gfRefreshMaterial];
+        CHECK(BlurRadius(pod) == 6);
+        provider.homeColor = [UIColor colorWithWhite:0 alpha:1];
+        GFHomeInvalidateWallpaper();
+        [pod gfRefreshMaterial];
+        CHECK(!pod.gfMaterialAdaptiveLight && BlurRadius(pod) == 10);
+        GFDockBlurAmount = 0.5;
+        [pod gfRefreshMaterial];
+        CHECK(BlurRadius(pod) == 5);
+        CHECK(!pod.gfCardRim.hidden && pod.gfAdaptiveRim.hidden);
+        TestStyle = 1;
+        GFAppLibraryGlassView *library = [[GFAppLibraryGlassView alloc] initWithStrength:1];
+        TestBackdropLayer *libraryLayer = (TestBackdropLayer *)library.gfBackdropSampleView.layer;
+        NSArray *libraryFilters = libraryLayer.testFilters;
+        CHECK(BlurRadius(library) == 8);
+        GFDockBlurAmount = -1;
+        [pod gfRefreshMaterial];
+        CHECK(BlurRadius(pod) == -1);
+        [library gfRefreshMaterial];
+        CHECK(libraryLayer.testFilters == libraryFilters && BlurRadius(library) == 8);
+        GFDockBlurAmount = NAN;
+        [pod gfRefreshMaterial];
+        CHECK(BlurRadius(pod) == 5);
+        GFDockBlurAmount = INFINITY;
+        [pod gfRefreshMaterial];
+        CHECK(BlurRadius(pod) == 5);
+        GFDockBlurAmount = 2;
+        [pod gfRefreshMaterial];
+        CHECK(BlurRadius(pod) == 10);
+        TestFailBlur = YES;
+        GFDockBlurAmount = 0.5;
+        [pod gfRefreshMaterial];
+        CHECK(pod.gfBackdropSampleView.hidden && !pod.gfFallbackBlurView.hidden);
+        CHECK(fabs(pod.gfFallbackBlurView.alpha - 0.22) < 0.0001);
+        GFDockBlurAmount = 0;
+        [pod gfRefreshMaterial];
+        CHECK(!pod.gfBackdropSampleView.hidden && pod.gfFallbackBlurView.hidden);
+        // Model a platform with no native backdrop, not merely a missing filter.
+        pod.gfBackdropSampleView.layer = [CALayer layer];
+        pod.gfHasMaterial = NO;
+        [pod gfRefreshMaterial];
+        CHECK(!pod.gfFallbackBlurView.hidden && pod.gfFallbackBlurView.alpha == 0);
+        GFDockBlurAmount = 0.25;
+        [pod gfRefreshMaterial];
+        CHECK(fabs(pod.gfFallbackBlurView.alpha - 0.11) < 0.0001);
+        GFDockBlurAmount = 1;
+        [pod gfRefreshMaterial];
+        CHECK(fabs(pod.gfFallbackBlurView.alpha - 0.44) < 0.0001);
         puts("Production library renderer: light wallpaper in dark UI, pod/search, "
              "100 stable layouts, style changes, wallpaper invalidation, "
-             "accessibility and Dock scope PASS");
+             "accessibility and independent Dock blur/zero/fallback/400 stable layouts PASS");
     }
     return 0;
 }
