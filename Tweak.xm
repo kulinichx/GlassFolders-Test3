@@ -4363,6 +4363,81 @@ static void GFUpdateDockBackground(UIView *host) {
 }
 %end
 %end
+
+%group GFLockStackOverlayVisibilityHooks
+%hook NCNotificationListStackDimmingOverlayView
+- (void)setHidden:(BOOL)hidden {
+    %orig(GFLockMaterialHiddenValue((UIView *)self, hidden));
+}
+%end
+%end
+
+%group GFLockShadowVisibilityHooks
+%hook MTShadowView
+- (void)setHidden:(BOOL)hidden {
+    %orig(GFLockMaterialHiddenValue((UIView *)self, hidden));
+}
+%end
+%end
+
+%group GFLockMaterialShadowVisibilityHooks
+%hook MTMaterialShadowView
+- (void)setHidden:(BOOL)hidden {
+    %orig(GFLockMaterialHiddenValue((UIView *)self, hidden));
+}
+%end
+%end
+
+%group GFLockPlatterDecorationHooks
+%hook PLPlatterView
+- (void)layoutSubviews {
+    %orig;
+    GFLockRefreshPlatterDecoration((UIView *)self);
+}
+%end
+%end
+
+%group GFNotificationSwipeActionHooks
+%hook PLPlatterActionButton
+- (void)layoutSubviews {
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+- (void)didMoveToWindow {
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+- (void)setHighlighted:(BOOL)highlighted {
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+- (void)setBackgroundTintColor:(UIColor *)color {
+    %orig;
+    GFUpdateLockScreenSurface((UIView *)self);
+}
+%end
+%end
+
+%group GFNotificationDateColorHooks
+%hook BSUIDefaultDateLabel
+- (void)setTextColor:(UIColor *)color {
+    GFNotificationTextState *state = objc_getAssociatedObject(self, &kGFNotificationManagedTextKey);
+    UIColor *resolved = GFNotificationManagedDateColor((UIView *)self, color);
+    BOOL applying = state.applyingColor;
+    state.applyingColor = YES;
+    %orig(resolved);
+    state.applyingColor = applying;
+}
+- (void)setAttributedText:(NSAttributedString *)text {
+    GFNotificationTextState *state = objc_getAssociatedObject(self, &kGFNotificationManagedTextKey);
+    NSAttributedString *resolved = GFNotificationManagedDateText((UIView *)self, text);
+    BOOL applying = state.applyingColor;
+    state.applyingColor = YES;
+    %orig(resolved);
+    state.applyingColor = applying;
+}
+%end
+%end
 // GF_MATERIAL_VISIBILITY_END
 
 %group GFNotificationContainerHooks
@@ -4977,6 +5052,30 @@ static void GFUpdateOpenedFolderBackground(
         Class materialClass = objc_getClass("MTMaterialView");
         if ([materialClass isSubclassOfClass:UIView.class]) {
             %init(GFLockMaterialVisibilityHooks);
+        }
+        Class stackOverlayClass = objc_getClass("NCNotificationListStackDimmingOverlayView");
+        if ([stackOverlayClass isSubclassOfClass:UIView.class]) {
+            %init(GFLockStackOverlayVisibilityHooks);
+        }
+        Class shadowClass = objc_getClass("MTShadowView");
+        if ([shadowClass isSubclassOfClass:UIView.class]) {
+            %init(GFLockShadowVisibilityHooks);
+        }
+        Class materialShadowClass = objc_getClass("MTMaterialShadowView");
+        if ([materialShadowClass isSubclassOfClass:UIView.class]) {
+            %init(GFLockMaterialShadowVisibilityHooks);
+        }
+        Class platterClass = objc_getClass("PLPlatterView");
+        if ([platterClass isSubclassOfClass:UIView.class]) {
+            %init(GFLockPlatterDecorationHooks);
+        }
+        Class swipeActionClass = objc_getClass("PLPlatterActionButton");
+        if ([swipeActionClass isSubclassOfClass:UIControl.class]) {
+            %init(GFNotificationSwipeActionHooks);
+        }
+        Class dateLabelClass = objc_getClass("BSUIDefaultDateLabel");
+        if ([dateLabelClass isSubclassOfClass:UILabel.class]) {
+            %init(GFNotificationDateColorHooks);
         }
         // GF_MATERIAL_VISIBILITY_END
         Class notificationContainerClass = objc_getClass("NCNotificationViewControllerView");

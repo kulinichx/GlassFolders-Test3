@@ -245,8 +245,11 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
 @property (nonatomic, strong) GFLockScreenGlassView *glass;
 @property (nonatomic, assign) BOOL originalHidden;
 @property (nonatomic, strong) GFLockMaterialVisibility *visibility;
-@property (nonatomic, weak) UIView *stackOverlay;
-@property (nonatomic, assign) BOOL originalStackOverlayHidden;
+@property (nonatomic, strong) GFLockMaterialVisibility *stackOverlayVisibility;
+@property (nonatomic, strong) GFLockMaterialVisibility *shadowVisibility;
+@property (nonatomic, strong) GFLockMaterialVisibility *materialShadowVisibility;
+@property (nonatomic, strong) GFLockMaterialVisibility *swipeTintVisibility;
+@property (nonatomic, strong) GFNotificationTextState *swipeTitle;
 @property (nonatomic, strong) GFNotificationForegroundState *foreground;
 - (void)restore;
 @end
@@ -257,8 +260,16 @@ static void GFLockApplyBackdropRecipe(GFPanelGlassView *glass, NSString *group, 
     if (self.visibility) [self.visibility restore];
     else if (self.background) self.background.hidden = self.originalHidden;
     self.visibility = nil;
-    if (self.stackOverlay) self.stackOverlay.hidden = self.originalStackOverlayHidden;
-    self.stackOverlay = nil;
+    [self.stackOverlayVisibility restore];
+    self.stackOverlayVisibility = nil;
+    [self.shadowVisibility restore];
+    self.shadowVisibility = nil;
+    [self.materialShadowVisibility restore];
+    self.materialShadowVisibility = nil;
+    [self.swipeTintVisibility restore];
+    self.swipeTintVisibility = nil;
+    [self.swipeTitle restore];
+    self.swipeTitle = nil;
     [self.glass removeFromSuperview];
     self.glass = nil;
     self.background = nil;
@@ -459,6 +470,21 @@ static BOOL GFLockNotificationIsStacked(UIView *host) {
     return GFLockBool(host, @"isNotificationContentViewHidden", NO);
 }
 
+static GFLockMaterialVisibility *GFLockSuppressDecoration(
+    UIView *view, GFLockMaterialVisibility *visibility
+) {
+    if (visibility.background != view) {
+        [visibility restore];
+        visibility = nil;
+        if (view) {
+            visibility = [GFLockMaterialVisibility new];
+            [visibility attachBackground:view glass:nil];
+        }
+    }
+    [visibility suppressNativeBackground];
+    return visibility;
+}
+
 static void GFLockSyncStackOverlay(UIView *host, GFLockBackgroundState *state) {
     // Apple's separate stacking overlay is tuned for an opaque system
     // platter. Retaining it over transparent glass can add a bright rear slab.
@@ -466,12 +492,38 @@ static void GFLockSyncStackOverlay(UIView *host, GFLockBackgroundState *state) {
     UIView *overlay = GFLockView(GFLockIvar(host, "_stackDimmingOverlayView"));
     if (!GFLockIsKind(overlay, "NCNotificationListStackDimmingOverlayView") ||
         ![overlay isDescendantOfView:host]) overlay = nil;
-    if (state.stackOverlay != overlay) {
-        if (state.stackOverlay) state.stackOverlay.hidden = state.originalStackOverlayHidden;
-        state.stackOverlay = overlay;
-        state.originalStackOverlayHidden = overlay.hidden;
+    state.stackOverlayVisibility = GFLockSuppressDecoration(overlay, state.stackOverlayVisibility);
+}
+
+static void GFLockSyncNotificationShadow(UIView *host, GFLockBackgroundState *state) {
+    UIView *platter = GFLockView(GFLockIvar(host, "_platterView"));
+    if (!GFLockIsKind(platter, "PLPlatterView")) platter = state.background.superview;
+    UIView *shadow = nil;
+    UIView *materialShadow = nil;
+    if (GFLockIsKind(platter, "PLPlatterView") && [platter isDescendantOfView:host]) {
+        shadow = GFLockView(GFLockIvar(platter, "_shadowView"));
+        if ((!GFLockIsKind(shadow, "MTShadowView") &&
+             !GFLockIsKind(shadow, "MTMaterialShadowView")) ||
+            ![shadow isDescendantOfView:platter]) shadow = nil;
+        materialShadow = GFLockView(GFLockObject(platter, @"backgroundMaterialShadowView"));
+        if (materialShadow == shadow || !GFLockIsKind(materialShadow, "MTMaterialShadowView") ||
+            ![materialShadow isDescendantOfView:platter]) materialShadow = nil;
     }
-    if (overlay) overlay.hidden = YES;
+    state.shadowVisibility = GFLockSuppressDecoration(shadow, state.shadowVisibility);
+    state.materialShadowVisibility = GFLockSuppressDecoration(materialShadow, state.materialShadowVisibility);
+}
+
+static BOOL GFLockNotificationSwipeContext(UIView *button) {
+    BOOL actionContainer = NO;
+    BOOL notificationOwner = NO;
+    UIResponder *node = button;
+    for (NSUInteger depth = 0; node && depth < 64; depth++, node = node.nextResponder) {
+        if (GFLockIsKind(node, "PLPlatterActionButtonsView")) actionContainer = YES;
+        if (GFLockIsKind(node, "NCNotificationListCell") ||
+            GFLockIsKind(node, "NCNotificationListView") ||
+            GFLockIsKind(node, "CSCoverSheetViewController")) notificationOwner = YES;
+    }
+    return actionContainer && notificationOwner;
 }
 
 static void GFUpdateLockScreenSurface(UIView *host) {
@@ -483,6 +535,7 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     BOOL enabled = NO;
     BOOL circle = NO;
     BOOL notification = GFLockIsKind(host, "NCNotificationShortLookView");
+    BOOL swipeAction = GFLockIsKind(host, "PLPlatterActionButton");
     BOOL banner = NO;
     UIView *background = nil;
     UIView *content = nil;
@@ -494,6 +547,11 @@ static void GFUpdateLockScreenSurface(UIView *host) {
         if (!content) content = GFLockView(GFLockObject(host, @"notificationContentView"));
         if (!content) content = GFLockView(GFLockIvar(host, "_notificationContentView"));
         background = GFNotificationMaterial(host, content);
+    } else if (swipeAction) {
+        enabled = GFLockNotificationsEnabled && GFLockNotificationSwipeContext(host);
+        background = GFLockMaterial(host);
+        content = GFLockView(GFLockObject(host, @"titleLabel"));
+        if (![content isKindOfClass:UILabel.class]) content = nil;
     } else if (GFLockIsKind(host, "CSQuickActionsButton")) {
         circle = YES;
         UIControl *button = (UIControl *)host;
@@ -523,6 +581,15 @@ static void GFUpdateLockScreenSurface(UIView *host) {
         background = GFLockMaterial(radiusOwner);
     }
 
+    // Reparenting/reuse can briefly detach a known notification. Keep its
+    // capture surface, but suspend drawing until it belongs to a window again.
+    if (state && notification && enabled && background && !host.window &&
+        state.background == background) {
+        state.visibility.suspended = YES;
+        state.glass.hidden = YES;
+        return;
+    }
+
     // Unknown/missing background layouts are left untouched. In particular,
     // an opaque remotely rendered Live Activity is never made transparent.
     if (!enabled || !host.window || (!banner && !GFLockScreenVisible(host)) || !background ||
@@ -544,7 +611,7 @@ static void GFUpdateLockScreenSurface(UIView *host) {
         return;
     }
     BOOL homeBanner = notification && banner && GFHomeScreenVisible();
-    BOOL adaptiveNotification = notification && (!banner || homeBanner);
+    BOOL adaptiveNotification = (notification && (!banner || homeBanner)) || swipeAction;
     GFNotificationPalette palette = {0};
     GFNotificationForegroundState *foreground = state.foreground;
     if (adaptiveNotification) {
@@ -559,7 +626,7 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     }
     Class glassClass = circle ? GFQuickActionGlassView.class :
         (banner ? GFBannerGlassView.class :
-         (notification ? GFNotificationGlassView.class : GFLockScreenGlassView.class));
+         ((notification || swipeAction) ? GFNotificationGlassView.class : GFLockScreenGlassView.class));
     if (state && (state.background != background || ![state.glass isMemberOfClass:glassClass])) {
         GFRestoreLockScreenSurface(host);
         state = nil;
@@ -587,11 +654,23 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     if (adaptiveNotification) {
         state.foreground = foreground;
         [glass gfApplyNotificationPalette:palette];
-        NSUInteger textCount = [foreground applyToHost:host content:content];
-        BOOL contentHidden = GFLockBool(host, @"isNotificationContentViewHidden", NO);
-        if (!textCount && !contentHidden) {
-            GFRestoreLockScreenSurface(host);
-            return;
+        if (swipeAction) {
+            if (state.swipeTitle.view != content) {
+                [state.swipeTitle restore];
+                state.swipeTitle = [GFNotificationTextState new];
+                state.swipeTitle.view = content;
+            }
+            BOOL updating = GFNotificationUpdatingForeground;
+            GFNotificationUpdatingForeground = YES;
+            [state.swipeTitle applyColor:[UIColor colorWithWhite:palette.primaryWhite alpha:1.0]];
+            GFNotificationUpdatingForeground = updating;
+        } else {
+            NSUInteger textCount = [foreground applyToHost:host content:content];
+            BOOL contentHidden = GFLockBool(host, @"isNotificationContentViewHidden", NO);
+            if (!textCount && !contentHidden) {
+                GFRestoreLockScreenSurface(host);
+                return;
+            }
         }
     }
     // One strength change also reaches retained music/activity/button surfaces.
@@ -602,6 +681,13 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     if (notification && !banner) {
         ((GFNotificationGlassView *)glass).gfStacked = GFLockNotificationIsStacked(host);
         GFLockSyncStackOverlay(host, state);
+        GFLockSyncNotificationShadow(host, state);
+    }
+    if (swipeAction) {
+        UIView *tint = GFLockView(GFLockIvar(host, "_backgroundTintColoringView"));
+        if (tint == host || ![tint isDescendantOfView:host] ||
+            [content isDescendantOfView:tint]) tint = nil;
+        state.swipeTintVisibility = GFLockSuppressDecoration(tint, state.swipeTintVisibility);
     }
     NSUInteger index = [container.subviews indexOfObjectIdenticalTo:background];
     if (glass.superview != container ||
@@ -625,6 +711,17 @@ static void GFUpdateLockScreenSurface(UIView *host) {
     [glass setPreferredRadius:radius];
     if (state.visibility) [state.visibility suppressNativeBackground];
     else if (!background.hidden) background.hidden = YES;
+}
+
+static void GFLockRefreshPlatterDecoration(UIView *platter) {
+    UIView *host = platter.superview;
+    for (NSUInteger depth = 0; host && depth < 16; depth++, host = host.superview) {
+        if (!GFLockIsKind(host, "NCNotificationShortLookView")) continue;
+        GFLockBackgroundState *state = objc_getAssociatedObject(host, &kGFLockBackgroundKey);
+        if (state && [state.glass isMemberOfClass:GFNotificationGlassView.class])
+            GFLockSyncNotificationShadow(host, state);
+        return;
+    }
 }
 
 static void GFRefreshNotificationTextOwner(UIView *content) {

@@ -161,6 +161,9 @@ static void GFLiveRefreshViewTree(UIView *view) {
         NSStringFromClass(view.class);
 
     for (NSString *name in @[@"NCNotificationShortLookView", @"CSQuickActionsButton",
+                             // GF_NOTIFICATION_SWIPE_BEGIN
+                             @"PLPlatterActionButton",
+                             // GF_NOTIFICATION_SWIPE_END
                              @"CSAdjunctItemView", @"NCNotificationListSupplementaryHostingView"]) {
         Class cls = NSClassFromString(name);
         if (cls && [view isKindOfClass:cls]) {

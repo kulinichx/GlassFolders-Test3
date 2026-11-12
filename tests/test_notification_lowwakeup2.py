@@ -20,6 +20,12 @@ class NotificationIntegration(unittest.TestCase):
     def test_installed_version_baseline(self):
         for name, expected in BASELINE.items():
             text = (ROOT / name).read_text(encoding="utf-8")
+            if name == "GFLivePreferencesPrelude.h":
+                text, count = re.subn(
+                    r"^[ \t]*// GF_NOTIFICATION_SWIPE_BEGIN\n.*?"
+                    r"^[ \t]*// GF_NOTIFICATION_SWIPE_END\n",
+                    "", text, flags=re.S | re.M)
+                self.assertEqual(count, 1)
             self.assertEqual(hashlib.sha256(text.encode()).hexdigest(), expected, name)
         tweak = (ROOT / "Tweak.xm").read_text(encoding="utf-8")
         stripped, count = re.subn(
@@ -64,7 +70,7 @@ class NotificationIntegration(unittest.TestCase):
         foreground = (ROOT / "GFNotificationForeground.h").read_text(encoding="utf-8")
         lock = (ROOT / "GFLockScreenGlass.h").read_text(encoding="utf-8")
         tweak = (ROOT / "Tweak.xm").read_text(encoding="utf-8")
-        self.assertIn("adaptiveNotification = notification && (!banner || homeBanner)", lock)
+        self.assertIn("adaptiveNotification = (notification && (!banner || homeBanner)) || swipeAction", lock)
         self.assertIn("GFHomeScreenVisible()", lock)
         self.assertIn("[self gfBackdropGroupName]", lock)
         self.assertIn("averageColorForCurrentWallpaper", foreground)

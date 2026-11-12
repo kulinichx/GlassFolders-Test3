@@ -1,0 +1,298 @@
+// Production update/state code with native view and palette stand-ins.
+// This checks lifecycle and control ownership, not private backdrop rendering.
+#import <objc/message.h>
+#import "GFNotificationPalette.h"
+
+static BOOL GFBannerNotificationsEnabled = NO;
+static BOOL GFLockNotificationsEnabled = YES;
+static BOOL GFLockQuickActionsEnabled = NO;
+static BOOL GFLockMusicEnabled = NO;
+static BOOL GFLockActivitiesEnabled = NO;
+static BOOL GFNotificationUpdatingForeground = NO;
+static BOOL GFTestLightWallpaper = NO;
+static NSUInteger GFTestGlassCreations = 0;
+
+@interface MTMaterialView : TestMaterialView
+@end
+@implementation MTMaterialView
+@end
+
+@interface NCNotificationListStackDimmingOverlayView : TestMaterialView
+@end
+@implementation NCNotificationListStackDimmingOverlayView
+@end
+@interface MTShadowView : TestMaterialView
+@end
+@implementation MTShadowView
+@end
+@interface MTMaterialShadowView : TestMaterialView
+@end
+@implementation MTMaterialShadowView
+@end
+
+@interface PLPlatterView : UIView {
+@public
+    UIView *_shadowView;
+}
+@property (nonatomic, strong) UIView *backgroundMaterialShadowView;
+@end
+@implementation PLPlatterView
+@end
+
+@interface NCNotificationShortLookView : UIView {
+@public
+    PLPlatterView *_platterView;
+    UIView *_stackDimmingOverlayView;
+}
+@property (nonatomic, strong) MTMaterialView *backgroundMaterialView;
+@property (nonatomic, strong) UIView *notificationContentView;
+@property (nonatomic, assign) BOOL isNotificationContentViewHidden;
+@end
+@implementation NCNotificationShortLookView
+@end
+
+@interface NCNotificationListCell : UIView
+@end
+@implementation NCNotificationListCell
+@end
+@interface PLPlatterActionButtonsView : UIView
+@end
+@implementation PLPlatterActionButtonsView
+@end
+@interface PLPlatterActionButton : UIControl {
+@public
+    UIView *_backgroundTintColoringView;
+}
+@property (nonatomic, strong) MTMaterialView *backgroundView;
+@property (nonatomic, strong) UILabel *titleLabel;
+@end
+@implementation PLPlatterActionButton
+@end
+
+@interface GFLockScreenGlassView : UIView
+@property (nonatomic, assign) BOOL gfCircular;
+@property (nonatomic, assign) GFNotificationPalette testPalette;
+- (instancetype)initWithStyle:(NSInteger)style strength:(CGFloat)strength;
+- (void)gfRefreshBackdropBlurIfNeeded;
+- (void)gfApplyNotificationPalette:(GFNotificationPalette)palette;
+- (void)gfClearNotificationPalette;
+- (void)setPreferredRadius:(CGFloat)radius;
+@end
+@implementation GFLockScreenGlassView
+- (instancetype)initWithStyle:(NSInteger)style strength:(CGFloat)strength {
+    self = [super initWithFrame:CGRectZero];
+    if (self) { GFTestGlassCreations++; self.userInteractionEnabled = NO; }
+    return self;
+}
+- (void)gfRefreshBackdropBlurIfNeeded {}
+- (void)gfApplyNotificationPalette:(GFNotificationPalette)palette { self.testPalette = palette; }
+- (void)gfClearNotificationPalette {}
+- (void)setPreferredRadius:(CGFloat)radius { self.layer.cornerRadius = radius; }
+@end
+@interface GFNotificationGlassView : GFLockScreenGlassView
+@property (nonatomic, assign) BOOL gfStacked;
+@end
+@implementation GFNotificationGlassView
+@end
+@interface GFBannerGlassView : GFLockScreenGlassView
+@end
+@implementation GFBannerGlassView
+@end
+@interface GFQuickActionGlassView : GFLockScreenGlassView
+@end
+@implementation GFQuickActionGlassView
+@end
+
+/* PRODUCTION_HELPERS */
+/* PRODUCTION_TEXT_STATE */
+
+@interface BSUIDefaultDateLabel : UILabel
+@end
+@implementation BSUIDefaultDateLabel
+- (void)setTextColor:(UIColor *)color {
+    GFNotificationTextState *state = objc_getAssociatedObject(self, &kGFNotificationManagedTextKey);
+    UIColor *resolved = GFNotificationManagedDateColor(self, color);
+    BOOL applying = state.applyingColor;
+    state.applyingColor = YES;
+    [super setTextColor:resolved];
+    state.applyingColor = applying;
+}
+- (void)setAttributedText:(NSAttributedString *)text {
+    GFNotificationTextState *state = objc_getAssociatedObject(self, &kGFNotificationManagedTextKey);
+    NSAttributedString *resolved = GFNotificationManagedDateText(self, text);
+    BOOL applying = state.applyingColor;
+    state.applyingColor = YES;
+    [super setAttributedText:resolved];
+    state.applyingColor = applying;
+}
+@end
+
+@interface GFNotificationForegroundState : NSObject
+- (GFNotificationPalette)paletteForHost:(UIView *)host;
+- (GFNotificationPalette)paletteForHomeBannerHost:(UIView *)host;
+- (NSUInteger)applyToHost:(UIView *)host content:(UIView *)content;
+- (void)restore;
+@end
+@implementation GFNotificationForegroundState
+- (GFNotificationPalette)paletteForHost:(UIView *)host {
+    return GFNotificationPaletteForAppearance(GFTestLightWallpaper);
+}
+- (GFNotificationPalette)paletteForHomeBannerHost:(UIView *)host {
+    return [self paletteForHost:host];
+}
+- (NSUInteger)applyToHost:(UIView *)host content:(UIView *)content { return 1; }
+- (void)restore {}
+@end
+
+static BOOL GFHomeScreenVisible(void) { return NO; }
+static BOOL GFLockScreenVisible(UIView *host) { return YES; }
+static BOOL GFLockScreenDismissing(UIView *host) { return NO; }
+static BOOL GFNotificationBannerPresentation(UIView *host, BOOL *banner) {
+    *banner = NO;
+    return YES;
+}
+static UIView *GFNotificationMaterial(UIView *host, UIView *content) {
+    return GFLockMaterial(host);
+}
+
+/* PRODUCTION_STATE */
+/* PRODUCTION_SURFACES */
+
+@interface GFSwipeTarget : NSObject
+@property (nonatomic, assign) NSUInteger selections;
+- (void)selected:(id)sender;
+@end
+@implementation GFSwipeTarget
+- (void)selected:(id)sender { self.selections++; }
+@end
+
+static void GFCheckNotificationSurfaces(UIWindow *window) {
+    BSUIDefaultDateLabel *date = [BSUIDefaultDateLabel new];
+    date.textColor = UIColor.whiteColor;
+    GFNotificationTextState *dateState = [GFNotificationTextState new];
+    dateState.view = date;
+    UIColor *dateColor = [UIColor colorWithWhite:0.07 alpha:1];
+    [dateState applyColor:dateColor];
+    for (NSUInteger i = 0; i < 100; i++) {
+        date.textColor = UIColor.whiteColor;
+        date.attributedText = [[NSAttributedString alloc] initWithString:@"2m ago"
+            attributes:@{NSForegroundColorAttributeName:UIColor.whiteColor,
+                         NSFontAttributeName:[UIFont systemFontOfSize:12]}];
+        NSCAssert([date.textColor isEqual:dateColor], @"Date update returned to white text");
+        NSCAssert([[date.attributedText attribute:NSForegroundColorAttributeName
+                    atIndex:0 effectiveRange:NULL] isEqual:dateColor], @"Date attributed text returned to white");
+        NSCAssert([date.attributedText attribute:NSFontAttributeName atIndex:0 effectiveRange:NULL],
+                  @"Date font was removed");
+    }
+    [dateState restore];
+    NSCAssert([date.textColor isEqual:UIColor.whiteColor], @"Date native color was not restored");
+    NSCAssert([[date.attributedText attribute:NSForegroundColorAttributeName
+                atIndex:0 effectiveRange:NULL] isEqual:UIColor.whiteColor], @"Date native attributes not restored");
+    date.textColor = UIColor.redColor;
+    NSCAssert([date.textColor isEqual:UIColor.redColor], @"Detached date remained managed");
+
+    UIView *scene = [[UIView alloc] initWithFrame:window.bounds];
+    [window addSubview:scene];
+    NCNotificationShortLookView *host = [[NCNotificationShortLookView alloc]
+        initWithFrame:CGRectMake(0, 0, 300, 80)];
+    [scene addSubview:host];
+    host->_platterView = [[PLPlatterView alloc] initWithFrame:host.bounds];
+    [host addSubview:host->_platterView];
+    host.backgroundMaterialView = [[MTMaterialView alloc] initWithFrame:host.bounds];
+    [host->_platterView addSubview:host.backgroundMaterialView];
+    host.notificationContentView = [[UIView alloc] initWithFrame:host.bounds];
+    [host addSubview:host.notificationContentView];
+    host->_stackDimmingOverlayView = [NCNotificationListStackDimmingOverlayView new];
+    [host addSubview:host->_stackDimmingOverlayView];
+    host->_platterView->_shadowView = [MTShadowView new];
+    [host->_platterView addSubview:host->_platterView->_shadowView];
+    GFUpdateLockScreenSurface(host);
+    GFLockBackgroundState *state = objc_getAssociatedObject(host, &kGFLockBackgroundKey);
+    NSCAssert(state && state.glass.superview == host->_platterView, @"No managed notification");
+    UIView *glass = state.glass;
+    NSUInteger creations = GFTestGlassCreations;
+    for (NSUInteger i = 0; i < 100; i++) {
+        host->_stackDimmingOverlayView.hidden = NO;
+        host->_platterView->_shadowView.hidden = NO;
+        NSCAssert(host->_stackDimmingOverlayView.hidden, @"Stack dimming reappeared without layout");
+        NSCAssert(host->_platterView->_shadowView.hidden, @"Native shadow reappeared without layout");
+        [host removeFromSuperview];
+        GFUpdateLockScreenSurface(host);
+        NSCAssert(objc_getAssociatedObject(host, &kGFLockBackgroundKey) == state,
+                  @"Temporary detach destroyed notification state");
+        NSCAssert(state.glass == glass && glass.hidden && host.backgroundMaterialView.hidden,
+                  @"Temporary detach returned to native material");
+        [scene addSubview:host];
+        GFUpdateLockScreenSurface(host);
+        NSCAssert(state.glass == glass && !glass.hidden, @"Reattach did not resume retained glass");
+        NSCAssert(GFTestGlassCreations == creations, @"Reparenting recreated capture view");
+    }
+    MTMaterialShadowView *newShadow = [MTMaterialShadowView new];
+    host->_platterView.backgroundMaterialShadowView = newShadow;
+    [host->_platterView addSubview:newShadow];
+    GFLockRefreshPlatterDecoration(host->_platterView);
+    NSCAssert(host->_platterView->_shadowView.hidden && newShadow.hidden,
+              @"Lazy material shadow did not preserve suppression of both native shadows");
+    newShadow.hidden = NO;
+    NSCAssert(newShadow.hidden, @"Material shadow escaped suppression");
+    UIView *oldShadow = host->_platterView->_shadowView;
+    host->_platterView->_shadowView = [MTShadowView new];
+    [host->_platterView addSubview:host->_platterView->_shadowView];
+    [oldShadow removeFromSuperview];
+    GFLockRefreshPlatterDecoration(host->_platterView);
+    NSCAssert(!oldShadow.hidden && host->_platterView->_shadowView.hidden && newShadow.hidden,
+              @"Shadow replacement did not restore the detached shadow");
+
+    NCNotificationListCell *cell = [[NCNotificationListCell alloc] initWithFrame:window.bounds];
+    PLPlatterActionButtonsView *actions = [[PLPlatterActionButtonsView alloc] initWithFrame:window.bounds];
+    [scene addSubview:cell];
+    [cell addSubview:actions];
+    PLPlatterActionButton *button = [[PLPlatterActionButton alloc] initWithFrame:CGRectMake(0, 0, 90, 80)];
+    [actions addSubview:button];
+    button.backgroundView = [[MTMaterialView alloc] initWithFrame:button.bounds];
+    [button addSubview:button.backgroundView];
+    button->_backgroundTintColoringView = [[UIView alloc] initWithFrame:button.bounds];
+    [button addSubview:button->_backgroundTintColoringView];
+    button.titleLabel = [[UILabel alloc] initWithFrame:button.bounds];
+    button.titleLabel.text = @"Options";
+    button.titleLabel.textColor = UIColor.whiteColor;
+    [button addSubview:button.titleLabel];
+    GFSwipeTarget *target = [GFSwipeTarget new];
+    [button addTarget:target action:@selector(selected:) forControlEvents:UIControlEventTouchUpInside];
+    for (NSUInteger mode = 0; mode < 2; mode++) {
+        GFTestLightWallpaper = mode == 1;
+        GFUpdateLockScreenSurface(button);
+        GFLockBackgroundState *buttonState = objc_getAssociatedObject(button, &kGFLockBackgroundKey);
+        NSCAssert(buttonState && button.backgroundView.hidden && button->_backgroundTintColoringView.hidden,
+                  @"Swipe action retained opaque native background");
+        NSCAssert(buttonState.glass.testPalette.lightSurface == GFTestLightWallpaper,
+                  @"Swipe action ignored wallpaper palette");
+        CGFloat expected = GFTestLightWallpaper ? 0.07 : 0.98;
+        CGFloat actual = 0, alpha = 0;
+        [button.titleLabel.textColor getWhite:&actual alpha:&alpha];
+        NSCAssert(fabs(actual - expected) < 0.001 && alpha == 1, @"Swipe text contrast not adapted");
+        NSCAssert([button.titleLabel.text isEqualToString:@"Options"], @"Swipe title changed");
+        NSCAssert([button hitTest:CGPointMake(40, 40) withEvent:nil] == button,
+                  @"Glass intercepted native action hit testing");
+        [button sendActionsForControlEvents:UIControlEventTouchUpInside];
+    }
+    NSCAssert(target.selections == 2, @"Native action stopped receiving events");
+    [actions removeFromSuperview];
+    [scene addSubview:actions];
+    GFUpdateLockScreenSurface(button);
+    NSCAssert(!objc_getAssociatedObject(button, &kGFLockBackgroundKey) &&
+              !button.backgroundView.hidden && !button->_backgroundTintColoringView.hidden,
+              @"Swipe effect escaped notification context");
+    NSCAssert([button.titleLabel.textColor isEqual:UIColor.whiteColor], @"Native title color not restored");
+
+    GFLockNotificationsEnabled = NO;
+    [host removeFromSuperview];
+    GFUpdateLockScreenSurface(host);
+    NSCAssert(!objc_getAssociatedObject(host, &kGFLockBackgroundKey), @"Disable retained managed state");
+    NSCAssert(!host.backgroundMaterialView.hidden && !host->_stackDimmingOverlayView.hidden &&
+              !host->_platterView->_shadowView.hidden && !newShadow.hidden && !glass.superview,
+              @"Disable failed to restore native decoration");
+    GFLockNotificationsEnabled = YES;
+    GFTestLightWallpaper = NO;
+    [scene removeFromSuperview];
+}

@@ -38,6 +38,8 @@ static BOOL GFNotificationIsVibrancy(id filter) {
         ([name isEqualToString:@"vibrantLight"] || [name isEqualToString:@"vibrantDark"]);
 }
 
+static char kGFNotificationManagedTextKey;
+
 @interface GFNotificationTextState : NSObject
 @property (nonatomic, weak) UIView *view;
 @property (nonatomic, strong) UIColor *nativeColor;
@@ -49,6 +51,7 @@ static BOOL GFNotificationIsVibrancy(id filter) {
 @property (nonatomic, copy) NSArray *appliedFilters;
 @property (nonatomic, assign) BOOL changedCompositing;
 @property (nonatomic, assign) BOOL changedFilters;
+@property (nonatomic, assign) BOOL applyingColor;
 - (void)applyColor:(UIColor *)color;
 - (void)restore;
 @end
@@ -57,6 +60,9 @@ static BOOL GFNotificationIsVibrancy(id filter) {
 - (void)applyColor:(UIColor *)color {
     id text = self.view;
     if (![text isKindOfClass:UILabel.class] && ![text isKindOfClass:UITextView.class]) return;
+    objc_setAssociatedObject(text, &kGFNotificationManagedTextKey, self,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    self.applyingColor = YES;
     UIColor *current = [text textColor];
     if (!self.appliedColor || ![current isEqual:self.appliedColor]) self.nativeColor = current;
     NSAttributedString *attributed = [text attributedText];
@@ -96,10 +102,14 @@ static BOOL GFNotificationIsVibrancy(id filter) {
             layer.filters = remaining;
         }
     }
+    self.applyingColor = NO;
 }
 - (void)restore {
     id text = self.view;
     if (!text) return;
+    if (objc_getAssociatedObject(text, &kGFNotificationManagedTextKey) == self)
+        objc_setAssociatedObject(text, &kGFNotificationManagedTextKey, nil,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     BOOL restoreColor = [[text textColor] isEqual:self.appliedColor];
     BOOL restoreAttributed = self.appliedAttributedText &&
         [[text attributedText] isEqualToAttributedString:self.appliedAttributedText];
@@ -117,6 +127,27 @@ static BOOL GFNotificationIsVibrancy(id filter) {
     self.changedFilters = NO;
 }
 @end
+
+// Native date updates can recolor a label without laying out its notification.
+// The hooks call these only for BSUIDefaultDateLabel, never global UILabel.
+static UIColor *GFNotificationManagedDateColor(UIView *view, UIColor *color) {
+    GFNotificationTextState *state = objc_getAssociatedObject(view, &kGFNotificationManagedTextKey);
+    if (!state || state.applyingColor || !state.appliedColor) return color;
+    state.nativeColor = color;
+    return state.appliedColor;
+}
+
+static NSAttributedString *GFNotificationManagedDateText(UIView *view, NSAttributedString *text) {
+    GFNotificationTextState *state = objc_getAssociatedObject(view, &kGFNotificationManagedTextKey);
+    if (!state || state.applyingColor || !state.appliedColor) return text;
+    state.nativeAttributedText = text;
+    NSMutableAttributedString *replacement = [text mutableCopy];
+    if (replacement.length)
+        [replacement addAttribute:NSForegroundColorAttributeName value:state.appliedColor
+                            range:NSMakeRange(0, replacement.length)];
+    state.appliedAttributedText = replacement;
+    return replacement;
+}
 
 @interface GFNotificationForegroundState : NSObject
 @property (nonatomic, weak) UIView *host;
@@ -227,15 +258,14 @@ static BOOL GFNotificationIsVibrancy(id filter) {
         id text = GFLockIvar(content, name.UTF8String);
         [self addText:text secondary:NO root:host seen:seen];
     }
-    for (NSString *name in @[@"_dateLabel", @"_footerTextLabel"]) {
-        [self addText:GFLockIvar(content, name.UTF8String) secondary:YES root:host seen:seen];
-    }
+    [self addText:GFLockIvar(content, "_dateLabel") secondary:NO root:host seen:seen];
+    [self addText:GFLockIvar(content, "_footerTextLabel") secondary:YES root:host seen:seen];
     id header = GFLockObject(host, @"_headerContentView");
     if (!header) header = GFLockIvar(host, "_headerContentView");
     if ([header isKindOfClass:UIView.class] &&
         [(UIView *)header isDescendantOfView:host]) {
         [self addText:GFLockIvar(header, "_titleLabel") secondary:NO root:host seen:seen];
-        [self addText:GFLockIvar(header, "_dateLabel") secondary:YES root:host seen:seen];
+        [self addText:GFLockIvar(header, "_dateLabel") secondary:NO root:host seen:seen];
     }
     for (NSValue *key in [self.texts.allKeys copy]) {
         if (![seen containsObject:key]) {

@@ -31,6 +31,8 @@ jobs:
         run: python3 tests/test_notification_blur.py -v
       - name: Check notification motion and slider layout
         run: python3 tests/test_notification_motion.py -v
+      - name: Check notification retention and swipe integration
+        run: python3 tests/test_notification_surfaces.py -v
       - name: Check shared Home and Dock strength wiring
         run: python3 tests/test_dock_blur.py -v
       - name: Exercise wallpaper palette

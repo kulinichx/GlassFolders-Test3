@@ -20,6 +20,8 @@
 }
 @end
 
+#import "NotificationSurfaceHarness.h"
+
 @implementation PSSpecifier
 - (id)propertyForKey:(NSString *)key { return self.properties[key]; }
 @end
@@ -74,6 +76,7 @@ static NSString *Documents(void) {
 @implementation SliderApp
 - (void)checkMaterialVisibility {
     @try {
+        GFCheckNotificationSurfaces(self.window);
         TestMaterialView *background = [TestMaterialView new];
         background.frame = CGRectMake(12, 12, 40, 40);
         UIView *glass = [[UIView alloc] initWithFrame:background.frame];
@@ -190,7 +193,7 @@ static NSString *Documents(void) {
                 [self.window layoutIfNeeded];
                 [self capture:@"slider-light.png"];
                 [self writeResult:@{@"status":@"pass", @"widths":@6, @"values":@6,
-                    @"checks":@"Material alpha/hidden updates without layout, in-flight UIKit opacity synchronization, suspend/restore/detach; slider track/thumb bounds, reuse, writes and detents"}];
+                    @"checks":@"Production notification reparent retention, no-layout stack/shadow suppression and restoration; swipe action scope, title contrast, hit testing and events; managed date color and attributed updates without layout and native restoration; material alpha/hidden updates, in-flight opacity synchronization, suspend/restore/detach; slider bounds, reuse, writes and detents"}];
             } @catch (NSException *exception) {
                 [self writeResult:@{@"status":@"fail", @"reason":exception.reason ?: @"unknown"}];
             }

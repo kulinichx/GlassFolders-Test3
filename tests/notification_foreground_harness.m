@@ -170,6 +170,27 @@ typedef UIView UIResponder;
 
 #import "../GFNotificationForeground.h"
 
+@interface BSUIDefaultDateLabel : UILabel
+@end
+@implementation BSUIDefaultDateLabel
+- (void)setTextColor:(UIColor *)color {
+    GFNotificationTextState *state = objc_getAssociatedObject(self, &kGFNotificationManagedTextKey);
+    UIColor *resolved = GFNotificationManagedDateColor(self, color);
+    BOOL applying = state.applyingColor;
+    state.applyingColor = YES;
+    [super setTextColor:resolved];
+    state.applyingColor = applying;
+}
+- (void)setAttributedText:(NSAttributedString *)text {
+    GFNotificationTextState *state = objc_getAssociatedObject(self, &kGFNotificationManagedTextKey);
+    NSAttributedString *resolved = GFNotificationManagedDateText(self, text);
+    BOOL applying = state.applyingColor;
+    state.applyingColor = YES;
+    [super setAttributedText:resolved];
+    state.applyingColor = applying;
+}
+@end
+
 static id GFLockObject(id object, NSString *name) {
     SEL selector = NSSelectorFromString(name);
     Method method = object ? class_getInstanceMethod(object_getClass(object), selector) : NULL;
@@ -249,7 +270,7 @@ int main(void) {
         content->_primaryTextLabel = [UILabel new];
         content->_primaryTextLabel.superview = content;
         content->_primaryTextLabel.textColor = white;
-        content->_dateLabel = [UILabel new];
+        content->_dateLabel = [BSUIDefaultDateLabel new];
         content->_dateLabel.superview = content;
         content->_dateLabel.textColor = native;
         UILabel *unmanaged = [UILabel new]; unmanaged.superview = content;
@@ -258,7 +279,18 @@ int main(void) {
         CHECK([foreground paletteForHost:host].lightSurface);
         CHECK([foreground applyToHost:host content:content] == 2);
         CHECK(content->_primaryTextLabel.textColor.white < .1);
-        CHECK(content->_dateLabel.textColor.white > content->_primaryTextLabel.textColor.white);
+        CHECK(content->_dateLabel.textColor.white == content->_primaryTextLabel.textColor.white);
+        for (NSUInteger i = 0; i < 100; i++) {
+            content->_dateLabel.textColor = white;
+            content->_dateLabel.attributedText = [[NSAttributedString alloc]
+                initWithString:[NSString stringWithFormat:@"%lum ago", (unsigned long)i]
+                attributes:@{NSForegroundColorAttributeName:white, @"Font":@"native-date-font"}];
+            CHECK(content->_dateLabel.textColor.white == content->_primaryTextLabel.textColor.white);
+            CHECK([[content->_dateLabel.attributedText attribute:NSForegroundColorAttributeName
+                atIndex:0 effectiveRange:NULL] white] == content->_primaryTextLabel.textColor.white);
+            CHECK([[content->_dateLabel.attributedText attribute:@"Font"
+                atIndex:0 effectiveRange:NULL] isEqual:@"native-date-font"]);
+        }
         CHECK([unmanaged.textColor isEqual:white]);
         for (NSUInteger i = 0; i < 100; i++) [foreground paletteForHost:host];
         CHECK(provider.reads == 1);
@@ -270,7 +302,8 @@ int main(void) {
         CHECK(content->_primaryTextLabel.textColor.white > .95);
         [foreground restore];
         CHECK([content->_primaryTextLabel.textColor isEqual:white]);
-        CHECK([content->_dateLabel.textColor isEqual:native]);
+        CHECK([content->_dateLabel.textColor isEqual:white]);
+        content->_dateLabel.textColor = native;
         // Header dates and seamless dates can be restyled without host layout.
         provider.color = white;
         GFNotificationInvalidateWallpaper();
