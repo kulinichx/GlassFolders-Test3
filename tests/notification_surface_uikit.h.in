@@ -166,7 +166,60 @@ static UIView *GFNotificationMaterial(UIView *host, UIView *content) {
 - (void)selected:(id)sender { self.selections++; }
 @end
 
+static void GFCheckDateFilterContrast(UIWindow *window) {
+    Class filterClass = NSClassFromString(@"CAFilter");
+    SEL factory = NSSelectorFromString(@"filterWithType:");
+    NSCAssert([filterClass respondsToSelector:factory], @"No native CAFilter factory");
+    id outputFilter = ((id (*)(id, SEL, id))objc_msgSend)(filterClass, factory, @"colorMonochrome");
+    id replacementFilter = ((id (*)(id, SEL, id))objc_msgSend)(filterClass, factory, @"colorSaturate");
+    NSCAssert(outputFilter && replacementFilter, @"Missing native output filters");
+    for (NSUInteger wallpaper = 0; wallpaper < 2; wallpaper++) {
+        for (NSUInteger darkMode = 0; darkMode < 2; darkMode++) {
+            UIView *scene = [[UIView alloc] initWithFrame:window.bounds];
+            scene.overrideUserInterfaceStyle = darkMode ? UIUserInterfaceStyleDark : UIUserInterfaceStyleLight;
+            scene.backgroundColor = wallpaper ? UIColor.whiteColor : UIColor.blackColor;
+            [window addSubview:scene];
+            BSUIDefaultDateLabel *date = [BSUIDefaultDateLabel new];
+            UILabel *body = [UILabel new];
+            BSUIDefaultDateLabel *unmanaged = [BSUIDefaultDateLabel new];
+            [scene addSubview:date];
+            [scene addSubview:body];
+            [scene addSubview:unmanaged];
+            UIColor *nativeColor = [UIColor.secondaryLabelColor resolvedColorWithTraitCollection:date.traitCollection];
+            unmanaged.textColor = nativeColor;
+            unmanaged.layer.filters = @[outputFilter];
+            body.layer.filters = @[outputFilter];
+            GFNotificationTextState *dateState = [GFNotificationTextState new];
+            dateState.view = date;
+            dateState.isDateLabel = YES;
+            GFNotificationTextState *bodyState = [GFNotificationTextState new];
+            bodyState.view = body;
+            GFNotificationPalette palette = GFNotificationPaletteForAppearance(wallpaper == 1);
+            UIColor *expected = [UIColor colorWithWhite:palette.primaryWhite alpha:1];
+            [bodyState applyColor:expected];
+            NSArray *latestFilters = nil;
+            for (NSUInteger update = 0; update < 100; update++) {
+                latestFilters = @[(update % 2) ? replacementFilter : outputFilter];
+                date.textColor = nativeColor;
+                date.layer.filters = latestFilters;
+                [dateState applyColor:expected];
+                NSCAssert(!date.layer.filters.count, @"Date output filters still override foreground");
+                NSCAssert([date.textColor isEqual:body.textColor], @"Wallpaper/mode date contrast mismatch");
+                NSCAssert([body.layer.filters isEqual:@[outputFilter]], @"Ordinary text lost a non-vibrancy filter");
+                NSCAssert([unmanaged.layer.filters isEqual:@[outputFilter]] &&
+                          [unmanaged.textColor isEqual:nativeColor], @"Unmanaged date was changed");
+            }
+            [dateState restore];
+            [bodyState restore];
+            NSCAssert([date.layer.filters isEqual:latestFilters], @"Latest native date filters not restored");
+            NSCAssert([date.textColor isEqual:nativeColor], @"Native date mode color not restored");
+            [scene removeFromSuperview];
+        }
+    }
+}
+
 static void GFCheckNotificationSurfaces(UIWindow *window) {
+    GFCheckDateFilterContrast(window);
     BSUIDefaultDateLabel *date = [BSUIDefaultDateLabel new];
     date.textColor = UIColor.whiteColor;
     GFNotificationTextState *dateState = [GFNotificationTextState new];

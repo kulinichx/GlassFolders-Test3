@@ -216,8 +216,76 @@ static UIResponder *GFLockCoverSheetOwner(UIView *host) {
     fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #x); return 1; \
 } } while (0)
 
+static int GFCheckDateOutputFilters(void) {
+    UIColor *white = [UIColor colorWithWhite:1 alpha:1];
+    UIColor *black = [UIColor colorWithWhite:0 alpha:1];
+    for (NSUInteger wallpaper = 0; wallpaper < 2; wallpaper++) {
+        for (NSUInteger darkMode = 0; darkMode < 2; darkMode++) {
+            UIColor *nativeColor = darkMode ? white : black;
+            TestCover *cover = [TestCover new];
+            cover.wallpaperColorProvider = [TestProvider new];
+            cover.wallpaperColorProvider.color = wallpaper ? white : black;
+            TestHost *host = [TestHost new]; host.superview = cover;
+            TestContent *content = [TestContent new]; content.superview = host;
+            content->_primaryTextLabel = [UILabel new];
+            content->_primaryTextLabel.superview = content;
+            content->_primaryTextLabel.textColor = nativeColor;
+            content->_primaryTextLabel.layer.filters = @[@"keep-body-filter"];
+            content->_dateLabel = [BSUIDefaultDateLabel new];
+            content->_dateLabel.superview = content;
+            host->_headerContentView = [TestHeader new];
+            host->_headerContentView.superview = host;
+            host->_headerContentView->_titleLabel = [UILabel new];
+            host->_headerContentView->_titleLabel.superview = host->_headerContentView;
+            host->_headerContentView->_titleLabel.textColor = nativeColor;
+            host->_headerContentView->_dateLabel = [UILabel new];
+            host->_headerContentView->_dateLabel.superview = host->_headerContentView;
+            UILabel *unmanaged = [BSUIDefaultDateLabel new]; unmanaged.superview = content;
+            unmanaged.textColor = nativeColor;
+            unmanaged.layer.filters = @[@"keep-unmanaged-filter"];
+            GFNotificationForegroundState *foreground = [GFNotificationForegroundState new];
+            [foreground paletteForHost:host];
+            NSArray *latestFilters = nil;
+            NSString *latestCompositing = nil;
+            for (NSUInteger update = 0; update < 100; update++) {
+                latestFilters = @[[NSString stringWithFormat:@"native-date-filter-%lu",
+                                    (unsigned long)(update % 2)]];
+                latestCompositing = [NSString stringWithFormat:@"native-date-compositing-%lu",
+                                      (unsigned long)(update % 2)];
+                for (UILabel *date in @[content->_dateLabel, host->_headerContentView->_dateLabel]) {
+                    date.textColor = nativeColor;
+                    date.layer.filters = latestFilters;
+                    date.layer.compositingFilter = latestCompositing;
+                }
+                CHECK([foreground applyToHost:host content:content] == 4);
+                for (UILabel *date in @[content->_dateLabel, host->_headerContentView->_dateLabel]) {
+                    CHECK([date.textColor isEqual:content->_primaryTextLabel.textColor]);
+                    CHECK(!date.layer.filters.count && !date.layer.compositingFilter);
+                    GFNotificationTextState *state = objc_getAssociatedObject(date,
+                                                        &kGFNotificationManagedTextKey);
+                    CHECK(state.isDateLabel);
+                }
+                CHECK([content->_primaryTextLabel.layer.filters isEqual:@[@"keep-body-filter"]]);
+                CHECK([unmanaged.textColor isEqual:nativeColor]);
+                CHECK([unmanaged.layer.filters isEqual:@[@"keep-unmanaged-filter"]]);
+            }
+            [foreground restore];
+            for (UILabel *date in @[content->_dateLabel, host->_headerContentView->_dateLabel]) {
+                CHECK([date.textColor isEqual:nativeColor]);
+                CHECK([date.layer.filters isEqual:latestFilters]);
+                CHECK([date.layer.compositingFilter isEqual:latestCompositing]);
+                CHECK(!objc_getAssociatedObject(date, &kGFNotificationManagedTextKey));
+            }
+        }
+    }
+    puts("Production date slots: four wallpaper/mode combinations, output filters, "
+         "100 restyles, sibling isolation and native restoration PASS");
+    return 0;
+}
+
 int main(void) {
     @autoreleasepool {
+        CHECK(GFCheckDateOutputFilters() == 0);
         UIColor *white = [UIColor colorWithWhite:1 alpha:1];
         UIColor *black = [UIColor colorWithWhite:0 alpha:1];
         UIColor *native = [UIColor colorWithWhite:.8 alpha:.9];

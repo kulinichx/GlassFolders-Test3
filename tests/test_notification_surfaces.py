@@ -48,13 +48,22 @@ class NotificationSurfaceTests(unittest.TestCase):
     def test_date_color_is_scoped_and_matches_primary_text(self):
         foreground = (ROOT / "GFNotificationForeground.h").read_text(encoding="utf-8")
         tweak = (ROOT / "Tweak.xm").read_text(encoding="utf-8")
-        self.assertIn('GFLockIvar(content, "_dateLabel") secondary:NO', foreground)
-        self.assertIn('GFLockIvar(header, "_dateLabel") secondary:NO', foreground)
+        self.assertIn('GFLockIvar(content, "_dateLabel") secondary:NO date:YES', foreground)
+        self.assertIn('GFLockIvar(header, "_dateLabel") secondary:NO date:YES', foreground)
         hook = tweak.split("%hook BSUIDefaultDateLabel\n", 1)[1].split("%end", 1)[0]
         self.assertIn("GFNotificationManagedDateColor", hook)
         self.assertIn("GFNotificationManagedDateText", hook)
         self.assertNotIn("%hook UILabel\n", tweak)
         self.assertIn("if (!state || state.applyingColor || !state.appliedColor) return color", foreground)
+
+    def test_date_output_filter_isolation_is_slot_scoped(self):
+        foreground = (ROOT / "GFNotificationForeground.h").read_text(encoding="utf-8")
+        self.assertIn("state.isDateLabel = date", foreground)
+        self.assertIn("self.isDateLabel || GFNotificationIsVibrancy(filter)", foreground)
+        for slot, secondary in (("_footerTextLabel", "YES"), ("_titleLabel", "NO")):
+            self.assertIn(f'"{slot}") secondary:{secondary} date:NO', foreground)
+        harness = surface_harness()
+        self.assertIn("GFCheckDateFilterContrast(window)", harness)
 
 
 if __name__ == "__main__":

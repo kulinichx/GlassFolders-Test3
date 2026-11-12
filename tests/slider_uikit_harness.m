@@ -193,7 +193,7 @@ static NSString *Documents(void) {
                 [self.window layoutIfNeeded];
                 [self capture:@"slider-light.png"];
                 [self writeResult:@{@"status":@"pass", @"widths":@6, @"values":@6,
-                    @"checks":@"Production notification reparent retention, no-layout stack/shadow suppression and restoration; swipe action scope, title contrast, hit testing and events; managed date color and attributed updates without layout and native restoration; material alpha/hidden updates, in-flight opacity synchronization, suspend/restore/detach; slider bounds, reuse, writes and detents"}];
+                    @"checks":@"Production notification reparent retention, no-layout stack/shadow suppression and restoration; swipe action scope, title contrast, hit testing and events; date-only output-filter isolation across four wallpaper/mode combinations, repeated native restyles and restoration; managed date color and attributed updates without layout and native restoration; material alpha/hidden updates, in-flight opacity synchronization, suspend/restore/detach; slider bounds, reuse, writes and detents"}];
             } @catch (NSException *exception) {
                 [self writeResult:@{@"status":@"fail", @"reason":exception.reason ?: @"unknown"}];
             }

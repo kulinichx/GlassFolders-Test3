@@ -70,3 +70,32 @@ Device acceptance still requires the reported scroll, checking for the flash
 and late bottom shade, plus left-swiping a notification and trying both actions.
 Also check right-hand dates after waiting for a system date update on both white
 and dark wallpapers; lock-screen clock/status-bar styling is outside this change.
+
+## Follow-Up: Date Output Filters
+
+The user reports the previous date candidate did not resolve the device issue.
+Across white/nonwhite wallpapers and light/dark modes, the date still appears
+to follow interface mode while other notification text follows wallpaper.
+The four-case observation is evidence of a mismatch, not proof of its cause.
+
+The existing text state only removed filters named vibrantLight/vibrantDark.
+It therefore left other date-layer output filters in place even after assigning
+the same foreground as the body. NoisyFlake/Velvet2 at commit
+3f2ccfe103e719474031ab254faa12a9c3f6e7ec provides a concrete reference:
+src/Velvet2Colorizer.m, colorDate:, clears the date label's own filters before
+setting its color. Its src/Tweak.x accesses the seamless content dateLabel.
+This supports a date-local filter fix, not a claim about exact 20G75 internals.
+
+The existing production text state now marks only the two identified date slots
+and suppresses their own filter/compositing output while glass is active. It
+retains the latest native values for restoration. Ordinary text still preserves
+unknown filters, and ancestors, icons, unmanaged dates, clock and status bar are
+not changed. Existing date callbacks and setter hooks are reused; no new hook,
+timer, wallpaper rule or glass/shadow change is added.
+
+Foundation tests exercise actual slot selection with date-only output filters,
+100 native restyles per wallpaper/mode combination, both date locations, sibling
+isolation and native restoration. UIKit uses production text state with real
+CALayer/CAFilter objects for the same four combinations and restore checks.
+These tests do not reproduce the private iOS 16 date renderer or establish that
+the label was located on the user's phone. Device acceptance remains required.
